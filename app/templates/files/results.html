@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block title %}Resultados — CoDataU{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">{{ record.original_name }}</div>
+        <div class="page-subtitle">
+            Procesado el {{ record.processed_at.strftime('%d/%m/%Y %H:%M') if record.processed_at }}
+        </div>
+    </div>
+    <div style="display:flex;gap:8px">
+        <a href="{{ url_for('reports.download', file_id=record.id) }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-download"></i> Descargar CSV
+        </a>
+        <a href="{{ url_for('files.upload') }}" class="btn btn-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+{% if summary %}
+
+<!-- KPIs -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="bi bi-table"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ '{:,}'.format(summary.rows) }}</div>
+            <div class="stat-label">Filas</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="bi bi-layout-three-columns"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ summary.columns }}</div>
+            <div class="stat-label">Columnas</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#FEF2F2;color:#DC2626"><i class="bi bi-exclamation-circle"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ summary.null_total }}</div>
+            <div class="stat-label">Valores nulos</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#FFFBEB;color:#D97706"><i class="bi bi-copy"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ summary.duplicates }}</div>
+            <div class="stat-label">Duplicados</div>
+        </div>
+    </div>
+</div>
+
+<!-- Insights + Stats -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+
+    {% if insights %}
+    <div class="card">
+        <div class="card-title"><i class="bi bi-stars"></i> Insights IA</div>
+        {% for ins in insights %}
+        <div class="insight-chip insight-{{ ins.insight_type }}">
+            <i class="bi bi-{% if ins.insight_type == 'success' %}check-circle{% elif ins.insight_type == 'warning' %}exclamation-triangle{% elif ins.insight_type == 'danger' %}x-circle{% else %}info-circle{% endif %}"></i>
+            {{ ins.message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if summary.numeric_summary %}
+    <div class="card">
+        <div class="card-title"><i class="bi bi-calculator"></i> Métricas numéricas</div>
+        <div class="table-wrap">
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Columna</th>
+                        <th style="text-align:right">Suma</th>
+                        <th style="text-align:right">Promedio</th>
+                        <th style="text-align:right">Máx</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for col, stats in summary.numeric_summary.items() %}
+                    <tr>
+                        <td><strong>{{ col }}</strong></td>
+                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.sum) }}</td>
+                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) }}</td>
+                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.max) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Preview -->
+<div class="card">
+    <div class="card-title" style="margin-bottom:16px">
+        <i class="bi bi-table"></i> Vista previa
+        <span class="badge badge-gray" style="margin-left:auto;font-weight:400">Primeras 10 filas</span>
+    </div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    {% for col in summary.column_names %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in summary.preview %}
+                <tr>
+                    {% for col in summary.column_names %}
+                    <td>{{ row[col] }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

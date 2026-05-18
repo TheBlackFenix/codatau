@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión — CoDataU</title>
+    <link rel="icon" href="{{ url_for('static', filename='img/isotipo.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<div class="auth-layout">
+    <!-- LEFT -->
+    <div class="auth-left">
+        <div class="auth-left-content">
+            <div class="auth-logo-wrap">
+                <img src="{{ url_for('static', filename='img/isotipo.png') }}" alt="CoDataU">
+            </div>
+            <div class="auth-brand-name">Co<span>Data</span>U</div>
+            <div class="auth-brand-tagline">Datos · Análisis · Inteligencia</div>
+
+            <div class="auth-feature">
+                <i class="bi bi-cloud-upload"></i>
+                <span class="auth-feature-text">Sube archivos CSV y Excel fácilmente</span>
+            </div>
+            <div class="auth-feature">
+                <i class="bi bi-cpu"></i>
+                <span class="auth-feature-text">Análisis automático con inteligencia artificial</span>
+            </div>
+            <div class="auth-feature">
+                <i class="bi bi-bar-chart-line"></i>
+                <span class="auth-feature-text">Dashboard interactivo con gráficas en tiempo real</span>
+            </div>
+            <div class="auth-feature">
+                <i class="bi bi-download"></i>
+                <span class="auth-feature-text">Descarga reportes limpios en CSV</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="auth-right">
+        <div class="auth-form-wrap">
+
+            <!-- Tabs -->
+            <div class="auth-tabs">
+                <a href="{{ url_for('auth.login') }}" class="auth-tab active">Iniciar sesión</a>
+                <a href="{{ url_for('auth.register') }}" class="auth-tab">Crear cuenta</a>
+            </div>
+
+            <h2 class="auth-form-title">¡<span>Bienvenido</span> de nuevo!</h2>
+            <p class="auth-form-subtitle">Ingresa tus credenciales para acceder a tu cuenta</p>
+
+            <!-- Flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash-alert flash-{{ category }}" style="margin-bottom:16px">
+                        <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% else %}info-circle{% endif %}"></i>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('auth.login') }}">
+                {{ form.hidden_tag() }}
+
+                <div class="form-group">
+                    {{ form.email.label(class='form-label') }}
+                    {{ form.email(class='form-control' + (' is-invalid' if form.email.errors else ''),
+                                  placeholder='tu@gmail.com') }}
+                    {% for error in form.email.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.password.label(class='form-label') }}
+                    <div style="position:relative">
+                        {{ form.password(class='form-control' + (' is-invalid' if form.password.errors else ''),
+                                         placeholder='••••••••', id='passwordInput') }}
+                        <button type="button" onclick="togglePass()"
+                                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                                       background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px">
+                            <i class="bi bi-eye-slash" id="eyeIcon"></i>
+                        </button>
+                    </div>
+                    {% for error in form.password.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-check">
+                        {{ form.remember(class='form-check-input') }}
+                        <span class="form-check-label">Recordarme</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-bottom:16px">
+                    Iniciar Sesión
+                </button>
+            </form>
+
+            <div class="auth-footer-link">
+                ¿No tienes cuenta?
+                <a href="{{ url_for('auth.register') }}" class="auth-link">Regístrate aquí</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePass() {
+    const input = document.getElementById('passwordInput');
+    const icon = document.getElementById('eyeIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'bi bi-eye';
+    } else {
+        input.type = 'password';
+        icon.className = 'bi bi-eye-slash';
+    }
+}
+</script>
+</body>
+</html>

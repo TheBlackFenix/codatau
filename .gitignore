@@ -1,0 +1,25 @@
+# Entorno virtual
+venv/
+
+# Base de datos
+instance/
+
+# Archivos subidos por usuarios
+uploads/
+
+# Variables de entorno (NUNCA subir)
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# VS Code
+.vscode/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

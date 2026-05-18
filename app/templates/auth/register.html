@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Cuenta — CoDataU</title>
+    <link rel="icon" href="{{ url_for('static', filename='img/isotipo.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<div class="auth-layout">
+    <div class="auth-left">
+        <div class="auth-left-content">
+            <div class="auth-logo-wrap">
+                <img src="{{ url_for('static', filename='img/isotipo.png') }}" alt="CoDataU">
+            </div>
+            <div class="auth-brand-name">Co<span>Data</span>U</div>
+            <div class="auth-brand-tagline">Datos · Análisis · Inteligencia</div>
+
+            <div class="auth-feature">
+                <i class="bi bi-cloud-upload"></i>
+                <span class="auth-feature-text">Sube archivos CSV y Excel fácilmente</span>
+            </div>
+            <div class="auth-feature">
+                <i class="bi bi-cpu"></i>
+                <span class="auth-feature-text">Análisis automático con inteligencia artificial</span>
+            </div>
+            <div class="auth-feature">
+                <i class="bi bi-bar-chart-line"></i>
+                <span class="auth-feature-text">Dashboard interactivo con gráficas en tiempo real</span>
+            </div>
+            <div class="auth-feature">
+                <i class="bi bi-download"></i>
+                <span class="auth-feature-text">Descarga reportes limpios en CSV</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-right">
+        <div class="auth-form-wrap">
+            <div class="auth-tabs">
+                <a href="{{ url_for('auth.login') }}" class="auth-tab">Iniciar sesión</a>
+                <a href="{{ url_for('auth.register') }}" class="auth-tab active">Crear cuenta</a>
+            </div>
+
+            <h2 class="auth-form-title"><span>Crea</span> tu cuenta</h2>
+            <p class="auth-form-subtitle">Completa tus datos para empezar a usar CoDataU</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash-alert flash-{{ category }}" style="margin-bottom:16px">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('auth.register') }}">
+                {{ form.hidden_tag() }}
+
+                <div class="form-group">
+                    {{ form.username.label(class='form-label') }}
+                    {{ form.username(class='form-control' + (' is-invalid' if form.username.errors else ''),
+                                     placeholder='Tu nombre de usuario') }}
+                    {% for error in form.username.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.email.label(class='form-label') }}
+                    {{ form.email(class='form-control' + (' is-invalid' if form.email.errors else ''),
+                                  placeholder='tu@gmail.com') }}
+                    {% for error in form.email.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.password.label(class='form-label') }}
+                    {{ form.password(class='form-control' + (' is-invalid' if form.password.errors else ''),
+                                     placeholder='Mínimo 6 caracteres') }}
+                    {% for error in form.password.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                    <div class="form-text">Mínimo 6 caracteres</div>
+                </div>
+
+                <div class="form-group">
+                    {{ form.password2.label(class='form-label') }}
+                    {{ form.password2(class='form-control' + (' is-invalid' if form.password2.errors else ''),
+                                      placeholder='Repite tu contraseña') }}
+                    {% for error in form.password2.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-bottom:16px">
+                    Crea tu cuenta
+                </button>
+            </form>
+
+            <div class="auth-footer-link">
+                ¿Ya tienes una cuenta?
+                <a href="{{ url_for('auth.login') }}" class="auth-link">Inicia sesión</a>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Inicio — CoDataU{% endblock %}
+
+{% block content %}
+<div class="welcome-hero">
+    <div class="welcome-avatar">{{ current_user.username[0].upper() }}</div>
+    <h1 class="welcome-title">
+        Hola <span>{{ current_user.username }}</span>, bienvenido de nuevo
+    </h1>
+    <p class="welcome-desc">
+        Estás en <strong>CoDataU</strong> — tu plataforma de análisis de datos con inteligencia artificial.
+        Sube archivos, obtén insights y descarga reportes limpios.
+    </p>
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary btn-lg">
+        <i class="bi bi-speedometer2"></i> Ir al Dashboard
+    </a>
+</div>
+
+<div class="feature-grid">
+    <a href="{{ url_for('files.upload') }}" class="feature-card">
+        <div class="feature-card-icon" style="background:var(--orange-soft);color:var(--orange)">
+            <i class="bi bi-cloud-upload"></i>
+        </div>
+        <div>
+            <div class="feature-card-title">Cargar archivos</div>
+            <div class="feature-card-desc">Sube archivos .xlsx, .xls o .csv con tus datos empresariales</div>
+        </div>
+        <i class="bi bi-chevron-right feature-card-arrow"></i>
+    </a>
+
+    <a href="{{ url_for('dashboard.index') }}" class="feature-card">
+        <div class="feature-card-icon" style="background:var(--purple-soft);color:var(--purple)">
+            <i class="bi bi-bar-chart-line"></i>
+        </div>
+        <div>
+            <div class="feature-card-title">Ver dashboard</div>
+            <div class="feature-card-desc">Gráficas, KPIs y métricas generadas automáticamente</div>
+        </div>
+        <i class="bi bi-chevron-right feature-card-arrow"></i>
+    </a>
+
+    <a href="{{ url_for('files.insights_ia') }}" class="feature-card">
+        <div class="feature-card-icon" style="background:#F0FDF4;color:#15803D">
+            <i class="bi bi-stars"></i>
+        </div>
+        <div>
+            <div class="feature-card-title">Insights IA</div>
+            <div class="feature-card-desc">Análisis automático y sugerencias inteligentes sobre tus datos</div>
+        </div>
+        <i class="bi bi-chevron-right feature-card-arrow"></i>
+    </a>
+
+    <a href="{{ url_for('reports.index') }}" class="feature-card">
+        <div class="feature-card-icon" style="background:#EFF6FF;color:#1D4ED8">
+            <i class="bi bi-download"></i>
+        </div>
+        <div>
+            <div class="feature-card-title">Descargar reportes</div>
+            <div class="feature-card-desc">Exporta tus datos procesados y limpios en formato CSV</div>
+        </div>
+        <i class="bi bi-chevron-right feature-card-arrow"></i>
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+from flask import Blueprint, render_template, session
+from flask_login import login_required, current_user
+from app.models.file_upload import FileUpload
+from app.models.ai_insight import AIInsight
+from app.services.data_service import DataService
+import os
+from flask import current_app
+
+dashboard_bp = Blueprint('dashboard', __name__)
+
+
+@dashboard_bp.route('/dashboard')
+@login_required
+def index():
+    all_files = (
+        FileUpload.query
+        .filter_by(user_id=current_user.id)
+        .order_by(FileUpload.uploaded_at.desc())
+        .all()
+    )
+
+    active_file_id = session.get('active_file_id')
+    active_file = None
+    summary = None
+    chart_data = {}
+
+    if active_file_id:
+        active_file = FileUpload.query.filter_by(
+            id=active_file_id, user_id=current_user.id
+        ).first()
+
+    if not active_file and all_files:
+        active_file = all_files[0]
+        session['active_file_id'] = active_file.id
+
+    if active_file:
+        filepath = os.path.join(
+            current_app.config['UPLOAD_FOLDER'],
+            active_file.filename
+        )
+        if os.path.exists(filepath):
+            try:
+                df = DataService.read_file(filepath)
+                df = DataService.clean_dataframe(df)
+                summary = DataService.get_summary(df)
+
+                numeric_cols = [
+                    c for c in df.select_dtypes(include='number').columns
+                    if df[c].notna().sum() > 0
+                ]
+                col_names = list(df.columns)
+
+                # Gráfica 1: promedio por columna numérica
+                if numeric_cols:
+                    bar_labels = []
+                    bar_data = []
+                    for c in numeric_cols:
+                        val = df[c].mean()
+                        if val == val:
+                            bar_labels.append(str(c))
+                            bar_data.append(round(float(val), 2))
+                    if bar_labels:
+                        chart_data['bar'] = {
+                            'labels': bar_labels,
+                            'datos':  bar_data
+                        }
+
+                # Gráfica 2: nulos por columna
+                null_dict = {}
+                for col in col_names:
+                    n = int(df[col].isnull().sum())
+                    if n > 0:
+                        null_dict[str(col)] = n
+                if null_dict:
+                    chart_data['nulls'] = {
+                        'labels': list(null_dict.keys()),
+                        'datos':  list(null_dict.values())
+                    }
+
+                # Gráfica 3: columna texto agrupada por columna numérica
+                text_cols = list(df.select_dtypes(include='object').columns)
+                if text_cols and numeric_cols:
+                    group_col = text_cols[0]
+                    num_col   = numeric_cols[0]
+                    try:
+                        grouped = (
+                            df.groupby(group_col)[num_col]
+                            .sum()
+                            .dropna()
+                            .head(10)
+                        )
+                        g_labels = [str(x) for x in grouped.index.tolist()]
+                        g_datos  = [round(float(v), 2) for v in grouped.to_list()]
+                        if g_labels:
+                            chart_data['grouped'] = {
+                                'labels':    g_labels,
+                                'datos':     g_datos,
+                                'group_col': str(group_col),
+                                'num_col':   str(num_col)
+                            }
+                    except Exception:
+                        pass
+
+            except Exception:
+                summary   = None
+                chart_data = {}
+
+    insights = []
+    if active_file:
+        insights = (
+            AIInsight.query
+            .filter_by(file_id=active_file.id)
+            .order_by(AIInsight.created_at.desc())
+            .all()
+        )
+
+    total_files    = len(all_files)
+    total_rows     = sum(f.row_count or 0 for f in all_files)
+    total_insights = AIInsight.query.filter_by(user_id=current_user.id).count()
+
+    return render_template('dashboard/index.html',
+        all_files=all_files,
+        active_file=active_file,
+        summary=summary,
+        chart_data=chart_data,
+        insights=insights,
+        total_files=total_files,
+        total_rows=total_rows,
+        total_insights=total_insights,
+    )

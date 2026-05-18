@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}Reportes — CoDataU{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Reportes</div>
+        <div class="page-subtitle">Descarga tus archivos procesados en formato CSV limpio</div>
+    </div>
+    <a href="{{ url_for('files.upload') }}" class="btn btn-primary">
+        <i class="bi bi-upload"></i> Cargar nuevo
+    </a>
+</div>
+
+{% if files %}
+
+<!-- Summary stats -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="bi bi-files"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ files|length }}</div>
+            <div class="stat-label">Archivos totales</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="bi bi-table"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ '{:,}'.format(files|sum(attribute='row_count') or 0) }}</div>
+            <div class="stat-label">Registros totales</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="bi bi-check-circle"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ files|selectattr('status', 'equalto', 'processed')|list|length }}</div>
+            <div class="stat-label">Procesados correctamente</div>
+        </div>
+    </div>
+</div>
+
+<!-- Files table -->
+<div class="card">
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Archivo</th>
+                    <th>Tipo</th>
+                    <th style="text-align:right">Filas</th>
+                    <th style="text-align:right">Columnas</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                    <th style="text-align:center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in files %}
+                <tr>
+                    <td>
+                        <div class="td-file">
+                            <div class="file-icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
+                            <div>
+                                <div class="file-name">{{ f.original_name }}</div>
+                                <div class="file-meta">{{ (f.file_size or 0) // 1024 }} KB</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="badge badge-purple">{{ f.file_type.upper() }}</span></td>
+                    <td style="text-align:right;font-weight:500">{{ '{:,}'.format(f.row_count or 0) }}</td>
+                    <td style="text-align:right">{{ f.column_count or 0 }}</td>
+                    <td>
+                        <span class="badge badge-green">
+                            <i class="bi bi-check-circle"></i> {{ f.status }}
+                        </span>
+                    </td>
+                    <td style="color:var(--gray-500);font-size:12px">
+                        {{ f.uploaded_at.strftime('%d/%m/%Y %H:%M') }}
+                    </td>
+                    <td>
+                        <div class="table-actions" style="justify-content:center">
+                            <a href="{{ url_for('files.results', file_id=f.id) }}"
+                               class="btn btn-secondary btn-sm">
+                                <i class="bi bi-eye"></i> Ver
+                            </a>
+                            <a href="{{ url_for('reports.download', file_id=f.id) }}"
+                               class="btn btn-primary btn-sm">
+                                <i class="bi bi-download"></i> CSV
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-icon"><i class="bi bi-folder2-open"></i></div>
+        <div class="empty-title">Sin archivos todavía</div>
+        <div class="empty-desc">Carga tu primer archivo para generar reportes.</div>
+        <a href="{{ url_for('files.upload') }}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Cargar archivo
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

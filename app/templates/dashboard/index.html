@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — CoDataU{% endblock %}
+
+{% block content %}
+
+<!-- File selector -->
+{% if all_files %}
+<div class="file-selector-bar">
+    <span class="file-selector-label"><i class="bi bi-folder2"></i> Archivo</span>
+    {% for f in all_files %}
+    <a href="{{ url_for('files.select', file_id=f.id) }}"
+       class="file-chip {% if active_file and active_file.id == f.id %}active{% endif %}">
+        <i class="bi bi-file-earmark-spreadsheet"></i>
+        {{ f.original_name|truncate(28) }}
+        <span class="chip-count">{{ '{:,}'.format(f.row_count or 0) }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if active_file and summary %}
+
+<!-- Stat cards -->
+<div class="dashboard-grid" style="margin-bottom:24px">
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="bi bi-table"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ '{:,}'.format(summary.rows) }}</div>
+            <div class="stat-label">Filas totales</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="bi bi-layout-three-columns"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ summary.columns }}</div>
+            <div class="stat-label">Columnas</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#FEF2F2;color:#DC2626"><i class="bi bi-exclamation-circle"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ summary.null_total }}</div>
+            <div class="stat-label">Valores nulos</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#FFFBEB;color:#D97706"><i class="bi bi-copy"></i></div>
+        <div class="stat-body">
+            <div class="stat-value">{{ summary.duplicates }}</div>
+            <div class="stat-label">Duplicados</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts + AI panel -->
+<div style="display:grid;grid-template-columns:1fr 1fr 320px;gap:16px;margin-bottom:24px">
+
+    {% if chart_data.bar %}
+    <div class="chart-area">
+        <div class="chart-header">
+            <div>
+                <div class="chart-title"><i class="bi bi-bar-chart" style="color:var(--purple)"></i> Promedio por columna</div>
+                <div class="chart-subtitle">Valores numéricos del archivo activo</div>
+            </div>
+        </div>
+        <canvas id="barChart" height="180"></canvas>
+    </div>
+    {% endif %}
+
+    {% if chart_data.grouped %}
+    <div class="chart-area">
+        <div class="chart-header">
+            <div>
+                <div class="chart-title"><i class="bi bi-pie-chart" style="color:var(--orange)"></i> {{ chart_data.grouped.num_col }}</div>
+                <div class="chart-subtitle">Agrupado por {{ chart_data.grouped.group_col }}</div>
+            </div>
+        </div>
+        <canvas id="groupedChart" height="180"></canvas>
+    </div>
+    {% endif %}
+
+    <!-- AI Panel -->
+    <div class="ai-panel">
+        <div class="ai-panel-title">
+            <i class="bi bi-stars"></i> Sugerencias de IA
+        </div>
+        {% if insights %}
+            {% for ins in insights[:5] %}
+            <div class="ai-suggestion">
+                <div class="ai-dot {% if ins.insight_type == 'success' %}green{% elif ins.insight_type == 'warning' %}orange{% elif ins.insight_type == 'danger' %}orange{% else %}purple{% endif %}"></div>
+                <span>{{ ins.message }}</span>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="ai-suggestion">
+            <div class="ai-dot purple"></div>
+            <span>Carga un archivo para ver sugerencias automáticas.</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Stats table + Nulls chart -->
+<div style="display:grid;grid-template-columns:1fr {% if chart_data.nulls %}1fr{% endif %};gap:16px;margin-bottom:24px">
+
+    {% if summary.numeric_summary %}
+    <div class="card">
+        <div class="card-title"><i class="bi bi-calculator"></i> Resumen estadístico</div>
+        <div class="table-wrap">
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Columna</th>
+                        <th style="text-align:right">Suma</th>
+                        <th style="text-align:right">Promedio</th>
+                        <th style="text-align:right">Mín</th>
+                        <th style="text-align:right">Máx</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for col, stats in summary.numeric_summary.items() %}
+                    <tr>
+                        <td><span style="font-weight:500">{{ col }}</span></td>
+                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.sum) }}</td>
+                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) }}</td>
+                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.min) }}</td>
+                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.max) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if chart_data.nulls %}
+    <div class="chart-area">
+        <div class="chart-header">
+            <div>
+                <div class="chart-title"><i class="bi bi-exclamation-triangle" style="color:#DC2626"></i> Nulos por columna</div>
+                <div class="chart-subtitle">Valores faltantes detectados</div>
+            </div>
+        </div>
+        <canvas id="nullsChart" height="180"></canvas>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Data preview -->
+<div class="card">
+    <div class="card-title" style="margin-bottom:16px">
+        <i class="bi bi-table"></i> Vista previa
+        <span class="badge badge-gray" style="margin-left:auto;font-weight:400">Primeras 10 filas</span>
+    </div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    {% for col in summary.column_names %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in summary.preview %}
+                <tr>
+                    {% for col in summary.column_names %}
+                    <td>{{ row[col] }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-icon"><i class="bi bi-cloud-upload"></i></div>
+        <div class="empty-title">Sin archivo activo</div>
+        <div class="empty-desc">Carga un archivo CSV o Excel para ver el dashboard con tus datos.</div>
+        <a href="{{ url_for('files.upload') }}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Cargar archivo
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const purple = '#5C2D91', orange = '#E87722', green = '#15803D', blue = '#1D4ED8';
+const colors = [purple, orange, green, blue, '#9333EA', '#EA580C', '#0891B2', '#65A30D', '#CA8A04', '#475569'];
+
+const baseOpts = {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#9CA3AF' } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 11 }, color: '#9CA3AF' } }
+    }
+};
+
+{% if chart_data.bar %}
+new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ chart_data.bar.labels | tojson }},
+        datasets: [{ data: {{ chart_data.bar.datos | tojson }}, backgroundColor: purple + 'CC', borderRadius: 6, borderSkipped: false }]
+    },
+    options: baseOpts
+});
+{% endif %}
+
+{% if chart_data.grouped %}
+new Chart(document.getElementById('groupedChart'), {
+    type: 'doughnut',
+    data: {
+        labels: {{ chart_data.grouped.labels | tojson }},
+        datasets: [{ data: {{ chart_data.grouped.datos | tojson }}, backgroundColor: colors, borderWidth: 0 }]
+    },
+    options: {
+        responsive: true,
+        cutout: '65%',
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } } }
+    }
+});
+{% endif %}
+
+{% if chart_data.nulls %}
+new Chart(document.getElementById('nullsChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ chart_data.nulls.labels | tojson }},
+        datasets: [{ data: {{ chart_data.nulls.datos | tojson }}, backgroundColor: '#FCA5A5', borderRadius: 6 }]
+    },
+    options: baseOpts
+});
+{% endif %}
+</script>
+{% endblock %}

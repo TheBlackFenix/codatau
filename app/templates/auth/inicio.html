@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoDataU — Analiza tus datos con IA</title>
+    <link rel="icon" href="{{ url_for('static', filename='img/isotipo.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<div class="landing-body">
+
+    <!-- NAV -->
+    <nav class="landing-nav">
+        <a href="{{ url_for('home') }}" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="{{ url_for('static', filename='img/isotipo.png') }}" style="width:36px;height:36px;object-fit:contain;">
+            <span style="font-size:18px;font-weight:700;color:var(--gray-900)">Co<span style="color:var(--orange)">Data</span>U</span>
+        </a>
+
+        <div class="landing-nav-links">
+            <a href="#bienvenido" class="landing-nav-link">Bienvenido</a>
+            <a href="#como-funciona" class="landing-nav-link">¿Cómo funciona?</a>
+            <a href="#beneficios" class="landing-nav-link">Beneficios</a>
+        </div>
+
+        <div class="landing-nav-actions">
+            <a href="{{ url_for('auth.login') }}" class="btn btn-secondary">Iniciar Sesión</a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary">Registrarse</a>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <div id="bienvenido">
+        <div class="hero">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <i class="bi bi-stars"></i>
+                    Potenciado por Inteligencia Artificial
+                </div>
+                <h1 class="hero-title">
+                    Analiza tus datos con<br>
+                    <span class="highlight-purple">inteligencia</span>
+                    <span class="highlight-orange"> artificial</span>
+                </h1>
+                <p class="hero-desc">
+                    Sube tus archivos y obtén insights automáticos en segundos.
+                    Sin configuraciones complejas. Solo datos y respuestas inteligentes.
+                </p>
+                <div class="hero-actions">
+                    <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-xl">
+                        Empezar ahora <i class="bi bi-arrow-right"></i>
+                    </a>
+                    <a href="#como-funciona" class="btn btn-secondary btn-xl">
+                        Ver cómo funciona
+                    </a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div style="background:linear-gradient(135deg,var(--purple-soft),var(--orange-soft));
+                            border-radius:24px;padding:32px;border:1px solid var(--gray-200);">
+                    <!-- Dashboard mockup -->
+                    <div style="background:white;border-radius:16px;padding:20px;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+                        <div style="display:flex;gap:12px;margin-bottom:16px;">
+                            <div style="flex:1;background:var(--purple-soft);border-radius:10px;padding:14px;">
+                                <div style="font-size:11px;color:var(--gray-500);font-weight:600">ARCHIVOS</div>
+                                <div style="font-size:22px;font-weight:700;color:var(--purple)">24</div>
+                            </div>
+                            <div style="flex:1;background:var(--orange-soft);border-radius:10px;padding:14px;">
+                                <div style="font-size:11px;color:var(--gray-500);font-weight:600">REGISTROS</div>
+                                <div style="font-size:22px;font-weight:700;color:var(--orange)">128K</div>
+                            </div>
+                            <div style="flex:1;background:#F0FDF4;border-radius:10px;padding:14px;">
+                                <div style="font-size:11px;color:var(--gray-500);font-weight:600">INSIGHTS</div>
+                                <div style="font-size:22px;font-weight:700;color:#15803D">96</div>
+                            </div>
+                        </div>
+                        <div style="background:var(--gray-50);border-radius:10px;padding:14px;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                                <div style="width:8px;height:8px;border-radius:50%;background:var(--orange)"></div>
+                                <span style="font-size:12px;font-weight:600;color:var(--gray-700)">Asistente IA</span>
+                            </div>
+                            <div style="font-size:12px;color:var(--gray-500);line-height:1.6">
+                                Se detectaron patrones de crecimiento en ventas Q1. Se recomienda revisar columna "ingresos"...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CÓMO FUNCIONA -->
+    <div id="como-funciona" style="background:var(--white);padding:80px 5%;">
+        <div style="max-width:1100px;margin:0 auto;">
+            <div class="section-header">
+                <h2 class="section-title">Cómo funciona</h2>
+                <p class="section-subtitle">Tres simples pasos para transformar tus datos en decisiones inteligentes</p>
+            </div>
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-icon-wrap">
+                        <i class="bi bi-cloud-upload"></i>
+                    </div>
+                    <h3 class="step-title">Subir archivo</h3>
+                    <p class="step-desc">Arrastra y suelta tus datos en formato CSV o Excel. Nuestra plataforma los procesa de forma segura y automática.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-icon-wrap" style="background:var(--orange-soft);color:var(--orange)">
+                        <i class="bi bi-cpu"></i>
+                    </div>
+                    <h3 class="step-title">Análisis con IA</h3>
+                    <p class="step-desc">Nuestra IA limpia, analiza y encuentra patrones en tus datos automáticamente.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-icon-wrap" style="background:#F0FDF4;color:#15803D">
+                        <i class="bi bi-file-earmark-bar-graph"></i>
+                    </div>
+                    <h3 class="step-title">Reportes e insights</h3>
+                    <p class="step-desc">Recibe visualizaciones interactivas, reportes detallados y respuestas a tus preguntas.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BENEFICIOS -->
+    <div id="beneficios" class="benefits-section">
+        <div class="benefits-inner">
+            <div class="benefits-content">
+                <h2 class="benefits-title">¿Por qué elegir CoDataU?</h2>
+                <p class="benefits-subtitle">Una plataforma diseñada para profesionales que valoran su tiempo y buscan resultados precisos.</p>
+
+                <div class="benefit-item">
+                    <div class="benefit-icon" style="background:var(--orange-soft);color:var(--orange)">
+                        <i class="bi bi-lightning-charge"></i>
+                    </div>
+                    <div>
+                        <div class="benefit-text-title">Rapidez extrema</div>
+                        <div class="benefit-text-desc">Analiza miles de datos en muy poco tiempo.</div>
+                    </div>
+                </div>
+                <div class="benefit-item">
+                    <div class="benefit-icon" style="background:var(--purple-soft);color:var(--purple)">
+                        <i class="bi bi-graph-up-arrow"></i>
+                    </div>
+                    <div>
+                        <div class="benefit-text-title">Precisión mejorada</div>
+                        <div class="benefit-text-desc">Reduce errores humanos y mejora la exactitud.</div>
+                    </div>
+                </div>
+                <div class="benefit-item">
+                    <div class="benefit-icon" style="background:#F0FDF4;color:#15803D">
+                        <i class="bi bi-gear-wide-connected"></i>
+                    </div>
+                    <div>
+                        <div class="benefit-text-title">Automatización completa</div>
+                        <div class="benefit-text-desc">Evita tareas manuales repetitivas.</div>
+                    </div>
+                </div>
+
+                <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg" style="margin-top:12px">
+                    Empezar ahora <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="benefits-image">
+                <div style="background:linear-gradient(135deg,var(--purple-soft),var(--orange-soft));
+                            border-radius:24px;padding:32px;border:1px solid var(--gray-200);">
+                    <div style="display:flex;flex-direction:column;gap:12px;">
+                        {% for item in [('bi-check-circle','#15803D','#F0FDF4','Datos limpios y validados'),
+                                        ('bi-bar-chart-line','var(--orange)','var(--orange-soft)','Gráficas generadas automáticamente'),
+                                        ('bi-lightbulb','var(--purple)','var(--purple-soft)','Insights de IA en segundos'),
+                                        ('bi-download','#1D4ED8','#EFF6FF','CSV listo para descargar')] %}
+                        <div style="background:white;border-radius:12px;padding:14px 18px;
+                                    display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+                            <div style="width:36px;height:36px;border-radius:8px;background:{{ item[2] }};
+                                        color:{{ item[1] }};display:flex;align-items:center;justify-content:center;font-size:16px">
+                                <i class="bi {{ item[0] }}"></i>
+                            </div>
+                            <span style="font-size:13px;font-weight:500;color:var(--gray-700)">{{ item[3] }}</span>
+                            <i class="bi bi-check-lg" style="margin-left:auto;color:#15803D;font-size:16px"></i>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div style="background:var(--gray-900);color:rgba(255,255,255,0.5);text-align:center;padding:24px;font-size:12px;">
+        © 2025 CoDataU — Datos · Análisis · Inteligencia
+    </div>
+
+</div>
+</body>
+</html>

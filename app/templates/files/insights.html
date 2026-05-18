@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{% block title %}Análisis IA — CoDataU{% endblock %}
+
+{% block content %}
+
+<!-- File selector -->
+{% if all_files %}
+<div class="file-selector-bar">
+    <span class="file-selector-label"><i class="bi bi-folder2"></i> Archivo</span>
+    {% for f in all_files %}
+    <a href="{{ url_for('files.select', file_id=f.id) }}"
+       class="file-chip {% if active_file and active_file.id == f.id %}active{% endif %}">
+        <i class="bi bi-file-earmark-spreadsheet"></i>
+        {{ f.original_name|truncate(28) }}
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if active_file and analysis %}
+
+<!-- Header card -->
+<div class="insights-header-card">
+    <div class="insights-header-icon">
+        <i class="bi bi-stars"></i>
+    </div>
+    <div style="flex:1">
+        <div class="insights-header-title">Asistente IA — {{ active_file.original_name }}</div>
+        <div class="insights-header-sub">
+            {{ analysis.summary.rows }} filas · {{ analysis.summary.columns }} columnas ·
+            Procesado el {{ active_file.processed_at.strftime('%d/%m/%Y') if active_file.processed_at }}
+        </div>
+    </div>
+    <a href="{{ url_for('reports.download', file_id=active_file.id) }}"
+       class="btn btn-secondary btn-sm" style="flex-shrink:0">
+        <i class="bi bi-download"></i> Descargar CSV
+    </a>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 340px;gap:20px">
+
+    <!-- Main analysis -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+        <!-- What kind of data -->
+        <div class="card">
+            <div class="card-title"><i class="bi bi-cpu"></i> Identificación del archivo</div>
+            <div class="insight-chip insight-info">
+                <i class="bi bi-info-circle"></i>
+                <span>
+                    Este archivo contiene <strong>{{ analysis.summary.rows }} filas</strong>
+                    y <strong>{{ analysis.summary.columns }} columnas</strong>.
+                    {% if analysis.numeric_cols %}
+                        Columnas numéricas: <strong>{{ analysis.numeric_cols|join(', ') }}</strong>.
+                    {% endif %}
+                    {% if analysis.text_cols %}
+                        Columnas de texto: <strong>{{ analysis.text_cols|join(', ') }}</strong>.
+                    {% endif %}
+                </span>
+            </div>
+
+            {% set cols_lower = analysis.summary.column_names|map('lower')|list %}
+            <div class="insight-chip insight-success" style="margin-top:8px">
+                <i class="bi bi-lightbulb"></i>
+                <span>
+                    {% if 'ventas' in cols_lower or 'venta' in cols_lower or 'sales' in cols_lower %}
+                        Este archivo parece contener <strong>datos de ventas</strong>. Se recomienda analizar tendencias por período y comparar con gastos.
+                    {% elif 'gasto' in cols_lower or 'gastos' in cols_lower or 'expense' in cols_lower %}
+                        Este archivo parece contener <strong>datos de gastos</strong>. Se recomienda identificar los rubros de mayor impacto.
+                    {% elif 'producto' in cols_lower or 'item' in cols_lower or 'articulo' in cols_lower %}
+                        Este archivo parece contener un <strong>catálogo de productos</strong>. Se recomienda revisar precios y stock.
+                    {% elif 'empleado' in cols_lower or 'nombre' in cols_lower or 'name' in cols_lower %}
+                        Este archivo parece contener <strong>datos de personal</strong>. Se recomienda verificar completitud.
+                    {% else %}
+                        Este archivo contiene <strong>datos tabulares generales</strong>. Revisa las columnas numéricas para identificar métricas clave.
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="card">
+            <div class="card-title"><i class="bi bi-list-check"></i> Sugerencias de mejora</div>
+
+            {% if analysis.summary.null_total > 0 %}
+            <div class="insight-chip insight-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>Completa los <strong>{{ analysis.summary.null_total }} valores nulos</strong> para mejorar la precisión del análisis.</span>
+            </div>
+            {% endif %}
+
+            {% if analysis.summary.duplicates > 0 %}
+            <div class="insight-chip insight-danger">
+                <i class="bi bi-x-circle"></i>
+                <span>Elimina las <strong>{{ analysis.summary.duplicates }} filas duplicadas</strong> para evitar distorsiones en los totales.</span>
+            </div>
+            {% endif %}
+
+            {% if analysis.numeric_cols %}
+            <div class="insight-chip insight-info">
+                <i class="bi bi-graph-up"></i>
+                <span>Las columnas <strong>{{ analysis.numeric_cols|join(', ') }}</strong> pueden usarse para análisis de tendencia.</span>
+            </div>
+            {% endif %}
+
+            {% if analysis.summary.rows < 50 %}
+            <div class="insight-chip insight-warning">
+                <i class="bi bi-exclamation-circle"></i>
+                <span>El archivo tiene pocas filas ({{ analysis.summary.rows }}). Para análisis más precisos se recomienda mínimo 50 registros.</span>
+            </div>
+            {% endif %}
+
+            {% if analysis.summary.null_total == 0 and analysis.summary.duplicates == 0 %}
+            <div class="insight-chip insight-success">
+                <i class="bi bi-check-circle"></i>
+                <span>¡Excelente! Los datos están limpios y listos para análisis.</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Stats table -->
+        {% if analysis.summary.numeric_summary %}
+        <div class="card">
+            <div class="card-title"><i class="bi bi-calculator"></i> Estadísticas detalladas</div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Columna</th>
+                            <th style="text-align:right">Suma total</th>
+                            <th style="text-align:right">Promedio</th>
+                            <th style="text-align:right">Mínimo</th>
+                            <th style="text-align:right">Máximo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for col, stats in analysis.summary.numeric_summary.items() %}
+                        <tr>
+                            <td><strong>{{ col }}</strong></td>
+                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.sum) }}</td>
+                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) }}</td>
+                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.min) }}</td>
+                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.max) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right panel: saved insights -->
+    <div>
+        {% if analysis.insights %}
+        <div class="card" style="position:sticky;top:80px">
+            <div class="card-title"><i class="bi bi-clock-history"></i> Insights guardados</div>
+            {% for ins in analysis.insights %}
+            <div class="ai-suggestion" style="margin-bottom:8px">
+                <div class="ai-dot {% if ins.insight_type == 'success' %}green{% elif ins.insight_type == 'warning' %}orange{% elif ins.insight_type == 'danger' %}orange{% else %}purple{% endif %}"></div>
+                <span style="font-size:12px">{{ ins.message }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-icon"><i class="bi bi-stars"></i></div>
+        <div class="empty-title">Sin archivo seleccionado</div>
+        <div class="empty-desc">Carga un archivo para ver el análisis de IA.</div>
+        <a href="{{ url_for('files.upload') }}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Cargar archivo
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

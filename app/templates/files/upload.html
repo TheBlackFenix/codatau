@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Archivos — CoDataU{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Archivos</div>
+        <div class="page-subtitle">Carga y gestiona tus archivos de datos</div>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+
+    <!-- Upload form -->
+    <div class="card card-lg">
+        <div class="card-title"><i class="bi bi-cloud-upload"></i> Subir nuevo archivo</div>
+
+        <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
+            <div style="font-size:15px;font-weight:600;color:var(--gray-700);margin-bottom:6px">
+                Arrastra tu archivo aquí
+            </div>
+            <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">
+                o haz clic para seleccionar
+            </div>
+            <div style="display:flex;gap:8px;justify-content:center">
+                <span class="badge badge-purple">.XLSX</span>
+                <span class="badge badge-orange">.XLS</span>
+                <span class="badge badge-gray">.CSV</span>
+            </div>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" id="uploadForm" style="margin-top:16px">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                {{ form.file.label(class='form-label') }}
+                {{ form.file(class='form-control' + (' is-invalid' if form.file.errors else ''),
+                              id='fileInput') }}
+                {% for error in form.file.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
+                <i class="bi bi-upload"></i> Cargar y procesar
+            </button>
+        </form>
+    </div>
+
+    <!-- File list -->
+    {% set uploads = current_user.uploads|sort(attribute='uploaded_at', reverse=True) %}
+    <div class="card">
+        <div class="card-title">
+            <i class="bi bi-folder2"></i> Mis archivos
+            <span class="badge badge-purple" style="margin-left:auto">{{ uploads|length }}</span>
+        </div>
+
+        {% if uploads %}
+        <div style="display:flex;flex-direction:column;gap:8px">
+            {% for u in uploads %}
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+                        background:var(--gray-50);border-radius:var(--radius);
+                        border:1px solid var(--gray-100);transition:all 0.15s"
+                 onmouseover="this.style.borderColor='var(--gray-300)'"
+                 onmouseout="this.style.borderColor='var(--gray-100)'">
+                <div class="file-icon">
+                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                </div>
+                <div style="flex:1;min-width:0">
+                    <div class="file-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                        {{ u.original_name }}
+                    </div>
+                    <div class="file-meta">
+                        {{ '{:,}'.format(u.row_count or 0) }} filas · {{ u.file_type.upper() }} · {{ u.uploaded_at.strftime('%d/%m/%Y') }}
+                    </div>
+                </div>
+                <div class="table-actions">
+                    <a href="{{ url_for('files.results', file_id=u.id) }}"
+                       class="btn btn-secondary btn-sm btn-icon" title="Ver resultados">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                    <a href="{{ url_for('files.select', file_id=u.id) }}"
+                       class="btn btn-sm btn-icon" title="Activar en dashboard"
+                       style="background:var(--purple-soft);color:var(--purple);border:none">
+                        <i class="bi bi-graph-up"></i>
+                    </a>
+                    <form method="POST" action="{{ url_for('files.delete', file_id=u.id) }}"
+                          style="display:inline"
+                          onsubmit="return confirm('¿Eliminar {{ u.original_name }}?')">
+                        {{ form.hidden_tag() }}
+                        <button type="submit" class="btn btn-danger-outline btn-sm btn-icon" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:40px 16px">
+            <div class="empty-icon"><i class="bi bi-folder2-open"></i></div>
+            <div class="empty-desc">Aún no has cargado ningún archivo.</div>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
