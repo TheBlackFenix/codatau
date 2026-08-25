@@ -72,7 +72,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 ```
 1. Sube tu archivo CSV o Excel
          ↓
-2. La IA lo analiza automáticamente
+2. El motor lo analiza automáticamente
          ↓
 3. Visualiza gráficas, insights y descarga el reporte limpio
 ```
@@ -96,7 +96,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Vista de todos los archivos con acciones: ver, activar, eliminar
 - [x] Eliminación de archivos (físico + registro en BD)
 
-### 🧪 Procesamiento con IA (pandas)
+### 🧪 Procesamiento de datos (pandas)
 - [x] Lectura automática con detección de encoding (UTF-8 / Latin-1)
 - [x] Limpieza automática: eliminar filas/columnas vacías, strip de texto
 - [x] Detección de valores nulos y filas duplicadas
@@ -114,7 +114,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Tabla de resumen estadístico
 - [x] Vista previa de las primeras 10 filas
 
-### 🤖 Insights IA
+### 🤖 Insights automáticos (base para IA)
 - [x] Identificación automática del tipo de archivo
 - [x] Sugerencias de mejora categorizadas (success / warning / danger / info)
 - [x] Alertas de calidad: nulos, duplicados, filas insuficientes
@@ -138,7 +138,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 | **Base de datos** | SQLite | 3.x |
 | **Autenticación** | Flask-Login + Werkzeug | — |
 | **Formularios** | Flask-WTF | — |
-| **Procesamiento datos** | pandas + openpyxl | 2.x |
+| **Procesamiento datos** | pandas + openpyxl + xlrd | 2.2 / 3.0 |
 | **Frontend CSS** | Sistema propio (Inter) | — |
 | **Gráficas** | Chart.js | 4.4.1 |
 | **Iconos** | Bootstrap Icons | 1.11.0 |
@@ -205,7 +205,7 @@ DataService.clean_dataframe() → limpia datos
        ↓
 DataService.get_summary() → calcula estadísticas
        ↓
-AIService.generate_insights() → genera insights IA
+AIService.generate_insights() → genera insights basados en reglas
        ↓
 FileUpload + AIInsight guardados en SQLite
        ↓
@@ -279,6 +279,9 @@ pymes_ai/
 ├── .env.example                 # Plantilla de variables de entorno
 ├── .gitignore
 ├── requirements.txt
+├── requirements-dev.txt         # Dependencias de pruebas
+├── pytest.ini                   # Configuración de pytest
+├── tests/                       # Pruebas automatizadas
 ├── run.py                       # Punto de entrada
 └── README.md
 ```
@@ -289,14 +292,14 @@ pymes_ai/
 
 ### Prerrequisitos
 
-- Python 3.10 o superior
+- Python 3.10 o superior (probado también con Python 3.14)
 - pip
 - Git
 
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/kevinsarmiento/codatau.git
+git clone https://github.com/TheBlackFenix/codatau.git
 cd codatau
 ```
 
@@ -316,6 +319,13 @@ source venv/bin/activate
 
 ```bash
 pip install -r requirements.txt
+```
+
+Para desarrollo y pruebas:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
 ```
 
 ### 4. Configurar variables de entorno
@@ -416,7 +426,7 @@ rm instance/pymes_ai.db        # macOS/Linux
 | POST | `/auth/login` | Procesar inicio de sesión | ❌ |
 | GET | `/auth/register` | Formulario de registro | ❌ |
 | POST | `/auth/register` | Procesar registro | ❌ |
-| GET | `/auth/logout` | Cerrar sesión | ✅ |
+| POST | `/auth/logout` | Cerrar sesión | ✅ |
 | GET | `/auth/bienvenida` | Página de bienvenida | ✅ |
 | GET | `/auth/perfil` | Editar perfil | ✅ |
 | POST | `/auth/perfil` | Guardar perfil | ✅ |
@@ -510,13 +520,9 @@ Este proyecto fue desarrollado como **Proyecto de Grado de Décimo Semestre** en
 
 ## 📚 Documentación
 
-La documentación completa del proyecto está disponible en la carpeta `/docs` del repositorio:
-
-- 📄 `Entrega1_Avance_Prototipo_CoDataU.docx` — Definición y diseño inicial
-- 📄 `Entrega2_MVP_Funcional_CoDataU.docx` — Desarrollo del MVP
-- 📄 `Entrega3_Final_CoDataU.docx` — Informe técnico final
-- 📘 `Manual_Usuario_CoDataU.docx` — Guía de uso para usuarios finales
-- 🔧 `Manual_Tecnico_CoDataU.docx` — Guía técnica para desarrolladores
+Este README contiene la guía funcional y técnica disponible actualmente. Los
+manuales académico, técnico y de usuario están previstos como una entrega futura
+y todavía no forman parte del repositorio.
 
 ---
 

@@ -4,6 +4,7 @@ from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.services.data_service import DataService
 import os
+import math
 from flask import current_app
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -56,7 +57,7 @@ def index():
                     bar_data = []
                     for c in numeric_cols:
                         val = df[c].mean()
-                        if val == val:
+                        if val == val and math.isfinite(float(val)):
                             bar_labels.append(str(c))
                             bar_data.append(round(float(val), 2))
                     if bar_labels:
@@ -78,7 +79,7 @@ def index():
                     }
 
                 # Gráfica 3: columna texto agrupada por columna numérica
-                text_cols = list(df.select_dtypes(include='object').columns)
+                text_cols = DataService.text_columns(df)
                 if text_cols and numeric_cols:
                     group_col = text_cols[0]
                     num_col   = numeric_cols[0]
@@ -89,8 +90,13 @@ def index():
                             .dropna()
                             .head(10)
                         )
-                        g_labels = [str(x) for x in grouped.index.tolist()]
-                        g_datos  = [round(float(v), 2) for v in grouped.to_list()]
+                        pairs = [
+                            (str(label), round(float(value), 2))
+                            for label, value in grouped.items()
+                            if math.isfinite(float(value))
+                        ]
+                        g_labels = [label for label, _ in pairs]
+                        g_datos = [value for _, value in pairs]
                         if g_labels:
                             chart_data['grouped'] = {
                                 'labels':    g_labels,
@@ -98,10 +104,18 @@ def index():
                                 'group_col': str(group_col),
                                 'num_col':   str(num_col)
                             }
-                    except Exception:
-                        pass
+                    except (TypeError, ValueError):
+                        current_app.logger.warning(
+                            'No se pudo construir la gráfica agrupada para %s y %s',
+                            group_col,
+                            num_col,
+                        )
 
             except Exception:
+                current_app.logger.exception(
+                    'No se pudo construir el dashboard para el archivo %s',
+                    active_file.id,
+                )
                 summary   = None
                 chart_data = {}
 

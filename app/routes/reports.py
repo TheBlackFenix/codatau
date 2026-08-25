@@ -2,6 +2,7 @@ import os
 import io
 from flask import Blueprint, render_template, send_file, abort
 from flask_login import login_required, current_user
+from werkzeug.utils import secure_filename
 from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.services.data_service import DataService
@@ -44,7 +45,8 @@ def download(file_id):
     df.to_csv(buffer, index=False, encoding='utf-8-sig')
     buffer.seek(0)
 
-    download_name = f"procesado_{record.original_name.rsplit('.', 1)[0]}.csv"
+    base_name = secure_filename(record.original_name.rsplit('.', 1)[0]) or 'archivo'
+    download_name = f"procesado_{base_name}.csv"
 
     return send_file(
         buffer,

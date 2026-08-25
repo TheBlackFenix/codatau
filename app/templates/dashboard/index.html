@@ -121,10 +121,10 @@
                     {% for col, stats in summary.numeric_summary.items() %}
                     <tr>
                         <td><span style="font-weight:500">{{ col }}</span></td>
-                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.sum) }}</td>
-                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) }}</td>
-                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.min) }}</td>
-                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.max) }}</td>
+                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.sum) if stats.sum is not none else '—' }}</td>
+                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) if stats.mean is not none else '—' }}</td>
+                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.min) if stats.min is not none else '—' }}</td>
+                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.max) if stats.max is not none else '—' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

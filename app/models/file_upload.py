@@ -1,5 +1,5 @@
 from app.extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class FileUpload(db.Model):
@@ -14,8 +14,11 @@ class FileUpload(db.Model):
     row_count     = db.Column(db.Integer, default=0)
     column_count  = db.Column(db.Integer, default=0)
     status        = db.Column(db.String(20), default='pending')  # pending, processed, error
-    uploaded_at   = db.Column(db.DateTime, default=datetime.utcnow)
-    processed_at  = db.Column(db.DateTime)
+    uploaded_at   = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    processed_at  = db.Column(db.DateTime(timezone=True))
 
     # Relación con insights
     insights = db.relationship('AIInsight', backref='file', lazy=True, cascade='all, delete-orphan')

@@ -16,7 +16,8 @@ class AIService:
             })
 
         if null_total > 0:
-            pct = round((null_total / (rows * len(df.columns))) * 100, 1)
+            total_cells = rows * len(df.columns)
+            pct = round((null_total / total_cells) * 100, 1) if total_cells else 0
             insights.append({
                 'type': 'warning',
                 'message': f'Se encontraron {null_total} valores nulos ({pct}% del total de celdas).'
@@ -35,14 +36,14 @@ class AIService:
             max_val = stats['max']
             min_val = stats['min']
 
-            if max_val > 0 and mean > 0:
+            if max_val is not None and mean is not None and max_val > 0 and mean > 0:
                 if max_val > mean * 5:
                     insights.append({
                         'type': 'warning',
                         'message': f'La columna "{col}" tiene valores extremos: máximo {max_val} vs promedio {mean}.'
                     })
 
-            if min_val < 0:
+            if min_val is not None and min_val < 0:
                 insights.append({
                     'type': 'info',
                     'message': f'La columna "{col}" tiene valores negativos (mínimo: {min_val}).'

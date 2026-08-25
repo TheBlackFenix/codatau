@@ -1,8 +1,7 @@
 import os
 import uuid
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, session
+from flask import Blueprint, render_template, flash, redirect, url_for, current_app, session
 from flask_login import login_required, current_user
-from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
@@ -10,7 +9,7 @@ from app.forms.file_forms import UploadForm
 from app.services.data_service import DataService
 from app.services.validation_service import ValidationService
 from app.services.ai_service import AIService
-from datetime import datetime
+from datetime import datetime, timezone
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
 
@@ -59,7 +58,7 @@ def upload():
                 row_count=summary['rows'],
                 column_count=summary['columns'],
                 status='processed',
-                processed_at=datetime.utcnow()
+                processed_at=datetime.now(timezone.utc)
             )
             db.session.add(upload_record)
             db.session.flush()  # Para obtener el ID antes del commit
@@ -88,7 +87,13 @@ def upload():
             db.session.rollback()
             if os.path.exists(filepath):
                 os.remove(filepath)
-            flash(f'Error al procesar el archivo: {str(e)}', 'danger')
+            current_app.logger.exception(
+                'No se pudo procesar el archivo %s: %s', original_name, e
+            )
+            flash(
+                'No fue posible procesar el archivo. Verifica que el formato y el contenido sean válidos.',
+                'danger',
+            )
             return redirect(url_for('files.upload'))
 
     return render_template('files/upload.html', form=form)
@@ -138,18 +143,22 @@ def delete(file_id):
         id=file_id, user_id=current_user.id
     ).first_or_404()
 
-    # Eliminar archivo físico
     filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
-    if os.path.exists(filepath):
-        os.remove(filepath)
 
     # Limpiar sesión si era el archivo activo
-    from flask import session
     if session.get('active_file_id') == file_id:
         session.pop('active_file_id', None)
 
     db.session.delete(record)
     db.session.commit()
+
+    # El registro es la fuente de verdad; un fallo físico no debe restaurarlo.
+    try:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    except OSError:
+        current_app.logger.exception('No se pudo eliminar el archivo físico %s', filepath)
+
     flash(f'Archivo "{record.original_name}" eliminado correctamente.', 'success')
     return redirect(url_for('files.upload'))
 

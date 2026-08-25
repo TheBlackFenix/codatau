@@ -1,8 +1,25 @@
 import pandas as pd
 import os
+import math
+from pandas.api.types import is_object_dtype, is_string_dtype
+
+
+def _finite_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return round(number, 2) if math.isfinite(number) else None
 
 
 class DataService:
+
+    @staticmethod
+    def text_columns(df):
+        return [
+            col for col in df.columns
+            if is_object_dtype(df[col].dtype) or is_string_dtype(df[col].dtype)
+        ]
 
     @staticmethod
     def read_file(filepath):
@@ -32,10 +49,10 @@ class DataService:
         if not numeric_df.empty:
             summary['numeric_summary'] = {
                 col: {
-                    'mean':  round(float(numeric_df[col].mean()), 2),
-                    'max':   round(float(numeric_df[col].max()), 2),
-                    'min':   round(float(numeric_df[col].min()), 2),
-                    'sum':   round(float(numeric_df[col].sum()), 2),
+                    'mean': _finite_number(numeric_df[col].mean()),
+                    'max': _finite_number(numeric_df[col].max()),
+                    'min': _finite_number(numeric_df[col].min()),
+                    'sum': _finite_number(numeric_df[col].sum()),
                 }
                 for col in numeric_df.columns
             }
@@ -49,11 +66,14 @@ class DataService:
 
     @staticmethod
     def clean_dataframe(df):
+        df = df.copy()
         # Eliminar filas completamente vacías
         df = df.dropna(how='all')
         # Eliminar columnas completamente vacías
         df = df.dropna(axis=1, how='all')
-        # Strip en columnas de texto
-        for col in df.select_dtypes(include='object').columns:
-            df[col] = df[col].str.strip()
+        # Limpiar solo valores de texto sin alterar tipos mixtos.
+        for col in DataService.text_columns(df):
+            df[col] = df[col].map(
+                lambda value: value.strip() if isinstance(value, str) else value
+            )
         return df

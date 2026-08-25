@@ -19,11 +19,13 @@ class RegisterForm(FlaskForm):
     submit    = SubmitField('Crear cuenta')
 
     def validate_username(self, field):
-        if User.query.filter_by(username=field.data).first():
+        username = field.data.strip()
+        if User.query.filter_by(username=username).first():
             raise ValidationError('Ese nombre de usuario ya está en uso.')
 
     def validate_email(self, field):
-        if User.query.filter_by(email=field.data).first():
+        email = field.data.strip().lower()
+        if User.query.filter_by(email=email).first():
             raise ValidationError('Ese correo ya está registrado.')
         
 class EditProfileForm(FlaskForm):
@@ -35,8 +37,9 @@ class EditProfileForm(FlaskForm):
         self.original_username = original_username
 
     def validate_username(self, field):
-        if field.data != self.original_username:
-            if User.query.filter_by(username=field.data).first():
+        username = field.data.strip()
+        if username != self.original_username:
+            if User.query.filter_by(username=username).first():
                 raise ValidationError('Ese nombre de usuario ya está en uso.')
 
 

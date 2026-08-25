@@ -1,20 +1,37 @@
+import os
+
 from flask import Flask, redirect, url_for, render_template
 from flask_login import current_user
 from app.config import config
 from app.extensions import db, login_manager, csrf
 
 
-def create_app(config_name='default'):
+def create_app(config_name='default', config_overrides=None):
+    if config_name not in config:
+        raise ValueError(f'Configuración desconocida: {config_name}')
+
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+    if config_overrides:
+        app.config.update(config_overrides)
+
+    if config_name == 'production':
+        missing = [
+            name for name in ('SECRET_KEY', 'SQLALCHEMY_DATABASE_URI')
+            if not app.config.get(name)
+        ]
+        if missing:
+            raise RuntimeError(
+                'Faltan variables requeridas para producción: ' + ', '.join(missing)
+            )
 
     # Inicializar extensiones
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
 
-    # Crear carpeta de uploads si no existe
-    import os
+    # Crear carpetas de datos si no existen
+    os.makedirs(app.instance_path, exist_ok=True)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     # Registrar blueprints
