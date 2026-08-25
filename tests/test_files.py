@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 import pandas as pd
 
@@ -35,6 +36,12 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
     assert download.mimetype == 'text/csv'
     assert b'category,amount' in download.data
 
+    profile = client.get('/files/profile/1')
+    assert profile.status_code == 200
+    assert profile.json['row_count'] == 3
+    assert profile.json['column_count'] == 2
+    assert len(profile.json['source_sha256']) == 64
+
     with app.app_context():
         record = FileUpload.query.one()
         assert record.row_count == 3
@@ -59,6 +66,24 @@ def test_xlsx_upload(app, client, auth):
     assert response.status_code == 302
     with app.app_context():
         assert FileUpload.query.one().file_type == 'xlsx'
+
+
+def test_download_uses_parquet_when_original_is_unavailable(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_csv_bytes()), 'sales.csv')},
+        content_type='multipart/form-data',
+    )
+
+    with app.app_context():
+        record = FileUpload.query.one()
+        Path(app.config['UPLOAD_FOLDER'], record.filename).unlink()
+
+    response = client.get('/reports/download/1')
+
+    assert response.status_code == 200
+    assert b'category,amount' in response.data
 
 
 def test_empty_csv_is_rejected(app, client, auth):
@@ -104,6 +129,7 @@ def test_user_cannot_access_another_users_file(app, client, auth):
 
     assert client.get('/files/results/1').status_code == 404
     assert client.get('/reports/download/1').status_code == 404
+    assert client.get('/files/profile/1').status_code == 404
 
 
 def test_delete_removes_database_record_and_file(app, client, auth):
@@ -116,11 +142,12 @@ def test_delete_removes_database_record_and_file(app, client, auth):
 
     with app.app_context():
         path = app.config['UPLOAD_FOLDER'] + '/' + FileUpload.query.one().filename
+        analytics_folder = app.config['ANALYTICS_FOLDER']
 
     response = client.post('/files/delete/1')
 
     assert response.status_code == 302
     with app.app_context():
         assert FileUpload.query.count() == 0
-    from pathlib import Path
     assert not Path(path).exists()
+    assert list(Path(analytics_folder).iterdir()) == []

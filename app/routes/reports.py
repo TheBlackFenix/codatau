@@ -1,12 +1,12 @@
 import os
 import io
-from flask import Blueprint, render_template, send_file, abort
+
+from flask import Blueprint, abort, current_app, render_template, send_file
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
+
 from app.models.file_upload import FileUpload
-from app.models.ai_insight import AIInsight
-from app.services.data_service import DataService
-from flask import current_app
+from app.services.dataset_pipeline import DatasetPipeline
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -35,11 +35,14 @@ def download(file_id):
         record.filename
     )
 
-    if not os.path.exists(filepath):
+    pipeline = DatasetPipeline(
+        current_app.config['ANALYTICS_FOLDER'],
+        current_app.config['PROFILE_SAMPLE_SIZE'],
+    )
+    try:
+        df = pipeline.load_dataframe_or_source(record.filename, filepath)
+    except (OSError, ValueError):
         abort(404)
-
-    df = DataService.read_file(filepath)
-    df = DataService.clean_dataframe(df)
 
     buffer = io.BytesIO()
     df.to_csv(buffer, index=False, encoding='utf-8-sig')

@@ -33,6 +33,7 @@ def create_app(config_name='default', config_overrides=None):
     # Crear carpetas de datos si no existen
     os.makedirs(app.instance_path, exist_ok=True)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['ANALYTICS_FOLDER'], exist_ok=True)
 
     # Registrar blueprints
     from app.routes.auth import auth_bp

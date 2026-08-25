@@ -13,13 +13,19 @@ def test_home_and_protected_route(client):
 
 def test_factory_applies_overrides_and_creates_upload_folder(tmp_path):
     upload_folder = tmp_path / 'custom-uploads'
+    analytics_folder = tmp_path / 'custom-artifacts'
     app = create_app(
         'testing',
-        {'SECRET_KEY': 'override', 'UPLOAD_FOLDER': str(upload_folder)},
+        {
+            'SECRET_KEY': 'override',
+            'UPLOAD_FOLDER': str(upload_folder),
+            'ANALYTICS_FOLDER': str(analytics_folder),
+        },
     )
 
     assert app.config['SECRET_KEY'] == 'override'
     assert upload_folder.is_dir()
+    assert analytics_folder.is_dir()
 
 
 def test_factory_rejects_unknown_configuration():

@@ -1,11 +1,13 @@
-from flask import Blueprint, render_template, session
+import math
+import os
+
+from flask import Blueprint, current_app, render_template, session
 from flask_login import login_required, current_user
+
 from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.services.data_service import DataService
-import os
-import math
-from flask import current_app
+from app.services.dataset_pipeline import DatasetPipeline
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -39,85 +41,87 @@ def index():
             current_app.config['UPLOAD_FOLDER'],
             active_file.filename
         )
-        if os.path.exists(filepath):
-            try:
-                df = DataService.read_file(filepath)
-                df = DataService.clean_dataframe(df)
-                summary = DataService.get_summary(df)
+        try:
+            pipeline = DatasetPipeline(
+                current_app.config['ANALYTICS_FOLDER'],
+                current_app.config['PROFILE_SAMPLE_SIZE'],
+            )
+            df = pipeline.load_dataframe_or_source(active_file.filename, filepath)
+            summary = DataService.get_summary(df)
 
-                numeric_cols = [
-                    c for c in df.select_dtypes(include='number').columns
-                    if df[c].notna().sum() > 0
-                ]
-                col_names = list(df.columns)
+            numeric_cols = [
+                c for c in df.select_dtypes(include='number').columns
+                if df[c].notna().sum() > 0
+            ]
+            col_names = list(df.columns)
 
-                # Gráfica 1: promedio por columna numérica
-                if numeric_cols:
-                    bar_labels = []
-                    bar_data = []
-                    for c in numeric_cols:
-                        val = df[c].mean()
-                        if val == val and math.isfinite(float(val)):
-                            bar_labels.append(str(c))
-                            bar_data.append(round(float(val), 2))
-                    if bar_labels:
-                        chart_data['bar'] = {
-                            'labels': bar_labels,
-                            'datos':  bar_data
-                        }
-
-                # Gráfica 2: nulos por columna
-                null_dict = {}
-                for col in col_names:
-                    n = int(df[col].isnull().sum())
-                    if n > 0:
-                        null_dict[str(col)] = n
-                if null_dict:
-                    chart_data['nulls'] = {
-                        'labels': list(null_dict.keys()),
-                        'datos':  list(null_dict.values())
+            # Gráfica 1: promedio por columna numérica
+            if numeric_cols:
+                bar_labels = []
+                bar_data = []
+                for c in numeric_cols:
+                    val = df[c].mean()
+                    if val == val and math.isfinite(float(val)):
+                        bar_labels.append(str(c))
+                        bar_data.append(round(float(val), 2))
+                if bar_labels:
+                    chart_data['bar'] = {
+                        'labels': bar_labels,
+                        'datos': bar_data,
                     }
 
-                # Gráfica 3: columna texto agrupada por columna numérica
-                text_cols = DataService.text_columns(df)
-                if text_cols and numeric_cols:
-                    group_col = text_cols[0]
-                    num_col   = numeric_cols[0]
-                    try:
-                        grouped = (
-                            df.groupby(group_col)[num_col]
-                            .sum()
-                            .dropna()
-                            .head(10)
-                        )
-                        pairs = [
-                            (str(label), round(float(value), 2))
-                            for label, value in grouped.items()
-                            if math.isfinite(float(value))
-                        ]
-                        g_labels = [label for label, _ in pairs]
-                        g_datos = [value for _, value in pairs]
-                        if g_labels:
-                            chart_data['grouped'] = {
-                                'labels':    g_labels,
-                                'datos':     g_datos,
-                                'group_col': str(group_col),
-                                'num_col':   str(num_col)
-                            }
-                    except (TypeError, ValueError):
-                        current_app.logger.warning(
-                            'No se pudo construir la gráfica agrupada para %s y %s',
-                            group_col,
-                            num_col,
-                        )
+            # Gráfica 2: nulos por columna
+            null_dict = {}
+            for col in col_names:
+                n = int(df[col].isnull().sum())
+                if n > 0:
+                    null_dict[str(col)] = n
+            if null_dict:
+                chart_data['nulls'] = {
+                    'labels': list(null_dict.keys()),
+                    'datos': list(null_dict.values()),
+                }
 
-            except Exception:
-                current_app.logger.exception(
-                    'No se pudo construir el dashboard para el archivo %s',
-                    active_file.id,
-                )
-                summary   = None
-                chart_data = {}
+            # Gráfica 3: columna texto agrupada por columna numérica
+            text_cols = DataService.text_columns(df)
+            if text_cols and numeric_cols:
+                group_col = text_cols[0]
+                num_col = numeric_cols[0]
+                try:
+                    grouped = (
+                        df.groupby(group_col)[num_col]
+                        .sum()
+                        .dropna()
+                        .head(10)
+                    )
+                    pairs = [
+                        (str(label), round(float(value), 2))
+                        for label, value in grouped.items()
+                        if math.isfinite(float(value))
+                    ]
+                    g_labels = [label for label, _ in pairs]
+                    g_datos = [value for _, value in pairs]
+                    if g_labels:
+                        chart_data['grouped'] = {
+                            'labels': g_labels,
+                            'datos': g_datos,
+                            'group_col': str(group_col),
+                            'num_col': str(num_col),
+                        }
+                except (TypeError, ValueError):
+                    current_app.logger.warning(
+                        'No se pudo construir la gráfica agrupada para %s y %s',
+                        group_col,
+                        num_col,
+                    )
+
+        except Exception:
+            current_app.logger.exception(
+                'No se pudo construir el dashboard para el archivo %s',
+                active_file.id,
+            )
+            summary = None
+            chart_data = {}
 
     insights = []
     if active_file:
@@ -128,8 +132,8 @@ def index():
             .all()
         )
 
-    total_files    = len(all_files)
-    total_rows     = sum(f.row_count or 0 for f in all_files)
+    total_files = len(all_files)
+    total_rows = sum(f.row_count or 0 for f in all_files)
     total_insights = AIInsight.query.filter_by(user_id=current_user.id).count()
 
     return render_template('dashboard/index.html',

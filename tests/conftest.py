@@ -7,11 +7,13 @@ from app.extensions import db
 @pytest.fixture()
 def app(tmp_path):
     upload_folder = tmp_path / 'uploads'
+    analytics_folder = tmp_path / 'artifacts'
     application = create_app(
         'testing',
         {
             'SECRET_KEY': 'test-secret-key',
             'UPLOAD_FOLDER': str(upload_folder),
+            'ANALYTICS_FOLDER': str(analytics_folder),
         },
     )
 

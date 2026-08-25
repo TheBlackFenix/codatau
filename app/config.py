@@ -20,6 +20,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = _env_int('MAX_CONTENT_LENGTH', 50 * 1024 * 1024)
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(BASE_DIR, 'uploads')
+    ANALYTICS_FOLDER = os.environ.get('ANALYTICS_FOLDER') or os.path.join(BASE_DIR, 'artifacts')
+    PROFILE_SAMPLE_SIZE = _env_int('PROFILE_SAMPLE_SIZE', 12)
     ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
     WTF_CSRF_ENABLED = True
 

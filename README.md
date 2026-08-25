@@ -12,6 +12,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
 [![pandas](https://img.shields.io/badge/pandas-2.x-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org)
+[![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
 [![SQLite](https://img.shields.io/badge/SQLite-3.x-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384?style=for-the-badge&logo=chartdotjs&logoColor=white)](https://chartjs.org)
 
@@ -96,9 +97,11 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Vista de todos los archivos con acciones: ver, activar, eliminar
 - [x] Eliminación de archivos (físico + registro en BD)
 
-### 🧪 Procesamiento de datos (pandas)
+### 🧪 Procesamiento de datos (pandas + DuckDB)
 - [x] Lectura automática con detección de encoding (UTF-8 / Latin-1)
 - [x] Limpieza automática: eliminar filas/columnas vacías, strip de texto
+- [x] Persistencia analítica en Parquet comprimido con Zstandard
+- [x] Perfil estructurado con tipos, nulos, cardinalidad, duplicados y muestra
 - [x] Detección de valores nulos y filas duplicadas
 - [x] Cálculo de estadísticas: suma, promedio, mínimo, máximo por columna
 - [x] Generación de datos para gráficas (promedios, agrupaciones)
@@ -138,7 +141,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 | **Base de datos** | SQLite | 3.x |
 | **Autenticación** | Flask-Login + Werkzeug | — |
 | **Formularios** | Flask-WTF | — |
-| **Procesamiento datos** | pandas + openpyxl + xlrd | 2.2 / 3.0 |
+| **Procesamiento datos** | pandas + DuckDB + Parquet | 2.2 / 1.5 / — |
 | **Frontend CSS** | Sistema propio (Inter) | — |
 | **Gráficas** | Chart.js | 4.4.1 |
 | **Iconos** | Bootstrap Icons | 1.11.0 |
@@ -172,7 +175,8 @@ CoDataU implementa el patrón **MVC** con **Application Factory** de Flask:
 │             │                                            │
 │  ┌──────────▼──────────────────────────────────────┐    │
 │  │                   SERVICES                       │    │
-│  │  DataService │ ValidationService │ AIService     │    │
+│  │ DataService │ DatasetPipeline │ StorageService   │    │
+│  │ ValidationService │ AIService                      │    │
 │  └──────────┬──────────────────────────────────────┘    │
 │             │                                            │
 │  ┌──────────▼──────────────────────────────────────┐    │
@@ -183,8 +187,8 @@ CoDataU implementa el patrón **MVC** con **Application Factory** de Flask:
               │
 ┌─────────────▼───────────────────────────────────────────┐
 │                       DATOS                              │
-│        SQLite (instance/pymes_ai.db)                     │
-│        Archivos subidos (uploads/)                       │
+│ SQLite (usuarios/metadatos) │ uploads/ (originales)      │
+│ artifacts/ (Parquet canónico + perfil JSON)              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -195,15 +199,17 @@ Usuario sube archivo
        ↓
 Flask-WTF valida el formulario + tipo de archivo
        ↓
-Archivo guardado con nombre UUID único en uploads/
+Original inmutable guardado con nombre UUID en uploads/
        ↓
 DataService.read_file() → pandas lee CSV/XLS/XLSX
        ↓
 ValidationService.validate_file() → detecta errores
        ↓
-DataService.clean_dataframe() → limpia datos
+DataService.clean_dataframe() → normaliza datos
        ↓
-DataService.get_summary() → calcula estadísticas
+DatasetPipeline → DuckDB escribe Parquet y genera el perfil
+       ↓
+La aplicación consulta el Parquet; la IA podrá consumir perfil + muestra
        ↓
 AIService.generate_insights() → genera insights basados en reglas
        ↓
@@ -238,6 +244,8 @@ pymes_ai/
 │   │
 │   ├── services/
 │   │   ├── data_service.py      # Procesamiento con pandas
+│   │   ├── dataset_pipeline.py  # Parquet y perfilado con DuckDB
+│   │   ├── storage_service.py   # Abstracción de almacenamiento local
 │   │   ├── validation_service.py # Validación de calidad
 │   │   └── ai_service.py        # Generación de insights IA
 │   │
@@ -274,6 +282,8 @@ pymes_ai/
 │   └── pymes_ai.db              # Base de datos SQLite (auto-generada)
 │
 ├── uploads/                     # Archivos subidos por usuarios
+├── artifacts/                   # Parquet y perfiles (auto-generados)
+├── docs/architecture/           # Decisiones técnicas del pipeline
 │
 ├── .env                         # Variables de entorno (NO subir a Git)
 ├── .env.example                 # Plantilla de variables de entorno
@@ -349,6 +359,8 @@ SECRET_KEY=tu-clave-secreta-muy-larga-y-segura
 DATABASE_URL=sqlite:///pymes_ai.db
 MAX_CONTENT_LENGTH=52428800
 UPLOAD_FOLDER=uploads
+ANALYTICS_FOLDER=artifacts
+PROFILE_SAMPLE_SIZE=12
 ```
 
 > ⚠️ **Nunca subas el archivo `.env` a GitHub.** Ya está incluido en `.gitignore`.
@@ -436,6 +448,7 @@ rm instance/pymes_ai.db        # macOS/Linux
 | GET | `/files/upload` | Vista de archivos | ✅ |
 | POST | `/files/upload` | Cargar archivo | ✅ |
 | GET | `/files/results/<id>` | Resultados de un archivo | ✅ |
+| GET | `/files/profile/<id>` | Perfil analítico estructurado | ✅ |
 | GET | `/files/select/<id>` | Activar archivo en dashboard | ✅ |
 | POST | `/files/delete/<id>` | Eliminar archivo | ✅ |
 | GET | `/files/insights` | Análisis IA | ✅ |
@@ -520,15 +533,17 @@ Este proyecto fue desarrollado como **Proyecto de Grado de Décimo Semestre** en
 
 ## 📚 Documentación
 
-Este README contiene la guía funcional y técnica disponible actualmente. Los
-manuales académico, técnico y de usuario están previstos como una entrega futura
-y todavía no forman parte del repositorio.
+Este README contiene la guía funcional general. La decisión y evolución del
+pipeline analítico se documentan en
+[`docs/architecture/data-pipeline.md`](docs/architecture/data-pipeline.md).
 
 ---
 
 ## 🚀 Roadmap — Próximas funcionalidades
 
-- [ ] Integración con **OpenAI / Claude API** para asistente conversacional real
+- [ ] Planes de limpieza estructurados por IA con aprobación y trazabilidad
+- [ ] Consultas y visualizaciones ejecutadas directamente en DuckDB
+- [ ] Integración con almacenamiento de objetos (S3 compatible)
 - [ ] Procesamiento asíncrono con **Celery + Redis** para archivos muy grandes
 - [ ] Gráficas avanzadas: correlaciones, series de tiempo, mapas de calor
 - [ ] Soporte para archivos **JSON**

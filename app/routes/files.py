@@ -1,6 +1,19 @@
 import os
 import uuid
-from flask import Blueprint, render_template, flash, redirect, url_for, current_app, session
+from datetime import datetime, timezone
+from pathlib import Path
+
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    session,
+    url_for,
+)
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.file_upload import FileUpload
@@ -9,9 +22,26 @@ from app.forms.file_forms import UploadForm
 from app.services.data_service import DataService
 from app.services.validation_service import ValidationService
 from app.services.ai_service import AIService
-from datetime import datetime, timezone
+from app.services.dataset_pipeline import DatasetPipeline
+from app.services.storage_service import LocalStorageService
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
+
+
+def _pipeline():
+    return DatasetPipeline(
+        current_app.config['ANALYTICS_FOLDER'],
+        current_app.config['PROFILE_SAMPLE_SIZE'],
+    )
+
+
+def _storage():
+    return LocalStorageService(current_app.config['UPLOAD_FOLDER'])
+
+
+def _load_dataframe(record):
+    source_path = _storage().path_for(record.filename)
+    return _pipeline().load_dataframe_or_source(record.filename, source_path)
 
 
 @files_bp.route('/upload', methods=['GET', 'POST'])
@@ -21,13 +51,14 @@ def upload():
 
     if form.validate_on_submit():
         file = form.file.data
-        original_name = file.filename
+        original_name = Path(file.filename).name
         ext = os.path.splitext(original_name)[1].lower().lstrip('.')
 
         # Nombre único para evitar colisiones
         unique_name = f"{uuid.uuid4().hex}.{ext}"
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_name)
-        file.save(filepath)
+        storage = _storage()
+        pipeline = _pipeline()
+        filepath = storage.save(file, unique_name)
 
         try:
             # Leer archivo
@@ -37,13 +68,16 @@ def upload():
             errors, warnings = ValidationService.validate_file(df)
 
             if errors:
-                os.remove(filepath)
+                storage.delete(unique_name)
                 for e in errors:
                     flash(e, 'danger')
                 return redirect(url_for('files.upload'))
 
             # Limpiar
             df = DataService.clean_dataframe(df)
+
+            # Crear artefacto analítico portable y perfil compacto para IA.
+            artifact = pipeline.ingest_dataframe(df, unique_name, filepath)
 
             # Resumen
             summary = DataService.get_summary(df)
@@ -55,8 +89,8 @@ def upload():
                 original_name=original_name,
                 file_type=ext,
                 file_size=os.path.getsize(filepath),
-                row_count=summary['rows'],
-                column_count=summary['columns'],
+                row_count=artifact.profile['row_count'],
+                column_count=artifact.profile['column_count'],
                 status='processed',
                 processed_at=datetime.now(timezone.utc)
             )
@@ -85,8 +119,8 @@ def upload():
 
         except Exception as e:
             db.session.rollback()
-            if os.path.exists(filepath):
-                os.remove(filepath)
+            storage.delete(unique_name)
+            pipeline.remove_artifacts(unique_name)
             current_app.logger.exception(
                 'No se pudo procesar el archivo %s: %s', original_name, e
             )
@@ -108,23 +142,17 @@ def results(file_id):
 
     insights = AIInsight.query.filter_by(file_id=file_id).all()
 
-    filepath = os.path.join(
-        current_app.config['UPLOAD_FOLDER'],
-        upload_record.filename
-    )
-
-    summary = None
-    if os.path.exists(filepath):
-        df = DataService.read_file(filepath)
-        df = DataService.clean_dataframe(df)
-        summary = DataService.get_summary(df)
+    try:
+        summary = DataService.get_summary(_load_dataframe(upload_record))
+    except (OSError, ValueError):
+        abort(404)
 
     return render_template('files/results.html',
         record=upload_record,
         insights=insights,
         summary=summary
     )
-    
+
 
 @files_bp.route('/select/<int:file_id>')
 @login_required
@@ -136,6 +164,19 @@ def select(file_id):
     flash(f'Archivo activo: {record.original_name}', 'info')
     return redirect(url_for('dashboard.index'))
 
+
+@files_bp.route('/profile/<int:file_id>')
+@login_required
+def profile(file_id):
+    record = FileUpload.query.filter_by(
+        id=file_id, user_id=current_user.id
+    ).first_or_404()
+    data_profile = _pipeline().load_profile(record.filename)
+    if data_profile is None:
+        return jsonify({'error': 'El perfil analítico no está disponible.'}), 404
+    return jsonify(data_profile)
+
+
 @files_bp.route('/delete/<int:file_id>', methods=['POST'])
 @login_required
 def delete(file_id):
@@ -143,7 +184,8 @@ def delete(file_id):
         id=file_id, user_id=current_user.id
     ).first_or_404()
 
-    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
+    storage = _storage()
+    pipeline = _pipeline()
 
     # Limpiar sesión si era el archivo activo
     if session.get('active_file_id') == file_id:
@@ -154,18 +196,21 @@ def delete(file_id):
 
     # El registro es la fuente de verdad; un fallo físico no debe restaurarlo.
     try:
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        storage.delete(record.filename)
+        pipeline.remove_artifacts(record.filename)
     except OSError:
-        current_app.logger.exception('No se pudo eliminar el archivo físico %s', filepath)
+        current_app.logger.exception(
+            'No se pudieron eliminar todos los artefactos del archivo %s',
+            record.filename,
+        )
 
     flash(f'Archivo "{record.original_name}" eliminado correctamente.', 'success')
     return redirect(url_for('files.upload'))
 
+
 @files_bp.route('/insights')
 @login_required
 def insights_ia():
-    from flask import session
     active_file_id = session.get('active_file_id')
     active_file = None
     analysis = None
@@ -183,10 +228,8 @@ def insights_ia():
         active_file = all_files[0]
 
     if active_file:
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], active_file.filename)
-        if os.path.exists(filepath):
-            df = DataService.read_file(filepath)
-            df = DataService.clean_dataframe(df)
+        try:
+            df = _load_dataframe(active_file)
             summary = DataService.get_summary(df)
 
             # Análisis descriptivo automático
@@ -200,6 +243,10 @@ def insights_ia():
                 'text_cols': text_cols,
                 'insights': AIInsight.query.filter_by(file_id=active_file.id).all()
             }
+        except (OSError, ValueError):
+            current_app.logger.exception(
+                'No se pudo cargar el análisis del archivo %s', active_file.id
+            )
 
     return render_template('files/insights.html',
         active_file=active_file,
