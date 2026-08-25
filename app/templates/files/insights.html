@@ -31,10 +31,16 @@
             Procesado el {{ active_file.processed_at.strftime('%d/%m/%Y') if active_file.processed_at }}
         </div>
     </div>
-    <a href="{{ url_for('reports.download', file_id=active_file.id) }}"
-       class="btn btn-secondary btn-sm" style="flex-shrink:0">
-        <i class="bi bi-download"></i> Descargar CSV
-    </a>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+        <a href="{{ url_for('files.cleaning', file_id=active_file.id) }}"
+           class="btn btn-primary btn-sm">
+            <i class="bi bi-magic"></i> Revisar y limpiar datos
+        </a>
+        <a href="{{ url_for('reports.download', file_id=active_file.id) }}"
+           class="btn btn-secondary btn-sm">
+            <i class="bi bi-download"></i> Descargar CSV
+        </a>
+    </div>
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 340px;gap:20px">
@@ -81,6 +87,17 @@
         <!-- Recommendations -->
         <div class="card">
             <div class="card-title"><i class="bi bi-list-check"></i> Sugerencias de mejora</div>
+
+            <div style="padding:12px 14px;background:var(--purple-soft);border-radius:10px;margin-bottom:12px">
+                <div style="font-size:13px;color:var(--gray-700);margin-bottom:8px">
+                    Estas sugerencias son el diagnóstico. Para seleccionar operaciones, simular
+                    cambios y crear una versión limpia, abre el plan de limpieza.
+                </div>
+                <a href="{{ url_for('files.cleaning', file_id=active_file.id) }}"
+                   class="btn btn-purple btn-sm">
+                    <i class="bi bi-list-check"></i> Abrir plan de limpieza
+                </a>
+            </div>
 
             {% if analysis.summary.null_total > 0 %}
             <div class="insight-chip insight-warning">

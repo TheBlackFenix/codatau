@@ -106,6 +106,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Inferencia semántica y plan de limpieza seguro (`automatic` / revisión / IA)
 - [x] Vista previa, aprobación por operación y versiones reversibles
 - [x] Cuarentena descargable para filas que no superan una validación
+- [x] Flujo de limpieza accesible desde navegación, dashboard, análisis y archivos
 - [x] Detección de valores nulos y filas duplicadas
 - [x] Cálculo de estadísticas: suma, promedio, mínimo, máximo por columna
 - [x] Generación de datos para gráficas (promedios, agrupaciones)
@@ -456,6 +457,7 @@ rm instance/pymes_ai.db        # macOS/Linux
 | GET | `/files/results/<id>` | Resultados de un archivo | ✅ |
 | GET | `/files/profile/<id>` | Perfil analítico estructurado | ✅ |
 | GET | `/files/cleaning/<id>` | Plan y versiones de limpieza | ✅ |
+| GET | `/files/cleaning` | Abrir limpieza del archivo activo | ✅ |
 | POST | `/files/cleaning/<id>/preview` | Vista previa de operaciones | ✅ |
 | POST | `/files/cleaning/<id>/apply` | Crear una nueva versión | ✅ |
 | POST | `/files/cleaning/<id>/activate/<version>` | Activar o revertir versión | ✅ |

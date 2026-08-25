@@ -87,6 +87,11 @@
                        style="background:var(--purple-soft);color:var(--purple);border:none">
                         <i class="bi bi-graph-up"></i>
                     </a>
+                    <a href="{{ url_for('files.cleaning', file_id=u.id) }}"
+                       class="btn btn-sm btn-icon" title="Limpiar datos"
+                       style="background:#F0FDF4;color:#15803D;border:none">
+                        <i class="bi bi-magic"></i>
+                    </a>
                     <form method="POST" action="{{ url_for('files.delete', file_id=u.id) }}"
                           style="display:inline"
                           onsubmit="return confirm('¿Eliminar {{ u.original_name }}?')">

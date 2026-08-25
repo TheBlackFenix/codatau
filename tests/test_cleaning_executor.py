@@ -95,3 +95,24 @@ def test_executor_rejects_unknown_or_non_executable_operations(tmp_path):
 
     with pytest.raises(CleaningPlanError, match='análisis adicional'):
         select_executable_operations(plan, ['email:review_invalid_values'])
+
+
+def test_executor_can_quarantine_rows_with_missing_values(tmp_path):
+    dataframe = pd.DataFrame({'category': ['A', None, 'B'], 'amount': [10, 20, 30]})
+    source = tmp_path / 'missing.csv'
+    dataframe.to_csv(source, index=False)
+    artifact = DatasetPipeline(tmp_path / 'artifacts').ingest_dataframe(
+        dataframe,
+        'missing.csv',
+        source,
+    )
+    selected = select_executable_operations(
+        artifact.profile['cleaning_plan'],
+        ['category:handle_missing'],
+    )
+
+    preview = CleaningExecutor().preview(artifact.parquet_path, selected)
+
+    assert preview.metrics['after_rows'] == 2
+    assert preview.metrics['quarantined_rows'] == 1
+    assert preview.quarantine[0]['amount'] == 20

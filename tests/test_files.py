@@ -38,10 +38,13 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
 
     assert upload.status_code == 302
     assert upload.headers['Location'].endswith('/files/results/1')
+    with client.session_transaction() as browser_session:
+        assert browser_session['active_file_id'] == 1
     assert client.get('/files/results/1').status_code == 200
     assert client.get('/dashboard').status_code == 200
     assert client.get('/files/insights').status_code == 200
     assert client.get('/reports/').status_code == 200
+    assert client.get('/files/cleaning').headers['Location'].endswith('/files/cleaning/1')
 
     download = client.get('/reports/download/1')
     assert download.status_code == 200
@@ -53,13 +56,22 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
     assert profile.json['row_count'] == 3
     assert profile.json['column_count'] == 2
     assert len(profile.json['source_sha256']) == 64
-    assert profile.json['profile_version'] == '1.1'
+    assert profile.json['profile_version'] == '1.2'
     assert profile.json['cleaning_plan']['status'] == 'proposed'
 
     with app.app_context():
         record = FileUpload.query.one()
         assert record.row_count == 3
         assert record.column_count == 2
+
+
+def test_cleaning_navigation_without_files_explains_next_step(client, auth):
+    _login(auth)
+
+    response = client.get('/files/cleaning', follow_redirects=True)
+
+    assert response.status_code == 200
+    assert 'Carga un archivo antes de iniciar una limpieza'.encode() in response.data
 
 
 def test_xlsx_upload(app, client, auth):
@@ -225,6 +237,13 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     assert plan_page.status_code == 200
     assert b'email:validate_email' in plan_page.data
     assert b'dataset:remove_exact_duplicates' in plan_page.data
+
+    dashboard = client.get('/dashboard')
+    insights = client.get('/files/insights')
+    files_page = client.get('/files/upload')
+    assert b'/files/cleaning/1' in dashboard.data
+    assert b'Revisar y limpiar datos' in insights.data
+    assert b'title="Limpiar datos"' in files_page.data
 
     selected = [
         'email:validate_email',

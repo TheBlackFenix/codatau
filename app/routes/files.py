@@ -67,11 +67,13 @@ def _record_for_user(file_id):
 def _cleaning_context(record):
     pipeline = _pipeline()
     stored_filename = record.active_stored_filename
-    profile_data = pipeline.load_profile(stored_filename)
-    if profile_data is None:
-        abort(404)
     source_parquet, _ = pipeline.paths_for(stored_filename)
     if not source_parquet.exists():
+        abort(404)
+    source_path = _storage().path_for(record.filename)
+    try:
+        profile_data = pipeline.ensure_current_profile(stored_filename, source_path)
+    except OSError:
         abort(404)
     return pipeline, stored_filename, source_parquet, profile_data
 
@@ -160,6 +162,7 @@ def upload():
                 db.session.add(insight_record)
 
             db.session.commit()
+            session['active_file_id'] = upload_record.id
 
             # Flash de warnings de validación
             for w in warnings:
@@ -240,8 +243,12 @@ def select(file_id):
 @login_required
 def profile(file_id):
     record = _record_for_user(file_id)
-    data_profile = _pipeline().load_profile(record.active_stored_filename)
-    if data_profile is None:
+    try:
+        data_profile = _pipeline().ensure_current_profile(
+            record.active_stored_filename,
+            _storage().path_for(record.filename),
+        )
+    except OSError:
         return jsonify({'error': 'El perfil analítico no está disponible.'}), 404
     return jsonify(data_profile)
 
@@ -303,6 +310,27 @@ def cleaning(file_id):
         versions=versions,
         form=CleaningActionForm(),
     )
+
+
+@files_bp.route('/cleaning')
+@login_required
+def cleaning_current():
+    active_file_id = session.get('active_file_id')
+    record = None
+    if active_file_id:
+        record = FileUpload.query.filter_by(
+            id=active_file_id,
+            user_id=current_user.id,
+        ).first()
+    if record is None:
+        record = FileUpload.query.filter_by(user_id=current_user.id).order_by(
+            FileUpload.uploaded_at.desc()
+        ).first()
+    if record is None:
+        flash('Carga un archivo antes de iniciar una limpieza.', 'info')
+        return redirect(url_for('files.upload'))
+    session['active_file_id'] = record.id
+    return redirect(url_for('files.cleaning', file_id=record.id))
 
 
 @files_bp.route('/cleaning/<int:file_id>/preview', methods=['POST'])

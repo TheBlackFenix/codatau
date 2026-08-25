@@ -34,6 +34,7 @@ OPERATION_CATALOG = frozenset(
     {
         'blank_to_null',
         'cast_type',
+        'handle_missing',
         'normalize_boolean',
         'normalize_case',
         'normalize_phone',

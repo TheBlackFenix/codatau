@@ -1,4 +1,5 @@
 import hashlib
+import json
 
 import pandas as pd
 import pytest
@@ -22,7 +23,7 @@ def test_pipeline_creates_parquet_and_compact_profile(tmp_path):
 
     assert artifact.parquet_path.exists()
     assert artifact.profile_path.exists()
-    assert artifact.profile['profile_version'] == '1.1'
+    assert artifact.profile['profile_version'] == '1.2'
     assert artifact.profile['source_sha256'] == hashlib.sha256(source_bytes).hexdigest()
     assert artifact.profile['row_count'] == 4
     assert artifact.profile['column_count'] == 2
@@ -36,6 +37,13 @@ def test_pipeline_creates_parquet_and_compact_profile(tmp_path):
     assert columns['amount']['numeric']['mean'] == 17.5
     assert columns['amount']['semantic']['type'] == 'number'
     assert artifact.profile['cleaning_plan']['status'] == 'proposed'
+    missing_operation = next(
+        operation
+        for operation in artifact.profile['cleaning_plan']['operations']
+        if operation['operation'] == 'handle_missing'
+    )
+    assert missing_operation['column'] == 'category'
+    assert missing_operation['decision'] == 'user_review'
     duplicate_operation = next(
         operation
         for operation in artifact.profile['cleaning_plan']['operations']
@@ -71,3 +79,21 @@ def test_pipeline_rejects_empty_dataframes(tmp_path):
 
     with pytest.raises(ValueError, match='No hay datos utilizables'):
         pipeline.ingest_dataframe(pd.DataFrame(), 'empty.csv', source_path)
+
+
+def test_pipeline_refreshes_an_outdated_profile(tmp_path):
+    source_path = tmp_path / 'source.csv'
+    source_path.write_bytes(b'value\n1\n')
+    pipeline = DatasetPipeline(tmp_path / 'artifacts')
+    artifact = pipeline.ingest_dataframe(
+        pd.DataFrame({'value': [1]}),
+        'dataset.csv',
+        source_path,
+    )
+    outdated = dict(artifact.profile)
+    outdated['profile_version'] = '0.9'
+    artifact.profile_path.write_text(json.dumps(outdated), encoding='utf-8')
+
+    refreshed = pipeline.ensure_current_profile('dataset.csv', source_path)
+
+    assert refreshed['profile_version'] == '1.2'

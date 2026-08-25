@@ -66,8 +66,10 @@ Las operaciones automáticas compatibles permanecen propuestas hasta la aprobaci
 El ejecutor reconstruye la selección desde el perfil del servidor y genera SQL de
 DuckDB desde un catálogo cerrado. Actualmente ejecuta `trim_text`,
 `blank_to_null`, conversiones numéricas inequívocas, validación de correo, fechas
-ISO y booleanos. Los duplicados exactos son ejecutables únicamente tras selección
-manual, porque dos eventos reales pueden tener los mismos valores.
+ISO y booleanos. Los valores nulos pueden enviarse a cuarentena tras selección
+manual, sin inventar una imputación. Los duplicados exactos también son
+ejecutables únicamente tras selección manual, porque dos eventos reales pueden
+tener los mismos valores.
 
 Las filas que no superan una conversión o validación salen de la versión limpia y
 se escriben en un Parquet de cuarentena con la operación que causó el rechazo. El

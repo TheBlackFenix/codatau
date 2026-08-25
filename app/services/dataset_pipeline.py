@@ -17,7 +17,7 @@ from app.services.semantic_profiler import (
 )
 
 
-PROFILE_VERSION = '1.1'
+PROFILE_VERSION = '1.2'
 
 
 @dataclass(frozen=True)
@@ -140,6 +140,12 @@ class DatasetPipeline:
         self._write_json_atomic(profile_path, profile)
         return DatasetArtifact(parquet_path, profile_path, profile)
 
+    def ensure_current_profile(self, stored_filename, source_path):
+        profile = self.load_profile(stored_filename)
+        if profile and profile.get('profile_version') == PROFILE_VERSION:
+            return profile
+        return self.profile_existing(stored_filename, source_path).profile
+
     def remove_artifacts(self, stored_filename):
         for path in self.paths_for(stored_filename):
             if path.exists():
@@ -201,6 +207,22 @@ class DatasetPipeline:
                     type_name,
                     row_count,
                 )
+                if null_count:
+                    operations.append(
+                        {
+                            'id': f'{name}:handle_missing',
+                            'column': name,
+                            'operation': 'handle_missing',
+                            'decision': 'user_review',
+                            'affected_rows': null_count,
+                            'confidence': 1.0,
+                            'parameters': {'strategy': 'quarantine_rows'},
+                            'reason': (
+                                'Puedes conservar estas filas o moverlas a cuarentena; '
+                                'no se imputan valores sin una regla de negocio.'
+                            ),
+                        }
+                    )
                 column_profile['semantic'] = semantic
                 column_operations.append(operations)
                 columns.append(column_profile)

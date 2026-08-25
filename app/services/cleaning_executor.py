@@ -64,10 +64,11 @@ class CleaningExecutor:
         'parse_date',
         'normalize_boolean',
     }
+    SUPPORTED_REVIEW = {'handle_missing', 'remove_exact_duplicates'}
 
     @classmethod
     def is_executable(cls, operation):
-        if operation['operation'] == 'remove_exact_duplicates':
+        if operation['operation'] in cls.SUPPORTED_REVIEW:
             return operation['decision'] == 'user_review'
         return (
             operation['decision'] == 'automatic'
@@ -234,6 +235,10 @@ class CleaningExecutor:
         if name == 'blank_to_null':
             transformed = f"nullif({text}, '')"
             return transformed, None, f'{current} IS DISTINCT FROM {transformed}'
+        if name == 'handle_missing':
+            if parameters.get('strategy') != 'quarantine_rows':
+                raise CleaningPlanError('La estrategia para valores nulos no es válida.')
+            return current, f'{current} IS NULL', None
         if name == 'cast_type':
             target = parameters.get('target_type')
             if target not in {'BIGINT', 'DOUBLE'}:
