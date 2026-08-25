@@ -10,6 +10,9 @@
         </div>
     </div>
     <div style="display:flex;gap:8px">
+        <a href="{{ url_for('files.cleaning', file_id=record.id) }}" class="btn btn-purple btn-sm">
+            <i class="bi bi-magic"></i> Revisar limpieza
+        </a>
         <a href="{{ url_for('reports.download', file_id=record.id) }}" class="btn btn-primary btn-sm">
             <i class="bi bi-download"></i> Descargar CSV
         </a>

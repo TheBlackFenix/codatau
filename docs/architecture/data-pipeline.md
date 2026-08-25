@@ -13,6 +13,8 @@ analizarlo:
    aproximada, duplicados, estadísticas numéricas y una muestra acotada.
 5. El dashboard y los reportes leen el artefacto Parquet y pueden recurrir al
    original para archivos creados antes de esta versión.
+6. Una limpieza aprobada crea un nuevo Parquet y, cuando corresponde, un artefacto
+   de cuarentena; la versión activa puede cambiarse sin sobrescribir las anteriores.
 
 Por ahora, SQLite solo almacena usuarios, metadatos e insights. No contiene los
 datos tabulares cargados.

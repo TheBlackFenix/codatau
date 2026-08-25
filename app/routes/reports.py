@@ -40,7 +40,10 @@ def download(file_id):
         current_app.config['PROFILE_SAMPLE_SIZE'],
     )
     try:
-        df = pipeline.load_dataframe_or_source(record.filename, filepath)
+        df = pipeline.load_dataframe_or_source(
+            record.active_stored_filename,
+            filepath,
+        )
     except (OSError, ValueError):
         abort(404)
 

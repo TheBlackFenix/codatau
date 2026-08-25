@@ -104,6 +104,8 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Persistencia analítica en Parquet comprimido con Zstandard
 - [x] Perfil estructurado con tipos, nulos, cardinalidad, duplicados y muestra
 - [x] Inferencia semántica y plan de limpieza seguro (`automatic` / revisión / IA)
+- [x] Vista previa, aprobación por operación y versiones reversibles
+- [x] Cuarentena descargable para filas que no superan una validación
 - [x] Detección de valores nulos y filas duplicadas
 - [x] Cálculo de estadísticas: suma, promedio, mínimo, máximo por columna
 - [x] Generación de datos para gráficas (promedios, agrupaciones)
@@ -236,6 +238,7 @@ pymes_ai/
 │   │   ├── __init__.py
 │   │   ├── user.py              # Modelo User
 │   │   ├── file_upload.py       # Modelo FileUpload
+│   │   ├── dataset_version.py   # Versiones de limpieza reversibles
 │   │   └── ai_insight.py        # Modelo AIInsight
 │   │
 │   ├── routes/
@@ -247,6 +250,7 @@ pymes_ai/
 │   ├── services/
 │   │   ├── data_service.py      # Procesamiento con pandas
 │   │   ├── dataset_pipeline.py  # Parquet y perfilado con DuckDB
+│   │   ├── cleaning_executor.py # Vista previa y ejecución SQL controlada
 │   │   ├── storage_service.py   # Abstracción de almacenamiento local
 │   │   ├── validation_service.py # Validación de calidad
 │   │   └── ai_service.py        # Generación de insights IA
@@ -451,6 +455,11 @@ rm instance/pymes_ai.db        # macOS/Linux
 | POST | `/files/upload` | Cargar archivo | ✅ |
 | GET | `/files/results/<id>` | Resultados de un archivo | ✅ |
 | GET | `/files/profile/<id>` | Perfil analítico estructurado | ✅ |
+| GET | `/files/cleaning/<id>` | Plan y versiones de limpieza | ✅ |
+| POST | `/files/cleaning/<id>/preview` | Vista previa de operaciones | ✅ |
+| POST | `/files/cleaning/<id>/apply` | Crear una nueva versión | ✅ |
+| POST | `/files/cleaning/<id>/activate/<version>` | Activar o revertir versión | ✅ |
+| GET | `/files/cleaning/<id>/quarantine/<version>` | Descargar cuarentena | ✅ |
 | GET | `/files/select/<id>` | Activar archivo en dashboard | ✅ |
 | POST | `/files/delete/<id>` | Eliminar archivo | ✅ |
 | GET | `/files/insights` | Análisis IA | ✅ |
@@ -546,7 +555,8 @@ contrato del motor de limpieza está en
 ## 🚀 Roadmap — Próximas funcionalidades
 
 - [x] Perfilado semántico y propuestas estructuradas de limpieza
-- [ ] Ejecutor de planes con vista previa, aprobación y trazabilidad
+- [x] Ejecutor inicial con vista previa, aprobación y trazabilidad
+- [ ] Parámetros interactivos para fechas, teléfonos y separadores regionales
 - [ ] Análisis de casos ambiguos mediante IA
 - [ ] Consultas y visualizaciones ejecutadas directamente en DuckDB
 - [ ] Integración con almacenamiento de objetos (S3 compatible)

@@ -46,7 +46,10 @@ def index():
                 current_app.config['ANALYTICS_FOLDER'],
                 current_app.config['PROFILE_SAMPLE_SIZE'],
             )
-            df = pipeline.load_dataframe_or_source(active_file.filename, filepath)
+            df = pipeline.load_dataframe_or_source(
+                active_file.active_stored_filename,
+                filepath,
+            )
             summary = DataService.get_summary(df)
 
             numeric_cols = [

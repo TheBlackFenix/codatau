@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from app.models.file_upload import FileUpload
+from app.models.dataset_version import DatasetVersion
 
 
 def _login(auth):
@@ -14,6 +15,16 @@ def _login(auth):
 
 def _csv_bytes():
     return b'category,amount\nA,10\nB,20\nA,30\n'
+
+
+def _cleaning_csv_bytes():
+    return (
+        b'email,amount\n'
+        b'ana@example.com,10\n'
+        b'invalid-email,20\n'
+        b'leo@example.org,30\n'
+        b'leo@example.org,30\n'
+    )
 
 
 def test_csv_flow_from_upload_to_download(app, client, auth):
@@ -199,6 +210,83 @@ def test_user_cannot_access_another_users_file(app, client, auth):
     assert client.get('/files/results/1').status_code == 404
     assert client.get('/reports/download/1').status_code == 404
     assert client.get('/files/profile/1').status_code == 404
+    assert client.get('/files/cleaning/1').status_code == 404
+
+
+def test_cleaning_preview_apply_and_revert_version(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+
+    plan_page = client.get('/files/cleaning/1')
+    assert plan_page.status_code == 200
+    assert b'email:validate_email' in plan_page.data
+    assert b'dataset:remove_exact_duplicates' in plan_page.data
+
+    selected = [
+        'email:validate_email',
+        'dataset:remove_exact_duplicates',
+    ]
+    preview = client.post(
+        '/files/cleaning/1/preview',
+        data={'operation_ids': selected},
+    )
+    assert preview.status_code == 200
+    assert b'Vista previa de limpieza' in preview.data
+    assert b'invalid-email' in preview.data
+
+    applied = client.post(
+        '/files/cleaning/1/apply',
+        data={'operation_ids': selected},
+        follow_redirects=True,
+    )
+    assert applied.status_code == 200
+    assert 'Versi\u00f3n 1 creada'.encode() in applied.data
+
+    with app.app_context():
+        record = FileUpload.query.one()
+        version = DatasetVersion.query.one()
+        assert record.active_version.id == version.id
+        assert record.row_count == 2
+        assert version.metrics['quarantined_rows'] == 1
+        assert version.metrics['duplicates_removed'] == 1
+        assert Path(
+            app.config['ANALYTICS_FOLDER'],
+            version.quarantine_filename,
+        ).exists()
+        version_id = version.id
+
+    quarantine_download = client.get(f'/files/cleaning/1/quarantine/{version_id}')
+    assert quarantine_download.status_code == 200
+    assert b'invalid-email' in quarantine_download.data
+    assert b'__quarantine_reason' in quarantine_download.data
+
+    cleaned_download = client.get('/reports/download/1')
+    assert cleaned_download.data.count(b'leo@example.org') == 1
+    assert b'invalid-email' not in cleaned_download.data
+
+    reverted = client.post(
+        '/files/cleaning/1/activate/0',
+        follow_redirects=True,
+    )
+    assert reverted.status_code == 200
+    assert 'versi\u00f3n original procesada'.encode() in reverted.data
+    baseline_download = client.get('/reports/download/1')
+    assert baseline_download.data.count(b'leo@example.org') == 2
+    assert b'invalid-email' in baseline_download.data
+
+    client.post(f'/files/cleaning/1/activate/{version_id}')
+    with app.app_context():
+        assert FileUpload.query.one().active_version.version_number == 1
+        analytics_folder = Path(app.config['ANALYTICS_FOLDER'])
+
+    client.post('/files/delete/1')
+    with app.app_context():
+        assert DatasetVersion.query.count() == 0
+    assert list(analytics_folder.iterdir()) == []
 
 
 def test_delete_removes_database_record_and_file(app, client, auth):

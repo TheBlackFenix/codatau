@@ -348,7 +348,9 @@ class SemanticProfiler:
             else:
                 decision = 'automatic'
             parameters = {
-                'target_type': 'number',
+                'target_type': (
+                    'BIGINT' if ratios['integer'] == 1 else 'DOUBLE'
+                ),
                 'decimal_separator': ',' if uses_decimal_comma else '.',
                 'on_error': 'quarantine',
             }

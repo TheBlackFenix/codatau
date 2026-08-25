@@ -63,6 +63,10 @@ class DatasetPipeline:
             self.analytics_folder / f'{stem}.profile.json',
         )
 
+    def quarantine_path_for(self, stored_filename):
+        parquet_path, _ = self.paths_for(stored_filename)
+        return parquet_path.with_name(f'{parquet_path.stem}.quarantine.parquet')
+
     def ingest_dataframe(self, dataframe, stored_filename, source_path):
         if dataframe.empty or len(dataframe.columns) == 0:
             raise ValueError('No hay datos utilizables para crear el artefacto analítico.')
@@ -101,6 +105,16 @@ class DatasetPipeline:
         finally:
             connection.close()
 
+    def load_quarantine_dataframe(self, stored_filename):
+        quarantine_path = self.quarantine_path_for(stored_filename)
+        if not quarantine_path.exists():
+            return None
+        connection = duckdb.connect()
+        try:
+            return connection.read_parquet(str(quarantine_path)).df()
+        finally:
+            connection.close()
+
     def load_dataframe_or_source(self, stored_filename, source_path):
         dataframe = self.load_dataframe(stored_filename)
         if dataframe is not None:
@@ -118,10 +132,21 @@ class DatasetPipeline:
         with profile_path.open('r', encoding='utf-8') as profile_file:
             return json.load(profile_file)
 
+    def profile_existing(self, stored_filename, source_path):
+        parquet_path, profile_path = self.paths_for(stored_filename)
+        if not parquet_path.exists():
+            raise FileNotFoundError(parquet_path)
+        profile = self._build_profile(parquet_path, source_path)
+        self._write_json_atomic(profile_path, profile)
+        return DatasetArtifact(parquet_path, profile_path, profile)
+
     def remove_artifacts(self, stored_filename):
         for path in self.paths_for(stored_filename):
             if path.exists():
                 path.unlink()
+        quarantine_path = self.quarantine_path_for(stored_filename)
+        if quarantine_path.exists():
+            quarantine_path.unlink()
 
     def _build_profile(self, parquet_path, source_path):
         connection = duckdb.connect()

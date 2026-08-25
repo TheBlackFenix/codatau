@@ -22,6 +22,22 @@ class FileUpload(db.Model):
 
     # Relación con insights
     insights = db.relationship('AIInsight', backref='file', lazy=True, cascade='all, delete-orphan')
+    versions = db.relationship(
+        'DatasetVersion',
+        backref='file',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
+
+    @property
+    def active_version(self):
+        active = [version for version in self.versions if version.is_active]
+        return max(active, key=lambda version: version.version_number, default=None)
+
+    @property
+    def active_stored_filename(self):
+        version = self.active_version
+        return version.stored_filename if version else self.filename
 
     def __repr__(self):
         return f'<FileUpload {self.original_name}>'

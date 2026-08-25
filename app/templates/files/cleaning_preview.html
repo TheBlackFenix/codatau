@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Vista previa de limpieza — CoDataU{% endblock %}
+
+{% macro preview_table(rows, empty_message) %}
+    {% if rows %}
+    <div class="table-wrap"><table class="data-table">
+        <thead><tr>{% for column in rows[0].keys() %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in rows %}<tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<div class="empty-desc">{{ empty_message }}</div>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Vista previa de limpieza</div>
+        <div class="page-subtitle">Nada se ha modificado todavía · {{ record.original_name }}</div>
+    </div>
+    <a href="{{ url_for('files.cleaning', file_id=record.id) }}" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Cambiar selección
+    </a>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+    {% for value, label in [
+        (preview.metrics.before_rows, 'Filas iniciales'),
+        (preview.metrics.after_rows, 'Filas resultantes'),
+        (preview.metrics.changed_rows, 'Filas transformadas'),
+        (preview.metrics.quarantined_rows, 'En cuarentena'),
+        (preview.metrics.duplicates_removed, 'Duplicados removidos')
+    ] %}
+    <div class="stat-card" style="padding:14px"><div class="stat-body"><div class="stat-value">{{ value }}</div><div class="stat-label">{{ label }}</div></div></div>
+    {% endfor %}
+</div>
+
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title"><i class="bi bi-arrow-left-right"></i> Resultado propuesto</div>
+    {{ preview_table(preview.after, 'No quedarían filas válidas.') }}
+</div>
+
+{% if preview.quarantine %}
+<div class="card" style="margin-bottom:20px;border-color:#FCA5A5">
+    <div class="card-title" style="color:#B91C1C"><i class="bi bi-shield-exclamation"></i> Cuarentena</div>
+    {{ preview_table(preview.quarantine, 'No hay filas en cuarentena.') }}
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title"><i class="bi bi-file-earmark-text"></i> Operaciones aprobadas</div>
+    {% for operation in operations %}
+    <div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <strong>{{ operation.operation }}</strong>{% if operation.column %} · {{ operation.column }}{% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<form method="POST" action="{{ url_for('files.cleaning_apply', file_id=record.id) }}">
+    {{ form.hidden_tag() }}
+    {% for operation in operations %}
+    <input type="hidden" name="operation_ids" value="{{ operation.id }}">
+    {% endfor %}
+    <button type="submit" class="btn btn-primary btn-lg">
+        <i class="bi bi-check2-circle"></i> Aprobar y crear nueva versión
+    </button>
+</form>
+{% endblock %}

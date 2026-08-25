@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Limpieza — CoDataU{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Plan de limpieza</div>
+        <div class="page-subtitle">{{ record.original_name }} · Perfil {{ profile.profile_version }}</div>
+    </div>
+    <a href="{{ url_for('files.results', file_id=record.id) }}" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Resultados
+    </a>
+</div>
+
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title"><i class="bi bi-clock-history"></i> Versiones</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=0) }}">
+            {{ form.hidden_tag() }}
+            <button class="btn btn-sm {{ 'btn-purple' if not record.active_version else 'btn-secondary' }}">
+                Base procesada
+            </button>
+        </form>
+        {% for version in versions %}
+        <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=version.id) }}">
+            {{ form.hidden_tag() }}
+            <button class="btn btn-sm {{ 'btn-purple' if version.is_active else 'btn-secondary' }}">
+                Versión {{ version.version_number }} · {{ version.metrics.after_rows }} filas
+            </button>
+        </form>
+        {% if version.quarantine_filename %}
+        <a class="btn btn-danger-outline btn-sm"
+           href="{{ url_for('files.cleaning_quarantine', file_id=record.id, version_id=version.id) }}">
+            <i class="bi bi-download"></i> Cuarentena v{{ version.version_number }}
+        </a>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('files.cleaning_preview', file_id=record.id) }}">
+    {{ form.hidden_tag() }}
+    <div class="card">
+        <div class="card-title">
+            <i class="bi bi-list-check"></i> Operaciones propuestas
+            <span class="badge badge-gray" style="margin-left:auto">{{ operations|length }}</span>
+        </div>
+        {% if operations %}
+        <div style="display:flex;flex-direction:column;gap:10px">
+            {% for operation in operations %}
+            {% set executable = operation.id in executable_ids %}
+            <label style="display:flex;gap:12px;padding:14px;border:1px solid var(--gray-200);border-radius:10px;{{ 'opacity:.58' if not executable }}">
+                <input type="checkbox" name="operation_ids" value="{{ operation.id }}"
+                       {{ 'checked' if executable and operation.decision == 'automatic' }}
+                       {{ 'disabled' if not executable }} style="margin-top:3px">
+                <span style="flex:1">
+                    <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <strong>{{ operation.operation }}</strong>
+                        {% if operation.column %}<span class="badge badge-gray">{{ operation.column }}</span>{% endif %}
+                        <span class="badge {% if operation.decision == 'automatic' %}badge-green{% elif operation.decision == 'user_review' %}badge-yellow{% else %}badge-purple{% endif %}">
+                            {{ operation.decision }}
+                        </span>
+                    </span>
+                    <span style="display:block;color:var(--gray-500);font-size:13px;margin-top:5px">
+                        {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
+                    </span>
+                    {% if not executable %}
+                    <span style="display:block;color:var(--orange);font-size:12px;margin-top:4px">
+                        Requiere parámetros o análisis adicional antes de ejecutarse.
+                    </span>
+                    {% endif %}
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:18px">
+            <i class="bi bi-eye"></i> Generar vista previa
+        </button>
+        {% else %}
+        <div class="empty-state"><div class="empty-desc">No hay operaciones propuestas.</div></div>
+        {% endif %}
+    </div>
+</form>
+{% endblock %}

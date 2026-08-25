@@ -9,8 +9,9 @@ El motor separa tres responsabilidades:
 3. En una fase posterior, la IA analizará únicamente los casos ambiguos y
    devolverá parámetros para ese catálogo; nunca código arbitrario.
 
-La versión actual solo genera un plan con estado `proposed`. No ejecuta las
-recomendaciones ni modifica el Parquet automáticamente.
+El perfil genera un plan con estado `proposed`. El usuario selecciona operaciones,
+revisa una simulación y confirma explícitamente antes de crear una versión nueva.
+El Parquet de entrada nunca se sobrescribe.
 
 ## Perfil semántico
 
@@ -61,18 +62,28 @@ una decisión:
 - `user_review`: necesita una decisión de negocio o configuración regional.
 - `ai_analysis`: contiene excepciones que justifican un análisis contextual.
 
-Incluso las operaciones clasificadas como automáticas permanecen propuestas hasta
-que exista el ejecutor versionado, la vista previa y el mecanismo de aprobación.
-Los duplicados exactos requieren revisión porque dos eventos reales pueden tener
-los mismos valores.
+Las operaciones automáticas compatibles permanecen propuestas hasta la aprobación.
+El ejecutor reconstruye la selección desde el perfil del servidor y genera SQL de
+DuckDB desde un catálogo cerrado. Actualmente ejecuta `trim_text`,
+`blank_to_null`, conversiones numéricas inequívocas, validación de correo, fechas
+ISO y booleanos. Los duplicados exactos son ejecutables únicamente tras selección
+manual, porque dos eventos reales pueden tener los mismos valores.
+
+Las filas que no superan una conversión o validación salen de la versión limpia y
+se escriben en un Parquet de cuarentena con la operación que causó el rechazo. El
+usuario puede descargarlo como CSV para corregirlo.
+
+Cada aplicación crea un registro `DatasetVersion` con las operaciones, métricas y
+artefactos utilizados. Una versión anterior o la base procesada se pueden activar
+sin eliminar las versiones posteriores.
 
 ## Uso futuro de IA
 
 La solicitud al modelo contendrá únicamente las columnas de
 `ai_candidate_columns`, sus métricas, patrones anómalos y una muestra mínima
 enmascarada cuando resulte necesaria. La respuesta deberá ajustarse a un esquema
-JSON y elegir una operación del catálogo. DuckDB generará después una vista previa
-con las filas modificadas, rechazadas o puestas en cuarentena.
+JSON y elegir una operación del catálogo. Esos parámetros pasarán por el mismo
+ejecutor, la vista previa y la aprobación ya implementados.
 
 ## Limitación transitoria
 
