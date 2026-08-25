@@ -41,6 +41,8 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
     assert profile.json['row_count'] == 3
     assert profile.json['column_count'] == 2
     assert len(profile.json['source_sha256']) == 64
+    assert profile.json['profile_version'] == '1.1'
+    assert profile.json['cleaning_plan']['status'] == 'proposed'
 
     with app.app_context():
         record = FileUpload.query.one()

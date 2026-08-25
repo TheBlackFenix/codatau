@@ -102,6 +102,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Limpieza automática: eliminar filas/columnas vacías, strip de texto
 - [x] Persistencia analítica en Parquet comprimido con Zstandard
 - [x] Perfil estructurado con tipos, nulos, cardinalidad, duplicados y muestra
+- [x] Inferencia semántica y plan de limpieza seguro (`automatic` / revisión / IA)
 - [x] Detección de valores nulos y filas duplicadas
 - [x] Cálculo de estadísticas: suma, promedio, mínimo, máximo por columna
 - [x] Generación de datos para gráficas (promedios, agrupaciones)
@@ -535,13 +536,17 @@ Este proyecto fue desarrollado como **Proyecto de Grado de Décimo Semestre** en
 
 Este README contiene la guía funcional general. La decisión y evolución del
 pipeline analítico se documentan en
-[`docs/architecture/data-pipeline.md`](docs/architecture/data-pipeline.md).
+[`docs/architecture/data-pipeline.md`](docs/architecture/data-pipeline.md). El
+contrato del motor de limpieza está en
+[`docs/architecture/semantic-cleaning.md`](docs/architecture/semantic-cleaning.md).
 
 ---
 
 ## 🚀 Roadmap — Próximas funcionalidades
 
-- [ ] Planes de limpieza estructurados por IA con aprobación y trazabilidad
+- [x] Perfilado semántico y propuestas estructuradas de limpieza
+- [ ] Ejecutor de planes con vista previa, aprobación y trazabilidad
+- [ ] Análisis de casos ambiguos mediante IA
 - [ ] Consultas y visualizaciones ejecutadas directamente en DuckDB
 - [ ] Integración con almacenamiento de objetos (S3 compatible)
 - [ ] Procesamiento asíncrono con **Celery + Redis** para archivos muy grandes

@@ -10,24 +10,14 @@ from pathlib import Path
 
 import duckdb
 
-
-PROFILE_VERSION = '1.0'
-NUMERIC_TYPE_PREFIXES = (
-    'TINYINT',
-    'SMALLINT',
-    'INTEGER',
-    'BIGINT',
-    'HUGEINT',
-    'UTINYINT',
-    'USMALLINT',
-    'UINTEGER',
-    'UBIGINT',
-    'UHUGEINT',
-    'FLOAT',
-    'DOUBLE',
-    'REAL',
-    'DECIMAL',
+from app.services.semantic_profiler import (
+    NUMERIC_TYPE_PREFIXES,
+    SemanticProfiler,
+    build_cleaning_plan,
 )
+
+
+PROFILE_VERSION = '1.1'
 
 
 @dataclass(frozen=True)
@@ -156,7 +146,9 @@ class DatasetPipeline:
                 else ()
             )
 
+            semantic_profiler = SemanticProfiler(connection, parquet_path)
             columns = []
+            column_operations = []
             total_nulls = 0
             for index, (name, type_name) in enumerate(zip(column_names, column_types)):
                 null_count = int(aggregate_values[index * 2] or 0)
@@ -179,6 +171,13 @@ class DatasetPipeline:
                         'max': _json_value(maximum),
                         'mean': _json_value(mean),
                     }
+                semantic, operations = semantic_profiler.analyze(
+                    name,
+                    type_name,
+                    row_count,
+                )
+                column_profile['semantic'] = semantic
+                column_operations.append(operations)
                 columns.append(column_profile)
 
             distinct_rows = connection.execute(
@@ -187,6 +186,7 @@ class DatasetPipeline:
             ).fetchone()[0]
             sample = self._sample(connection, relation, parquet_path, row_count)
 
+            duplicate_rows = int(row_count - distinct_rows)
             return {
                 'profile_version': PROFILE_VERSION,
                 'generated_at': datetime.now(timezone.utc).isoformat(),
@@ -194,9 +194,13 @@ class DatasetPipeline:
                 'row_count': int(row_count),
                 'column_count': len(column_names),
                 'null_count': total_nulls,
-                'duplicate_rows': int(row_count - distinct_rows),
+                'duplicate_rows': duplicate_rows,
                 'columns': columns,
                 'sample': sample,
+                'cleaning_plan': build_cleaning_plan(
+                    column_operations,
+                    duplicate_rows,
+                ),
             }
         finally:
             connection.close()

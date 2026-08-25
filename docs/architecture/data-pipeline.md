@@ -67,3 +67,6 @@ deben:
 
 Así, la IA decide y explica transformaciones; DuckDB las ejecuta de forma
 repetible, auditable y económica en tokens.
+
+El contrato de inferencia, el catálogo permitido y los niveles de decisión están
+detallados en [Limpieza semántica asistida](semantic-cleaning.md).
