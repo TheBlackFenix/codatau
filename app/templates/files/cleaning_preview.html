@@ -49,7 +49,7 @@
     <div class="card-title"><i class="bi bi-file-earmark-text"></i> Operaciones aprobadas</div>
     {% for operation in operations %}
     <div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
-        <strong>{{ operation.operation }}</strong>{% if operation.column %} · {{ operation.column }}{% endif %}
+        <strong>{{ operation_labels.get(operation.operation, operation.operation) }}</strong>{% if operation.column %} · {{ operation.column }}{% endif %}
     </div>
     {% endfor %}
 </div>
@@ -58,6 +58,19 @@
     {{ form.hidden_tag() }}
     {% for operation in operations %}
     <input type="hidden" name="operation_ids" value="{{ operation.id }}">
+    {% if operation.operation == 'cast_type' %}
+    <input type="hidden" name="parameter:{{ operation.id }}:decimal_separator"
+           value="{{ operation.parameters.decimal_separator }}">
+    {% elif operation.operation == 'parse_date' %}
+    <input type="hidden" name="parameter:{{ operation.id }}:date_format"
+           value="{{ operation.parameters.date_format }}">
+    {% elif operation.operation == 'normalize_case' %}
+    <input type="hidden" name="parameter:{{ operation.id }}:case_style"
+           value="{{ operation.parameters.case_style }}">
+    {% elif operation.operation == 'normalize_phone' %}
+    <input type="hidden" name="parameter:{{ operation.id }}:phone_style"
+           value="{{ operation.parameters.phone_style }}">
+    {% endif %}
     {% endfor %}
     <button type="submit" class="btn btn-primary btn-lg">
         <i class="bi bi-check2-circle"></i> Aprobar y crear nueva versión

@@ -59,10 +59,12 @@ Esta entrega mantiene la limpieza existente en pandas para no cambiar el
 comportamiento del producto durante la estabilización. Los siguientes incrementos
 deben:
 
-1. Incorporar entidades `Dataset` y `DatasetVersion` para conservar linaje.
+1. Completar la separación entre carga y `Dataset`; `DatasetVersion` ya conserva
+   el linaje de las limpiezas aprobadas.
 2. Llevar agregaciones, filtros y transformaciones deterministas a SQL de DuckDB.
 3. Hacer que la IA produzca un plan estructurado y validable, no código arbitrario.
-4. Mostrar costo estimado, vista previa y cambios antes de aplicar el plan.
+4. Mostrar costo estimado de IA; la vista previa y los cambios deterministas ya se
+   presentan antes de aplicar el plan.
 5. Enviar a la IA primero el perfil y solo muestras mínimas cuando sean necesarias.
 6. Sustituir el almacenamiento local por un adaptador de objetos sin cambiar el
    pipeline ni las rutas.

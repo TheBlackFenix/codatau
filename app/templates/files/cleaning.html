@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <div class="page-title">Plan de limpieza</div>
+        <div class="page-title">Limpieza de datos</div>
         <div class="page-subtitle">{{ record.original_name }} · Perfil {{ profile.profile_version }}</div>
     </div>
     <a href="{{ url_for('files.results', file_id=record.id) }}" class="btn btn-secondary btn-sm">
@@ -12,20 +12,28 @@
     </a>
 </div>
 
+<div class="insight-chip insight-info" style="margin-bottom:20px">
+    <i class="bi bi-shield-check"></i>
+    <span>
+        Elige las reglas, configura las que requieren tu decisión y revisa el resultado
+        antes de aplicarlo. El archivo original nunca se sobrescribe.
+    </span>
+</div>
+
 <div class="card" style="margin-bottom:20px">
-    <div class="card-title"><i class="bi bi-clock-history"></i> Versiones</div>
+    <div class="card-title"><i class="bi bi-clock-history"></i> Historial de versiones</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
         <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=0) }}">
             {{ form.hidden_tag() }}
             <button class="btn btn-sm {{ 'btn-purple' if not record.active_version else 'btn-secondary' }}">
-                Base procesada
+                Original procesado
             </button>
         </form>
         {% for version in versions %}
         <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=version.id) }}">
             {{ form.hidden_tag() }}
             <button class="btn btn-sm {{ 'btn-purple' if version.is_active else 'btn-secondary' }}">
-                Versión {{ version.version_number }} · {{ version.metrics.after_rows }} filas
+                Versión {{ version.version_number }} · {{ version.metrics.get('after_rows', '—') }} filas
             </button>
         </form>
         {% if version.quarantine_filename %}
@@ -42,68 +50,149 @@
     {{ form.hidden_tag() }}
     <div class="card">
         <div class="card-title">
-            <i class="bi bi-list-check"></i> Operaciones propuestas
+            <i class="bi bi-list-check"></i> Reglas propuestas
             <span class="badge badge-gray" style="margin-left:auto">{{ operations|length }}</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-            <div style="padding:12px;background:#F0FDF4;border-radius:10px">
-                <strong style="display:block;color:#15803D">{{ executable_ids|length }}</strong>
-                <span style="font-size:12px;color:var(--gray-600)">Ejecutables ahora</span>
+
+        <div class="cleaning-summary">
+            <div class="cleaning-summary-item is-automatic">
+                <strong>{{ automatic_ids|length }}</strong>
+                <span>Seguras y preseleccionadas</span>
             </div>
-            <div style="padding:12px;background:var(--gray-50);border-radius:10px">
-                <strong style="display:block">{{ operations|length - executable_ids|length }}</strong>
-                <span style="font-size:12px;color:var(--gray-600)">Requieren configuración o IA</span>
+            <div class="cleaning-summary-item is-review">
+                <strong>{{ executable_ids|length - automatic_ids|length }}</strong>
+                <span>Disponibles con tu decisión</span>
             </div>
-            <div style="padding:12px;background:var(--purple-soft);border-radius:10px">
-                <strong style="display:block;color:var(--purple)">Versión nueva</strong>
-                <span style="font-size:12px;color:var(--gray-600)">El original no se sobrescribe</span>
+            <div class="cleaning-summary-item is-ai">
+                <strong>{{ operations|length - executable_ids|length }}</strong>
+                <span>Reservadas para análisis con IA</span>
             </div>
         </div>
+
         {% if operations %}
-        <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="cleaning-operation-list">
             {% for operation in operations %}
             {% set executable = operation.id in executable_ids %}
-            <label style="display:flex;gap:12px;padding:14px;border:1px solid var(--gray-200);border-radius:10px;{{ 'opacity:.58' if not executable }}">
-                <input type="checkbox" name="operation_ids" value="{{ operation.id }}"
-                       {{ 'checked' if executable and operation.decision == 'automatic' }}
-                       {{ 'disabled' if not executable }} style="margin-top:3px">
-                <span style="flex:1">
-                    <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                        <strong>{{ operation.operation }}</strong>
-                        {% if operation.column %}<span class="badge badge-gray">{{ operation.column }}</span>{% endif %}
-                        <span class="badge {% if operation.decision == 'automatic' %}badge-green{% elif operation.decision == 'user_review' %}badge-yellow{% else %}badge-purple{% endif %}">
-                            {{ operation.decision }}
+            {% set automatic = operation.id in automatic_ids %}
+            <div class="cleaning-operation {{ 'is-disabled' if not executable }}">
+                <label class="cleaning-operation-main">
+                    <input type="checkbox" name="operation_ids" value="{{ operation.id }}"
+                           {{ 'checked' if automatic }} {{ 'disabled' if not executable }}>
+                    <span style="flex:1">
+                        <span class="cleaning-operation-title">
+                            <strong>{{ operation_labels.get(operation.operation, operation.operation) }}</strong>
+                            {% if operation.column %}<span class="badge badge-gray">{{ operation.column }}</span>{% endif %}
+                            {% if automatic %}
+                                <span class="badge badge-green">Automática</span>
+                            {% elif executable %}
+                                <span class="badge badge-yellow">Requiere tu decisión</span>
+                            {% else %}
+                                <span class="badge badge-purple">Pendiente de IA</span>
+                            {% endif %}
+                        </span>
+                        <span class="cleaning-operation-reason">
+                            {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
                         </span>
                     </span>
-                    <span style="display:block;color:var(--gray-500);font-size:13px;margin-top:5px">
-                        {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
-                    </span>
-                    {% if not executable %}
-                    <span style="display:block;color:var(--orange);font-size:12px;margin-top:4px">
-                        Requiere parámetros o análisis adicional antes de ejecutarse.
-                    </span>
+                </label>
+
+                {% if executable and not automatic %}
+                <div class="cleaning-configuration">
+                    {% if operation.operation == 'cast_type' %}
+                    <label>
+                        <span>Formato numérico</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:decimal_separator">
+                            <option value="," {{ 'selected' if operation.parameters.get('decimal_separator') == ',' }}>1.234,56 — coma decimal</option>
+                            <option value="." {{ 'selected' if operation.parameters.get('decimal_separator') == '.' }}>1,234.56 — punto decimal</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'parse_date' %}
+                    <label>
+                        <span>Formato de fecha</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:date_format">
+                            <option value="%d/%m/%Y">Día/Mes/Año — 31/12/2026</option>
+                            <option value="%m/%d/%Y">Mes/Día/Año — 12/31/2026</option>
+                            <option value="%Y-%m-%d">Año-Mes-Día — 2026-12-31</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'normalize_case' %}
+                    <label>
+                        <span>Normalización de texto</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:case_style">
+                            <option value="lower">Convertir todo a minúsculas</option>
+                            <option value="upper">Convertir todo a MAYÚSCULAS</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'normalize_phone' %}
+                    <label>
+                        <span>Normalización de teléfono</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:phone_style">
+                            <option value="digits">Conservar únicamente dígitos</option>
+                            <option value="keep_plus">Conservar prefijo + y dígitos</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'handle_missing' %}
+                    <span><i class="bi bi-box-arrow-right"></i> Las filas se separarán en un archivo de cuarentena descargable.</span>
+                    {% elif operation.operation == 'remove_exact_duplicates' %}
+                    <span><i class="bi bi-files"></i> Se conservará una sola copia de cada fila idéntica.</span>
                     {% endif %}
-                </span>
-            </label>
+                </div>
+                {% elif not executable %}
+                <div class="cleaning-configuration is-ai-note">
+                    <i class="bi bi-stars"></i>
+                    Esta recomendación necesita analizar excepciones; no se modificará hasta contar con una decisión validada.
+                </div>
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
-        <button type="submit" class="btn btn-primary" style="margin-top:18px"
-                {{ 'disabled' if not executable_ids }}>
-            <i class="bi bi-eye"></i> Generar vista previa
-        </button>
+
+        <div class="cleaning-submit">
+            <div>
+                <strong>El siguiente paso todavía no modifica tus datos.</strong>
+                <span>Verás filas resultantes, cambios y cuarentena antes de confirmar.</span>
+            </div>
+            <button type="submit" class="btn btn-primary" {{ 'disabled' if not executable_ids }}>
+                <i class="bi bi-eye"></i> Previsualizar cambios seleccionados
+            </button>
+        </div>
+
         {% if not executable_ids %}
         <div class="insight-chip insight-info" style="margin-top:12px">
             <i class="bi bi-info-circle"></i>
             <span>
-                El perfil no encontró una operación segura para ejecutar sin parámetros.
-                Las recomendaciones visibles necesitan una regla de negocio, configuración
-                regional o análisis asistido antes de modificar datos.
+                Este archivo solo contiene casos ambiguos. Permanecerán sin cambios hasta
+                que el análisis asistido por IA pueda proponer una regla validable.
             </span>
         </div>
         {% endif %}
         {% else %}
-        <div class="empty-state"><div class="empty-desc">No hay operaciones propuestas.</div></div>
+        <div class="empty-state">
+            <div class="empty-title">No encontramos correcciones necesarias</div>
+            <div class="empty-desc">El perfil actual no generó reglas de limpieza.</div>
+        </div>
         {% endif %}
     </div>
 </form>
+
+<style>
+.cleaning-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.cleaning-summary-item{padding:13px;border-radius:10px}.cleaning-summary-item strong{display:block;font-size:20px}.cleaning-summary-item span{font-size:12px;color:var(--gray-600)}
+.cleaning-summary-item.is-automatic{background:#F0FDF4}.cleaning-summary-item.is-automatic strong{color:#15803D}
+.cleaning-summary-item.is-review{background:#FFF7ED}.cleaning-summary-item.is-review strong{color:#C2410C}
+.cleaning-summary-item.is-ai{background:var(--purple-soft)}.cleaning-summary-item.is-ai strong{color:var(--purple)}
+.cleaning-operation-list{display:flex;flex-direction:column;gap:10px}
+.cleaning-operation{padding:14px;border:1px solid var(--gray-200);border-radius:10px;background:white}
+.cleaning-operation.is-disabled{opacity:.65;background:var(--gray-50)}
+.cleaning-operation-main{display:flex;gap:12px;cursor:pointer}.cleaning-operation-main input{margin-top:4px}
+.cleaning-operation-title{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cleaning-operation-reason{display:block;color:var(--gray-500);font-size:13px;margin-top:5px}
+.cleaning-configuration{margin:12px 0 0 28px;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
+.cleaning-configuration label{display:grid;grid-template-columns:minmax(150px,220px) minmax(220px,420px);align-items:center;gap:12px;font-weight:600}
+.cleaning-configuration .form-control{margin:0;background:white}
+.cleaning-configuration.is-ai-note{background:var(--purple-soft);color:var(--purple)}
+.cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
+.cleaning-submit span{display:block;color:var(--gray-500);font-size:12px;margin-top:3px}
+@media(max-width:800px){.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
+</style>
 {% endblock %}

@@ -1,7 +1,16 @@
-import os
 import io
+import os
+import uuid
 
-from flask import Blueprint, abort, current_app, render_template, send_file
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    send_file,
+    url_for,
+)
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
@@ -44,8 +53,20 @@ def download(file_id):
             record.active_stored_filename,
             filepath,
         )
-    except (OSError, ValueError):
-        abort(404)
+    except Exception as error:
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo descargar el archivo %s: %s',
+            reference,
+            record.id,
+            error,
+        )
+        flash(
+            'El archivo procesado no está disponible para descarga. '
+            f'Referencia: {reference}.',
+            'danger',
+        )
+        return redirect(url_for('reports.index'))
 
     buffer = io.BytesIO()
     df.to_csv(buffer, index=False, encoding='utf-8-sig')

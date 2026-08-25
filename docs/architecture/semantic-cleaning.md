@@ -64,20 +64,23 @@ una decisión:
 
 Las operaciones automáticas compatibles permanecen propuestas hasta la aprobación.
 El ejecutor reconstruye la selección desde el perfil del servidor y genera SQL de
-DuckDB desde un catálogo cerrado. Actualmente ejecuta `trim_text`,
+DuckDB desde un catálogo cerrado. Ejecuta automáticamente `trim_text`,
 `blank_to_null`, conversiones numéricas inequívocas, validación de correo, fechas
-ISO y booleanos. Los valores nulos pueden enviarse a cuarentena tras selección
-manual, sin inventar una imputación. Los duplicados exactos también son
-ejecutables únicamente tras selección manual, porque dos eventos reales pueden
-tener los mismos valores.
+ISO y booleanos. Las reglas de revisión permiten al usuario confirmar el separador
+decimal, el orden de día y mes, la normalización de mayúsculas/minúsculas y el
+formato de teléfonos antes de previsualizar. Los valores nulos pueden enviarse a
+cuarentena tras selección manual, sin inventar una imputación. Los duplicados
+exactos también son ejecutables únicamente tras selección manual, porque dos
+eventos reales pueden tener los mismos valores.
 
 Las filas que no superan una conversión o validación salen de la versión limpia y
 se escriben en un Parquet de cuarentena con la operación que causó el rechazo. El
 usuario puede descargarlo como CSV para corregirlo.
 
-Cada aplicación crea un registro `DatasetVersion` con las operaciones, métricas y
-artefactos utilizados. Una versión anterior o la base procesada se pueden activar
-sin eliminar las versiones posteriores.
+Cada aplicación crea un registro `DatasetVersion` con las operaciones —incluidos
+los parámetros confirmados por el usuario—, métricas y artefactos utilizados. Una
+versión anterior o la base procesada se pueden activar sin eliminar las versiones
+posteriores.
 
 ## Uso futuro de IA
 
@@ -90,6 +93,8 @@ ejecutor, la vista previa y la aprobación ya implementados.
 ## Limitación transitoria
 
 La capa de compatibilidad actual lee y normaliza archivos con pandas antes de
-crear el Parquet. El original sigue siendo la fuente inmutable. Cuando se añadan
-`Dataset` y `DatasetVersion`, el primer artefacto conservará los valores crudos y
-la inferencia de tipos pasará a ser una transformación explícita y reversible.
+crear el Parquet. El original sigue siendo la fuente inmutable. `DatasetVersion`
+ya conserva el linaje de las limpiezas aprobadas. Cuando se añada una entidad
+`Dataset` independiente de la carga, el primer artefacto podrá conservar los
+valores crudos y la inferencia de tipos pasará a ser una transformación explícita
+y reversible.

@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,6 +36,10 @@ def _sql_literal(value):
 
 
 def select_executable_operations(plan, selected_ids):
+    return select_configured_operations(plan, selected_ids, {})
+
+
+def select_configured_operations(plan, selected_ids, parameter_overrides=None):
     selected_ids = list(dict.fromkeys(selected_ids))
     if not selected_ids:
         raise CleaningPlanError('Selecciona al menos una operación para continuar.')
@@ -44,12 +49,20 @@ def select_executable_operations(plan, selected_ids):
     if unknown:
         raise CleaningPlanError('El plan contiene operaciones desconocidas o desactualizadas.')
 
-    operations = [proposed[operation_id] for operation_id in selected_ids]
-    for operation in operations:
+    parameter_overrides = parameter_overrides or {}
+    operations = []
+    for operation_id in selected_ids:
+        operation = deepcopy(proposed[operation_id])
         if not CleaningExecutor.is_executable(operation):
             raise CleaningPlanError(
                 f'La operación “{operation["operation"]}” todavía requiere análisis adicional.'
             )
+        operations.append(
+            CleaningExecutor.configure(
+                operation,
+                parameter_overrides.get(operation_id, {}),
+            )
+        )
     return operations
 
 
@@ -64,16 +77,71 @@ class CleaningExecutor:
         'parse_date',
         'normalize_boolean',
     }
-    SUPPORTED_REVIEW = {'handle_missing', 'remove_exact_duplicates'}
+    SUPPORTED_REVIEW = {
+        'cast_type',
+        'handle_missing',
+        'normalize_case',
+        'normalize_phone',
+        'parse_date',
+        'remove_exact_duplicates',
+    }
+    DATE_FORMATS = {'%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'}
+    CASE_STYLES = {'lower', 'upper'}
+    PHONE_STYLES = {'digits', 'keep_plus'}
 
     @classmethod
     def is_executable(cls, operation):
-        if operation['operation'] in cls.SUPPORTED_REVIEW:
-            return operation['decision'] == 'user_review'
-        return (
-            operation['decision'] == 'automatic'
-            and operation['operation'] in cls.SUPPORTED_AUTOMATIC
-        )
+        if operation['decision'] == 'automatic':
+            return operation['operation'] in cls.SUPPORTED_AUTOMATIC
+        if operation['decision'] == 'user_review':
+            return operation['operation'] in cls.SUPPORTED_REVIEW
+        return False
+
+    @classmethod
+    def configure(cls, operation, overrides):
+        """Validate user choices and return an executable operation copy."""
+        if operation['decision'] != 'user_review':
+            return operation
+
+        name = operation['operation']
+        parameters = operation.setdefault('parameters', {})
+
+        if name == 'cast_type':
+            separator = overrides.get('decimal_separator')
+            if separator not in {'.', ','}:
+                raise CleaningPlanError(
+                    'Selecciona si los decimales usan punto o coma.'
+                )
+            parameters['decimal_separator'] = separator
+            parameters['thousands_separator'] = ',' if separator == '.' else '.'
+        elif name == 'parse_date':
+            date_format = overrides.get('date_format')
+            if date_format not in cls.DATE_FORMATS:
+                raise CleaningPlanError('Selecciona el formato de fecha de la columna.')
+            parameters['date_format'] = date_format
+        elif name == 'normalize_case':
+            case_style = overrides.get('case_style')
+            if case_style not in cls.CASE_STYLES:
+                raise CleaningPlanError(
+                    'Selecciona cómo normalizar mayúsculas y minúsculas.'
+                )
+            parameters['case_style'] = case_style
+        elif name == 'normalize_phone':
+            phone_style = overrides.get('phone_style')
+            if phone_style not in cls.PHONE_STYLES:
+                raise CleaningPlanError('Selecciona cómo normalizar los teléfonos.')
+            parameters['phone_style'] = phone_style
+        elif name == 'handle_missing':
+            if parameters.get('strategy') != 'quarantine_rows':
+                raise CleaningPlanError(
+                    'La estrategia propuesta para valores faltantes no es válida.'
+                )
+        elif name != 'remove_exact_duplicates':
+            raise CleaningPlanError(
+                f'La operación “{name}” todavía no admite configuración manual.'
+            )
+
+        return operation
 
     def preview(self, source_parquet, operations, sample_size=8):
         connection = duckdb.connect()
@@ -243,16 +311,33 @@ class CleaningExecutor:
             target = parameters.get('target_type')
             if target not in {'BIGINT', 'DOUBLE'}:
                 raise CleaningPlanError('El tipo numérico propuesto no es ejecutable.')
-            if parameters.get('decimal_separator', '.') != '.':
-                raise CleaningPlanError('Confirma el separador decimal antes de convertir.')
-            transformed = f'try_cast({text} AS {target})'
+            decimal_separator = parameters.get('decimal_separator', '.')
+            if decimal_separator not in {'.', ','}:
+                raise CleaningPlanError('El separador decimal no es válido.')
+            normalized_number = text
+            thousands_separator = parameters.get('thousands_separator')
+            if thousands_separator:
+                normalized_number = (
+                    f"replace({normalized_number}, "
+                    f"{_sql_literal(thousands_separator)}, '')"
+                )
+            if decimal_separator == ',':
+                normalized_number = (
+                    f"replace({normalized_number}, ',', '.')"
+                )
+            transformed = f'try_cast({normalized_number} AS {target})'
             invalid = f'{present} AND {transformed} IS NULL'
             return transformed, invalid, f'{present} AND {transformed} IS NOT NULL'
         if name == 'validate_email':
             valid = f"regexp_full_match({text}, {_sql_literal(EMAIL_PATTERN)})"
             return current, f'{present} AND NOT {valid}', None
         if name == 'parse_date':
-            transformed = f"try_strptime({text}, '%Y-%m-%d')::DATE"
+            date_format = parameters.get('date_format', '%Y-%m-%d')
+            if date_format not in CleaningExecutor.DATE_FORMATS:
+                raise CleaningPlanError('El formato de fecha no es válido.')
+            transformed = (
+                f'try_strptime({text}, {_sql_literal(date_format)})::DATE'
+            )
             invalid = f'{present} AND {transformed} IS NULL'
             return transformed, invalid, f'{present} AND {transformed} IS NOT NULL'
         if name == 'normalize_boolean':
@@ -264,6 +349,27 @@ class CleaningExecutor:
             )
             invalid = f'{present} AND {transformed} IS NULL'
             return transformed, invalid, f'{present} AND {transformed} IS NOT NULL'
+        if name == 'normalize_case':
+            case_style = parameters.get('case_style')
+            if case_style not in CleaningExecutor.CASE_STYLES:
+                raise CleaningPlanError('La normalización de texto no es válida.')
+            transformed = f'{case_style}({text})'
+            return transformed, None, f'{current} IS DISTINCT FROM {transformed}'
+        if name == 'normalize_phone':
+            phone_style = parameters.get('phone_style')
+            if phone_style not in CleaningExecutor.PHONE_STYLES:
+                raise CleaningPlanError('La normalización de teléfono no es válida.')
+            digits = f"regexp_replace({text}, '[^0-9]', '', 'g')"
+            if phone_style == 'keep_plus':
+                transformed = (
+                    f"CASE WHEN starts_with({text}, '+') THEN '+' || {digits} "
+                    f'ELSE {digits} END'
+                )
+            else:
+                transformed = digits
+            invalid = f'{present} AND length({digits}) NOT BETWEEN 7 AND 15'
+            changed = f'{present} AND {current} IS DISTINCT FROM {transformed}'
+            return transformed, invalid, changed
         raise CleaningPlanError(f'Operación no implementada: {name}')
 
     @staticmethod

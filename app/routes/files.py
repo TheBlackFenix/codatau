@@ -31,11 +31,32 @@ from app.services.dataset_pipeline import DatasetPipeline
 from app.services.cleaning_executor import (
     CleaningExecutor,
     CleaningPlanError,
-    select_executable_operations,
+    select_configured_operations,
 )
 from app.services.storage_service import LocalStorageService
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
+
+CLEANING_PARAMETER_FIELDS = {
+    'cast_type': ('decimal_separator',),
+    'parse_date': ('date_format',),
+    'normalize_case': ('case_style',),
+    'normalize_phone': ('phone_style',),
+}
+
+CLEANING_OPERATION_LABELS = {
+    'blank_to_null': 'Convertir textos vacíos en valores nulos',
+    'cast_type': 'Convertir a número',
+    'handle_missing': 'Enviar filas incompletas a cuarentena',
+    'normalize_boolean': 'Normalizar valores Sí/No',
+    'normalize_case': 'Unificar mayúsculas y minúsculas',
+    'normalize_phone': 'Normalizar teléfonos',
+    'parse_date': 'Convertir a fecha',
+    'remove_exact_duplicates': 'Eliminar filas duplicadas exactas',
+    'review_invalid_values': 'Revisar valores inválidos con IA',
+    'trim_text': 'Eliminar espacios externos',
+    'validate_email': 'Validar correos electrónicos',
+}
 
 
 def _pipeline():
@@ -88,6 +109,37 @@ def _discard_failed_upload(storage, pipeline, stored_filename):
             'No se pudieron descartar todos los artefactos fallidos de %s',
             stored_filename,
         )
+
+
+def _cleaning_parameter_overrides(form_data, operations, selected_ids):
+    selected_ids = set(selected_ids)
+    overrides = {}
+    for operation in operations:
+        operation_id = operation['id']
+        if operation_id not in selected_ids:
+            continue
+        fields = CLEANING_PARAMETER_FIELDS.get(operation['operation'], ())
+        values = {
+            field: form_data.get(f'parameter:{operation_id}:{field}')
+            for field in fields
+        }
+        overrides[operation_id] = values
+    return overrides
+
+
+def _selected_cleaning_operations(profile_data):
+    selected_ids = request.form.getlist('operation_ids')
+    operations = profile_data['cleaning_plan']['operations']
+    overrides = _cleaning_parameter_overrides(
+        request.form,
+        operations,
+        selected_ids,
+    )
+    return select_configured_operations(
+        profile_data['cleaning_plan'],
+        selected_ids,
+        overrides,
+    )
 
 
 @files_bp.route('/upload', methods=['GET', 'POST'])
@@ -218,8 +270,20 @@ def results(file_id):
 
     try:
         summary = DataService.get_summary(_load_dataframe(upload_record))
-    except (OSError, ValueError):
-        abort(404)
+    except Exception as error:
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudieron abrir los resultados del archivo %s: %s',
+            reference,
+            upload_record.id,
+            error,
+        )
+        flash(
+            'El registro del archivo existe, pero sus datos procesados no están '
+            f'disponibles. Referencia: {reference}.',
+            'danger',
+        )
+        return redirect(url_for('files.upload'))
 
     return render_template('files/results.html',
         record=upload_record,
@@ -248,8 +312,18 @@ def profile(file_id):
             record.active_stored_filename,
             _storage().path_for(record.filename),
         )
-    except OSError:
-        return jsonify({'error': 'El perfil analítico no está disponible.'}), 404
+    except Exception as error:
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo cargar el perfil del archivo %s: %s',
+            reference,
+            record.id,
+            error,
+        )
+        return jsonify({
+            'error': 'El perfil analítico no está disponible.',
+            'reference': reference,
+        }), 404
     return jsonify(data_profile)
 
 
@@ -291,7 +365,19 @@ def delete(file_id):
 @login_required
 def cleaning(file_id):
     record = _record_for_user(file_id)
-    _, _, _, profile_data = _cleaning_context(record)
+    try:
+        _, _, _, profile_data = _cleaning_context(record)
+    except (KeyError, TypeError, ValueError):
+        current_app.logger.exception(
+            'El perfil de limpieza del archivo %s no es válido',
+            record.id,
+        )
+        flash(
+            'No pudimos construir el plan de limpieza. Vuelve a cargar el archivo '
+            'para regenerar su perfil.',
+            'danger',
+        )
+        return redirect(url_for('files.results', file_id=record.id))
     operations = profile_data['cleaning_plan']['operations']
     executable_ids = {
         operation['id']
@@ -307,6 +393,13 @@ def cleaning(file_id):
         profile=profile_data,
         operations=operations,
         executable_ids=executable_ids,
+        automatic_ids={
+            operation['id']
+            for operation in operations
+            if operation['decision'] == 'automatic'
+            and operation['id'] in executable_ids
+        },
+        operation_labels=CLEANING_OPERATION_LABELS,
         versions=versions,
         form=CleaningActionForm(),
     )
@@ -342,13 +435,24 @@ def cleaning_preview(file_id):
     record = _record_for_user(file_id)
     _, _, source_parquet, profile_data = _cleaning_context(record)
     try:
-        operations = select_executable_operations(
-            profile_data['cleaning_plan'],
-            request.form.getlist('operation_ids'),
-        )
+        operations = _selected_cleaning_operations(profile_data)
         preview = CleaningExecutor().preview(source_parquet, operations)
     except CleaningPlanError as error:
         flash(str(error), 'warning')
+        return redirect(url_for('files.cleaning', file_id=record.id))
+    except Exception as error:
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo generar la vista previa del archivo %s: %s',
+            reference,
+            record.id,
+            error,
+        )
+        flash(
+            'No pudimos generar la vista previa con esa combinación de reglas. '
+            f'El archivo no fue modificado. Referencia: {reference}.',
+            'danger',
+        )
         return redirect(url_for('files.cleaning', file_id=record.id))
 
     return render_template(
@@ -356,6 +460,7 @@ def cleaning_preview(file_id):
         record=record,
         operations=operations,
         preview=preview,
+        operation_labels=CLEANING_OPERATION_LABELS,
         form=CleaningActionForm(),
     )
 
@@ -369,10 +474,7 @@ def cleaning_apply(file_id):
     record = _record_for_user(file_id)
     pipeline, _, source_parquet, profile_data = _cleaning_context(record)
     try:
-        operations = select_executable_operations(
-            profile_data['cleaning_plan'],
-            request.form.getlist('operation_ids'),
-        )
+        operations = _selected_cleaning_operations(profile_data)
     except CleaningPlanError as error:
         flash(str(error), 'warning')
         return redirect(url_for('files.cleaning', file_id=record.id))
@@ -437,7 +539,7 @@ def cleaning_apply(file_id):
         f'y {metrics["quarantined_rows"]} en cuarentena.',
         'success',
     )
-    return redirect(url_for('files.results', file_id=record.id))
+    return redirect(url_for('files.cleaning', file_id=record.id))
 
 
 @files_bp.route(
@@ -459,16 +561,32 @@ def cleaning_activate(file_id, version_id):
 
     for version in record.versions:
         version.is_active = version is target
-    if target:
-        profile_data = _pipeline().load_profile(target.stored_filename)
-        record.row_count = profile_data['row_count']
-        record.column_count = profile_data['column_count']
-        label = f'versión {target.version_number}'
-    else:
-        profile_data = _pipeline().load_profile(record.filename)
-        record.row_count = profile_data['row_count']
-        record.column_count = profile_data['column_count']
-        label = 'versión original procesada'
+    try:
+        if target:
+            profile_data = _pipeline().load_profile(target.stored_filename)
+            record.row_count = profile_data['row_count']
+            record.column_count = profile_data['column_count']
+            label = f'versión {target.version_number}'
+        else:
+            profile_data = _pipeline().load_profile(record.filename)
+            record.row_count = profile_data['row_count']
+            record.column_count = profile_data['column_count']
+            label = 'versión original procesada'
+    except Exception as error:
+        db.session.rollback()
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo activar una versión del archivo %s: %s',
+            reference,
+            record.id,
+            error,
+        )
+        flash(
+            'La versión seleccionada no está disponible; se conservó la versión '
+            f'actual. Referencia: {reference}.',
+            'danger',
+        )
+        return redirect(url_for('files.cleaning', file_id=record.id))
     db.session.commit()
     flash(f'Ahora estás usando la {label}.', 'success')
     return redirect(url_for('files.cleaning', file_id=record.id))
@@ -482,7 +600,15 @@ def cleaning_quarantine(file_id, version_id):
         id=version_id,
         file_id=record.id,
     ).first_or_404()
-    dataframe = _pipeline().load_quarantine_dataframe(version.stored_filename)
+    try:
+        dataframe = _pipeline().load_quarantine_dataframe(version.stored_filename)
+    except Exception as error:
+        current_app.logger.exception(
+            'No se pudo leer la cuarentena de la versión %s: %s',
+            version.id,
+            error,
+        )
+        abort(404)
     if dataframe is None:
         abort(404)
 
@@ -533,9 +659,14 @@ def insights_ia():
                 'text_cols': text_cols,
                 'insights': AIInsight.query.filter_by(file_id=active_file.id).all()
             }
-        except (OSError, ValueError):
+        except Exception:
             current_app.logger.exception(
                 'No se pudo cargar el análisis del archivo %s', active_file.id
+            )
+            flash(
+                'No pudimos abrir los datos del archivo activo. Puedes seleccionar '
+                'otro archivo o volver a cargarlo.',
+                'warning',
             )
 
     return render_template('files/insights.html',

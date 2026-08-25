@@ -27,6 +27,14 @@ def _cleaning_csv_bytes():
     )
 
 
+def _configurable_cleaning_csv_bytes():
+    return (
+        'price,date,city,phone\n'
+        '"10,50",31/12/2025,Bogota,+57 300 123 4567\n'
+        '"20,75",15/01/2026,BOGOTA,(601) 555-1234\n'
+    ).encode()
+
+
 def test_csv_flow_from_upload_to_download(app, client, auth):
     _login(auth)
 
@@ -160,6 +168,30 @@ def test_unexpected_processing_error_reports_stage_and_reference(app, client, au
     assert b'internal detail' not in response.data
 
 
+def test_preview_failure_returns_to_plan_without_server_error(client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+
+    with patch(
+        'app.services.cleaning_executor.CleaningExecutor.preview',
+        side_effect=RuntimeError('duckdb detail'),
+    ):
+        response = client.post(
+            '/files/cleaning/1/preview',
+            data={'operation_ids': ['email:validate_email']},
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert b'El archivo no fue modificado' in response.data
+    assert b'Referencia:' in response.data
+    assert b'duckdb detail' not in response.data
+
+
 def test_download_uses_parquet_when_original_is_unavailable(app, client, auth):
     _login(auth)
     client.post(
@@ -176,6 +208,28 @@ def test_download_uses_parquet_when_original_is_unavailable(app, client, auth):
 
     assert response.status_code == 200
     assert b'category,amount' in response.data
+
+
+def test_missing_dataset_artifacts_do_not_break_navigation(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_csv_bytes()), 'sales.csv')},
+        content_type='multipart/form-data',
+    )
+
+    with app.app_context():
+        record = FileUpload.query.one()
+        Path(app.config['UPLOAD_FOLDER'], record.filename).unlink()
+        for artifact in Path(app.config['ANALYTICS_FOLDER']).iterdir():
+            artifact.unlink()
+
+    assert client.get('/dashboard').status_code == 200
+    assert client.get('/files/insights').status_code == 200
+    assert client.get('/reports/').status_code == 200
+    assert client.get('/files/results/1').status_code == 302
+    assert client.get('/reports/download/1').status_code == 302
+    assert client.get('/files/cleaning/1').status_code == 404
 
 
 def test_empty_csv_is_rejected(app, client, auth):
@@ -306,6 +360,58 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     with app.app_context():
         assert DatasetVersion.query.count() == 0
     assert list(analytics_folder.iterdir()) == []
+
+
+def test_user_can_configure_preview_and_apply_review_rules(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={
+            'file': (
+                BytesIO(_configurable_cleaning_csv_bytes()),
+                'regional.csv',
+            )
+        },
+        content_type='multipart/form-data',
+    )
+
+    plan_page = client.get('/files/cleaning/1')
+    assert plan_page.status_code == 200
+    assert 'Disponibles con tu decisión'.encode() in plan_page.data
+    assert b'parameter:price:cast_type:decimal_separator' in plan_page.data
+    assert b'parameter:date:parse_date:date_format' in plan_page.data
+    assert b'parameter:city:normalize_case:case_style' in plan_page.data
+    assert b'parameter:phone:normalize_phone:phone_style' in plan_page.data
+
+    selected = [
+        'price:cast_type',
+        'date:parse_date',
+        'city:normalize_case',
+        'phone:normalize_phone',
+    ]
+    configured = {
+        'operation_ids': selected,
+        'parameter:price:cast_type:decimal_separator': ',',
+        'parameter:date:parse_date:date_format': '%d/%m/%Y',
+        'parameter:city:normalize_case:case_style': 'lower',
+        'parameter:phone:normalize_phone:phone_style': 'keep_plus',
+    }
+    preview = client.post('/files/cleaning/1/preview', data=configured)
+    assert preview.status_code == 200
+    assert b'Vista previa de limpieza' in preview.data
+    assert b'parameter:price:cast_type:decimal_separator' in preview.data
+
+    applied = client.post(
+        '/files/cleaning/1/apply',
+        data=configured,
+        follow_redirects=True,
+    )
+    assert applied.status_code == 200
+    assert 'Versión 1 creada'.encode() in applied.data
+    assert b'Historial de versiones' in applied.data
+
+    download = client.get('/reports/download/1')
+    assert b'10.5,2025-12-31,bogota,+573001234567' in download.data
 
 
 def test_delete_removes_database_record_and_file(app, client, auth):

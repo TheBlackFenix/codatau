@@ -105,6 +105,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Perfil estructurado con tipos, nulos, cardinalidad, duplicados y muestra
 - [x] Inferencia semántica y plan de limpieza seguro (`automatic` / revisión / IA)
 - [x] Vista previa, aprobación por operación y versiones reversibles
+- [x] Configuración interactiva de fechas, teléfonos, texto y separadores regionales
 - [x] Cuarentena descargable para filas que no superan una validación
 - [x] Flujo de limpieza accesible desde navegación, dashboard, análisis y archivos
 - [x] Detección de valores nulos y filas duplicadas
@@ -394,7 +395,8 @@ La base de datos se crea automáticamente en `instance/pymes_ai.db` al primer ar
 4. Ve a **Archivos** y sube tu primer CSV o Excel
 5. Explora el **Dashboard** con las gráficas automáticas
 6. Visita **Análisis** para ver los insights generados por IA
-7. Desde **Reportes** descarga el archivo procesado y limpio
+7. En **Limpieza**, selecciona reglas, configura decisiones regionales y revisa la vista previa
+8. Aprueba una versión y desde **Reportes** descarga el archivo limpio
 
 ### Formatos de archivo soportados
 
@@ -558,7 +560,7 @@ contrato del motor de limpieza está en
 
 - [x] Perfilado semántico y propuestas estructuradas de limpieza
 - [x] Ejecutor inicial con vista previa, aprobación y trazabilidad
-- [ ] Parámetros interactivos para fechas, teléfonos y separadores regionales
+- [x] Parámetros interactivos para fechas, teléfonos y separadores regionales
 - [ ] Análisis de casos ambiguos mediante IA
 - [ ] Consultas y visualizaciones ejecutadas directamente en DuckDB
 - [ ] Integración con almacenamiento de objetos (S3 compatible)

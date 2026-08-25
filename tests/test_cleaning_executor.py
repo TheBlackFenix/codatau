@@ -4,6 +4,7 @@ import pytest
 from app.services.cleaning_executor import (
     CleaningExecutor,
     CleaningPlanError,
+    select_configured_operations,
     select_executable_operations,
 )
 from app.services.dataset_pipeline import DatasetPipeline
@@ -116,3 +117,69 @@ def test_executor_can_quarantine_rows_with_missing_values(tmp_path):
     assert preview.metrics['after_rows'] == 2
     assert preview.metrics['quarantined_rows'] == 1
     assert preview.quarantine[0]['amount'] == 20
+
+
+def test_executor_applies_user_configured_regional_and_text_rules(tmp_path):
+    dataframe = pd.DataFrame(
+        {
+            'price': ['10,50', '20,75'],
+            'date': ['31/12/2025', '15/01/2026'],
+            'city': ['Bogota', 'BOGOTA'],
+            'phone': ['+57 300 123 4567', '(601) 555-1234'],
+        }
+    )
+    source = tmp_path / 'regional.csv'
+    dataframe.to_csv(source, index=False)
+    artifact = DatasetPipeline(tmp_path / 'artifacts').ingest_dataframe(
+        dataframe,
+        'regional.csv',
+        source,
+    )
+    selected_ids = [
+        'price:cast_type',
+        'date:parse_date',
+        'city:normalize_case',
+        'phone:normalize_phone',
+    ]
+
+    selected = select_configured_operations(
+        artifact.profile['cleaning_plan'],
+        selected_ids,
+        {
+            'price:cast_type': {'decimal_separator': ','},
+            'date:parse_date': {'date_format': '%d/%m/%Y'},
+            'city:normalize_case': {'case_style': 'lower'},
+            'phone:normalize_phone': {'phone_style': 'keep_plus'},
+        },
+    )
+    preview = CleaningExecutor().preview(artifact.parquet_path, selected)
+
+    assert preview.metrics['after_rows'] == 2
+    assert preview.metrics['quarantined_rows'] == 0
+    assert [row['price'] for row in preview.after] == [10.5, 20.75]
+    assert [row['date'][:10] for row in preview.after] == [
+        '2025-12-31',
+        '2026-01-15',
+    ]
+    assert [row['city'] for row in preview.after] == ['bogota', 'bogota']
+    assert [row['phone'] for row in preview.after] == [
+        '+573001234567',
+        '6015551234',
+    ]
+
+
+def test_executor_rejects_missing_user_configuration(tmp_path):
+    dataframe = pd.DataFrame({'price': ['10,50', '20,75']})
+    source = tmp_path / 'regional.csv'
+    dataframe.to_csv(source, index=False)
+    artifact = DatasetPipeline(tmp_path / 'artifacts').ingest_dataframe(
+        dataframe,
+        'regional.csv',
+        source,
+    )
+
+    with pytest.raises(CleaningPlanError, match='decimales usan punto o coma'):
+        select_configured_operations(
+            artifact.profile['cleaning_plan'],
+            ['price:cast_type'],
+        )
