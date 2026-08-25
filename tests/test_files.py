@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -68,6 +69,72 @@ def test_xlsx_upload(app, client, auth):
     assert response.status_code == 302
     with app.app_context():
         assert FileUpload.query.one().file_type == 'xlsx'
+
+
+def test_semicolon_csv_upload_is_detected(app, client, auth):
+    _login(auth)
+
+    response = client.post(
+        '/files/upload',
+        data={'file': (BytesIO(b'category;amount\nA;10\nB;20\n'), 'sales.csv')},
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        record = FileUpload.query.one()
+        assert record.row_count == 2
+        assert record.column_count == 2
+
+
+def test_invalid_excel_explains_how_to_fix_it(app, client, auth):
+    _login(auth)
+
+    response = client.post(
+        '/files/upload',
+        data={'file': (BytesIO(b'not an excel workbook'), 'broken.xlsx')},
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert 'no corresponde a un archivo Excel moderno'.encode() in response.data
+    assert 'Guardar como'.encode() in response.data
+
+
+def test_malformed_csv_explains_the_structure_problem(app, client, auth):
+    _login(auth)
+
+    response = client.post(
+        '/files/upload',
+        data={'file': (BytesIO(b'name,amount\n"unterminated,10\n'), 'broken.csv')},
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert 'comillas sin cerrar'.encode() in response.data
+    assert 'CSV UTF-8'.encode() in response.data
+
+
+def test_unexpected_processing_error_reports_stage_and_reference(app, client, auth):
+    _login(auth)
+
+    with patch(
+        'app.services.dataset_pipeline.DatasetPipeline.ingest_dataframe',
+        side_effect=RuntimeError('internal detail'),
+    ):
+        response = client.post(
+            '/files/upload',
+            data={'file': (BytesIO(_csv_bytes()), 'sales.csv')},
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert 'creación del perfil analítico'.encode() in response.data
+    assert 'Referencia:'.encode() in response.data
+    assert b'internal detail' not in response.data
 
 
 def test_download_uses_parquet_when_original_is_unavailable(app, client, auth):

@@ -93,6 +93,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 
 ### 📁 Gestión de Archivos
 - [x] Carga de archivos `.csv`, `.xls`, `.xlsx` (hasta 50 MB)
+- [x] Detección de separadores CSV y errores de carga accionables
 - [x] Nombres únicos UUID para evitar colisiones
 - [x] Vista de todos los archivos con acciones: ver, activar, eliminar
 - [x] Eliminación de archivos (físico + registro en BD)

@@ -35,10 +35,14 @@
             <div class="form-group">
                 {{ form.file.label(class='form-label') }}
                 {{ form.file(class='form-control' + (' is-invalid' if form.file.errors else ''),
-                              id='fileInput') }}
+                              id='fileInput', accept='.csv,.xls,.xlsx') }}
                 {% for error in form.file.errors %}
                     <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}
+                <div class="form-hint" style="margin-top:8px;color:var(--gray-500);font-size:12px">
+                    CSV con separador coma, punto y coma, tabulador o |. Excel .xls y .xlsx.
+                    Máximo 50 MB.
+                </div>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">
                 <i class="bi bi-upload"></i> Cargar y procesar

@@ -11,6 +11,7 @@ from flask import (
     jsonify,
     redirect,
     render_template,
+    request,
     session,
     url_for,
 )
@@ -19,7 +20,7 @@ from app.extensions import db
 from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.forms.file_forms import UploadForm
-from app.services.data_service import DataService
+from app.services.data_service import DataService, FileReadError
 from app.services.validation_service import ValidationService
 from app.services.ai_service import AIService
 from app.services.dataset_pipeline import DatasetPipeline
@@ -44,6 +45,18 @@ def _load_dataframe(record):
     return _pipeline().load_dataframe_or_source(record.filename, source_path)
 
 
+def _discard_failed_upload(storage, pipeline, stored_filename):
+    db.session.rollback()
+    try:
+        storage.delete(stored_filename)
+        pipeline.remove_artifacts(stored_filename)
+    except OSError:
+        current_app.logger.exception(
+            'No se pudieron descartar todos los artefactos fallidos de %s',
+            stored_filename,
+        )
+
+
 @files_bp.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
@@ -58,13 +71,17 @@ def upload():
         unique_name = f"{uuid.uuid4().hex}.{ext}"
         storage = _storage()
         pipeline = _pipeline()
-        filepath = storage.save(file, unique_name)
+        processing_stage = 'almacenamiento inicial'
 
         try:
+            filepath = storage.save(file, unique_name)
+
             # Leer archivo
+            processing_stage = 'lectura del archivo'
             df = DataService.read_file(filepath)
 
             # Validar
+            processing_stage = 'validación de estructura'
             errors, warnings = ValidationService.validate_file(df)
 
             if errors:
@@ -74,15 +91,18 @@ def upload():
                 return redirect(url_for('files.upload'))
 
             # Limpiar
+            processing_stage = 'normalización de datos'
             df = DataService.clean_dataframe(df)
 
             # Crear artefacto analítico portable y perfil compacto para IA.
+            processing_stage = 'creación del perfil analítico'
             artifact = pipeline.ingest_dataframe(df, unique_name, filepath)
 
             # Resumen
             summary = DataService.get_summary(df)
 
             # Guardar registro en BD
+            processing_stage = 'registro del resultado'
             upload_record = FileUpload(
                 user_id=current_user.id,
                 filename=unique_name,
@@ -117,18 +137,38 @@ def upload():
             flash(f'Archivo procesado correctamente: {summary["rows"]} filas, {summary["columns"]} columnas.', 'success')
             return redirect(url_for('files.results', file_id=upload_record.id))
 
+        except FileReadError as error:
+            _discard_failed_upload(storage, pipeline, unique_name)
+            current_app.logger.warning(
+                'Archivo rechazado %s (%s): %s',
+                original_name,
+                error.code,
+                error,
+            )
+            flash(f'No pudimos leer “{original_name}”: {error.user_message}', 'danger')
+            flash(f'Qué puedes revisar: {error.hint}', 'info')
+            return redirect(url_for('files.upload'))
         except Exception as e:
-            db.session.rollback()
-            storage.delete(unique_name)
-            pipeline.remove_artifacts(unique_name)
+            _discard_failed_upload(storage, pipeline, unique_name)
+            error_reference = uuid.uuid4().hex[:8].upper()
             current_app.logger.exception(
-                'No se pudo procesar el archivo %s: %s', original_name, e
+                '[%s] No se pudo procesar %s durante %s: %s',
+                error_reference,
+                original_name,
+                processing_stage,
+                e,
             )
             flash(
-                'No fue posible procesar el archivo. Verifica que el formato y el contenido sean válidos.',
+                f'El archivo se recibió, pero falló durante {processing_stage}. '
+                f'No se guardaron cambios. Referencia: {error_reference}.',
                 'danger',
             )
             return redirect(url_for('files.upload'))
+
+    if request.method == 'POST':
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                flash(error, 'danger')
 
     return render_template('files/upload.html', form=form)
 

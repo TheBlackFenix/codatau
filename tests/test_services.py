@@ -1,9 +1,10 @@
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from app.services.ai_service import AIService
-from app.services.data_service import DataService
+from app.services.data_service import DataService, FileReadError
 from app.services.validation_service import ValidationService
 
 
@@ -61,3 +62,14 @@ def test_xls_extension_uses_excel_reader(tmp_path):
 
     reader.assert_called_once_with(str(filepath))
     assert result.equals(expected)
+
+
+def test_csv_content_with_excel_signature_reports_extension_mismatch(tmp_path):
+    filepath = tmp_path / 'renamed.csv'
+    filepath.write_bytes(b'PK\x03\x04placeholder')
+
+    with pytest.raises(FileReadError) as error:
+        DataService.read_file(filepath)
+
+    assert error.value.code == 'extension_mismatch'
+    assert '.xlsx' in error.value.hint
