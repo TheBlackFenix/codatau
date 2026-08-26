@@ -381,6 +381,10 @@ python run.py
 
 La aplicación estará disponible en: **http://127.0.0.1:5000**
 
+El arranque comprueba que el puerto esté libre. Si ya existe otra instancia de
+CoDataU, se detiene con un mensaje explícito en lugar de servir versiones distintas
+de la aplicación sobre el mismo puerto.
+
 La base de datos se crea automáticamente en `instance/pymes_ai.db` al primer arranque.
 
 ---
