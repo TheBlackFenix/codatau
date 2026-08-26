@@ -15,14 +15,20 @@
     <div class="card card-lg">
         <div class="card-title"><i class="bi bi-cloud-upload"></i> Subir nuevo archivo</div>
 
-        <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-zone" id="uploadZone" role="button" tabindex="0"
+             aria-controls="fileInput" aria-label="Seleccionar o soltar un archivo">
             <div class="upload-icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
-            <div style="font-size:15px;font-weight:600;color:var(--gray-700);margin-bottom:6px">
+            <div id="uploadPrompt" style="font-size:15px;font-weight:600;color:var(--gray-700);margin-bottom:6px">
                 Arrastra tu archivo aquí
             </div>
-            <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">
+            <div id="uploadHint" style="font-size:13px;color:var(--gray-400);margin-bottom:16px">
                 o haz clic para seleccionar
             </div>
+            <div id="selectedFile" class="selected-file" hidden>
+                <i class="bi bi-file-earmark-check"></i>
+                <span><strong id="selectedFileName"></strong><small id="selectedFileSize"></small></span>
+            </div>
+            <div id="uploadError" class="upload-error" role="alert" hidden></div>
             <div style="display:flex;gap:8px;justify-content:center">
                 <span class="badge badge-purple">.XLSX</span>
                 <span class="badge badge-orange">.XLS</span>
@@ -33,9 +39,9 @@
         <form method="POST" enctype="multipart/form-data" id="uploadForm" style="margin-top:16px">
             {{ form.hidden_tag() }}
             <div class="form-group">
-                {{ form.file.label(class='form-label') }}
+                {{ form.file.label(class='form-label visually-hidden') }}
                 {{ form.file(class='form-control' + (' is-invalid' if form.file.errors else ''),
-                              id='fileInput', accept='.csv,.xls,.xlsx') }}
+                              id='fileInput', accept='.csv,.xls,.xlsx', style='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none') }}
                 {% for error in form.file.errors %}
                     <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}
@@ -113,4 +119,83 @@
     </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+    const zone = document.getElementById('uploadZone');
+    const input = document.getElementById('fileInput');
+    const prompt = document.getElementById('uploadPrompt');
+    const hint = document.getElementById('uploadHint');
+    const selected = document.getElementById('selectedFile');
+    const selectedName = document.getElementById('selectedFileName');
+    const selectedSize = document.getElementById('selectedFileSize');
+    const error = document.getElementById('uploadError');
+    const allowedExtensions = ['csv', 'xls', 'xlsx'];
+    const maxBytes = 50 * 1024 * 1024;
+
+    const formatBytes = bytes => {
+        if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const showError = message => {
+        error.textContent = message;
+        error.hidden = false;
+        zone.classList.add('has-error');
+        selected.hidden = true;
+        input.value = '';
+    };
+
+    const chooseFile = file => {
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (!allowedExtensions.includes(extension)) {
+            showError('Formato no permitido. Usa CSV, XLS o XLSX.');
+            return;
+        }
+        if (file.size > maxBytes) {
+            showError('El archivo supera el límite de 50 MB.');
+            return;
+        }
+
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        input.files = transfer.files;
+        error.hidden = true;
+        zone.classList.remove('has-error');
+        zone.classList.add('has-file');
+        prompt.textContent = 'Archivo listo para procesar';
+        hint.textContent = 'Puedes soltar otro archivo para reemplazarlo';
+        selectedName.textContent = file.name;
+        selectedSize.textContent = formatBytes(file.size);
+        selected.hidden = false;
+    };
+
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            input.click();
+        }
+    });
+    zone.addEventListener('dragover', event => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        zone.classList.add('is-dragover');
+    });
+    zone.addEventListener('dragleave', event => {
+        if (!zone.contains(event.relatedTarget)) zone.classList.remove('is-dragover');
+    });
+    zone.addEventListener('drop', event => {
+        event.preventDefault();
+        zone.classList.remove('is-dragover');
+        const [file] = event.dataTransfer.files;
+        if (file) chooseFile(file);
+    });
+    input.addEventListener('change', () => {
+        if (input.files[0]) chooseFile(input.files[0]);
+    });
+})();
+</script>
 {% endblock %}

@@ -56,8 +56,8 @@
     </div>
 </div>
 
-<!-- Insights + Stats -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+<!-- Insights -->
+<div style="display:grid;grid-template-columns:1fr;gap:20px;margin-bottom:20px">
 
     {% if insights %}
     <div class="card">
@@ -71,35 +71,13 @@
     </div>
     {% endif %}
 
-    {% if summary.numeric_summary %}
-    <div class="card">
-        <div class="card-title"><i class="bi bi-calculator"></i> Métricas numéricas</div>
-        <div class="table-wrap">
-            <table class="stats-table">
-                <thead>
-                    <tr>
-                        <th>Columna</th>
-                        <th style="text-align:right">Suma</th>
-                        <th style="text-align:right">Promedio</th>
-                        <th style="text-align:right">Máx</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for col, stats in summary.numeric_summary.items() %}
-                    <tr>
-                        <td><strong>{{ col }}</strong></td>
-                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.sum) }}</td>
-                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) }}</td>
-                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.max) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-
 </div>
+
+{% if summary.numeric_summary %}
+    {% set metric_explorer_id = 'results-metrics' %}
+    {% include 'files/_metric_explorer.html' %}
+    <div style="height:20px"></div>
+{% endif %}
 
 <!-- Preview -->
 <div class="card">

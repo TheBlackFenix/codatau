@@ -1483,6 +1483,58 @@ body {
     background: var(--purple-soft);
 }
 
+.upload-zone.is-dragover {
+    border-color: var(--purple);
+    background: var(--purple-soft);
+    box-shadow: 0 0 0 4px rgba(92,45,145,0.09);
+    transform: translateY(-2px);
+}
+
+.upload-zone.has-file {
+    border-style: solid;
+    border-color: #86EFAC;
+    background: #F0FDF4;
+}
+
+.upload-zone.has-file .upload-icon {
+    background: #DCFCE7;
+    color: #15803D;
+}
+
+.upload-zone.has-error {
+    border-color: #FCA5A5;
+    background: #FEF2F2;
+}
+
+.selected-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 100%;
+    padding: 9px 12px;
+    margin: 0 auto 14px;
+    border-radius: 9px;
+    background: var(--white);
+    color: #15803D;
+    box-shadow: var(--shadow-sm);
+}
+
+.selected-file[hidden] { display: none; }
+.visually-hidden {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+.selected-file span { min-width: 0; text-align: left; }
+.selected-file strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected-file small { display: block; color: var(--gray-500); margin-top: 2px; }
+.upload-error { color: #B91C1C; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+
 .upload-icon {
     width: 64px;
     height: 64px;
@@ -1494,6 +1546,182 @@ body {
     align-items: center;
     justify-content: center;
     margin: 0 auto 16px;
+}
+
+/* Semantic data roles and metric explorer */
+.data-role-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.data-role-grid > div {
+    padding: 12px 14px;
+    border: 1px solid var(--gray-100);
+    border-radius: var(--radius);
+    background: var(--gray-50);
+}
+
+.data-role-grid strong {
+    display: block;
+    color: var(--gray-900);
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.data-role-grid span {
+    display: block;
+    margin-top: 3px;
+    color: var(--gray-500);
+    font-size: 11px;
+}
+
+.column-classification {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.column-classification summary,
+.metric-builder summary {
+    color: var(--purple);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.column-classification p {
+    margin: 9px 0 0;
+    color: var(--gray-600);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.metric-explorer { overflow: hidden; }
+
+.metric-explorer-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.metric-explorer-subtitle {
+    color: var(--gray-500);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.metric-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+}
+
+.metric-card {
+    position: relative;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(145deg, var(--white), var(--gray-50));
+}
+
+.metric-card.is-custom {
+    border-color: #DDD0F0;
+    background: var(--purple-soft);
+}
+
+.metric-card-label {
+    overflow: hidden;
+    color: var(--gray-600);
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.metric-card-value {
+    margin-top: 8px;
+    overflow-wrap: anywhere;
+    color: var(--gray-900);
+    font-size: clamp(19px, 2vw, 27px);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.metric-card-primary {
+    margin-top: 2px;
+    color: var(--purple);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.metric-card-meta {
+    margin-top: 10px;
+    color: var(--gray-500);
+    font-size: 10px;
+}
+
+.metric-empty {
+    padding: 18px;
+    border: 1px dashed var(--gray-200);
+    border-radius: var(--radius);
+    color: var(--gray-500);
+    font-size: 13px;
+    text-align: center;
+}
+
+.metric-builder {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.metric-builder-controls {
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) minmax(150px, 1fr) auto;
+    align-items: end;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.metric-builder-controls label > span {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--gray-600);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.custom-metric-grid { margin-top: 12px; }
+
+.metric-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.75);
+    color: var(--gray-500);
+    cursor: pointer;
+}
+
+.metric-remove:hover { background: var(--white); color: #B91C1C; }
+
+.metric-identifier-note {
+    display: flex;
+    gap: 7px;
+    margin-top: 12px;
+    color: var(--gray-500);
+    font-size: 11px;
 }
 
 /* Numeric stats table */
@@ -1542,4 +1770,7 @@ body {
     .benefits-inner { flex-direction: column; }
     .feature-grid { grid-template-columns: 1fr; }
     .nav-links { display: none; }
+    .data-role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metric-explorer-header { flex-direction: column; }
+    .metric-builder-controls { grid-template-columns: 1fr; }
 }

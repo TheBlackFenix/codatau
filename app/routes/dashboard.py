@@ -8,6 +8,7 @@ from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.services.data_service import DataService
 from app.services.dataset_pipeline import DatasetPipeline
+from app.services.ai_service import AIService
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -26,6 +27,7 @@ def index():
     active_file = None
     summary = None
     chart_data = {}
+    insights = []
 
     if active_file_id:
         active_file = FileUpload.query.filter_by(
@@ -51,10 +53,12 @@ def index():
                 filepath,
             )
             summary = DataService.get_summary(df)
+            insights = AIService.generate_display_insights(df, summary)
 
             numeric_cols = [
-                c for c in df.select_dtypes(include='number').columns
-                if df[c].notna().sum() > 0
+                column
+                for column in summary['default_metrics']
+                if df[column].notna().sum() > 0
             ]
             col_names = list(df.columns)
 
@@ -125,15 +129,6 @@ def index():
             )
             summary = None
             chart_data = {}
-
-    insights = []
-    if active_file:
-        insights = (
-            AIInsight.query
-            .filter_by(file_id=active_file.id)
-            .order_by(AIInsight.created_at.desc())
-            .all()
-        )
 
     total_files = len(all_files)
     total_rows = sum(f.row_count or 0 for f in all_files)

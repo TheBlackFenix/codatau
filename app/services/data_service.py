@@ -1,6 +1,7 @@
 import csv
-import os
 import math
+import re
+import unicodedata
 from pathlib import Path
 from zipfile import BadZipFile
 
@@ -13,6 +14,107 @@ from xlrd.biffh import XLRDError
 
 CSV_ENCODINGS = ('utf-8-sig', 'cp1252', 'latin-1')
 CSV_DELIMITERS = ',;\t|'
+
+MEASURE_HINTS = {
+    'amount',
+    'alto',
+    'ancho',
+    'cantidad',
+    'coste',
+    'costo',
+    'cost',
+    'descuento',
+    'discount',
+    'duracion',
+    'duration',
+    'egreso',
+    'flete',
+    'gasto',
+    'gastos',
+    'importe',
+    'impuesto',
+    'income',
+    'ingreso',
+    'height',
+    'largo',
+    'length',
+    'margen',
+    'margin',
+    'monto',
+    'peso',
+    'price',
+    'pieza',
+    'piezas',
+    'precio',
+    'profit',
+    'qty',
+    'quantity',
+    'saldo',
+    'seguro',
+    'tarifa',
+    'tiempo',
+    'time',
+    'total',
+    'unidad',
+    'unidades',
+    'utilidad',
+    'valor',
+    'venta',
+    'ventas',
+    'volumen',
+    'volume',
+    'weight',
+    'width',
+}
+
+IDENTIFIER_HINTS = {
+    'cedula',
+    'celular',
+    'codigo',
+    'documento',
+    'guia',
+    'id',
+    'identificacion',
+    'nit',
+    'phone',
+    'postal',
+    'sku',
+    'telefono',
+    'zip',
+}
+
+NUMBER_IDENTIFIER_CONTEXT = {
+    'contrato',
+    'convenio',
+    'cuenta',
+    'factura',
+    'guia',
+    'identificacion',
+    'orden',
+}
+
+
+def _column_tokens(column_name):
+    separated = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', str(column_name))
+    normalized = unicodedata.normalize('NFKD', separated)
+    ascii_name = ''.join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+    return set(filter(None, re.split(r'[^a-z0-9]+', ascii_name.lower())))
+
+
+def classify_numeric_column(column_name):
+    """Classify a physical number without assuming it is a business measure."""
+    tokens = _column_tokens(column_name)
+    if tokens & IDENTIFIER_HINTS:
+        return 'identifier'
+    if 'numero' in tokens and tokens & NUMBER_IDENTIFIER_CONTEXT:
+        return 'identifier'
+    if tokens & MEASURE_HINTS:
+        return 'measure'
+    return 'optional'
 
 
 class FileReadError(ValueError):
@@ -124,11 +226,35 @@ class DataService:
 
     @staticmethod
     def get_summary(df):
+        numeric_cols = list(df.select_dtypes(include='number').columns)
+        numeric_roles = {
+            column: classify_numeric_column(column)
+            for column in numeric_cols
+        }
+        recommended_metrics = [
+            column
+            for column in numeric_cols
+            if numeric_roles[column] == 'measure'
+        ]
+        identifier_cols = [
+            column
+            for column in numeric_cols
+            if numeric_roles[column] == 'identifier'
+        ]
+        optional_numeric_cols = [
+            column
+            for column in numeric_cols
+            if numeric_roles[column] == 'optional'
+        ]
         summary = {
             'rows':        len(df),
             'columns':     len(df.columns),
             'column_names': list(df.columns),
-            'numeric_cols': list(df.select_dtypes(include='number').columns),
+            'numeric_cols': numeric_cols,
+            'recommended_metrics': recommended_metrics,
+            'default_metrics': recommended_metrics[:6],
+            'identifier_cols': identifier_cols,
+            'optional_numeric_cols': optional_numeric_cols,
             'null_total':  int(df.isnull().sum().sum()),
             'duplicates':  int(df.duplicated().sum()),
         }
@@ -142,6 +268,18 @@ class DataService:
                     'max': _finite_number(numeric_df[col].max()),
                     'min': _finite_number(numeric_df[col].min()),
                     'sum': _finite_number(numeric_df[col].sum()),
+                    'non_null_count': int(numeric_df[col].notna().sum()),
+                    'missing_count': int(numeric_df[col].isna().sum()),
+                    'unique_count': int(numeric_df[col].nunique(dropna=True)),
+                    'unique_percentage': round(
+                        numeric_df[col].nunique(dropna=True) / len(df) * 100,
+                        1,
+                    ) if len(df) else 0.0,
+                    'completeness': round(
+                        numeric_df[col].notna().sum() / len(df) * 100,
+                        1,
+                    ) if len(df) else 0.0,
+                    'role': numeric_roles[col],
                 }
                 for col in numeric_df.columns
             }

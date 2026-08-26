@@ -1,0 +1,148 @@
+{% set metric_id = metric_explorer_id|default('metric-explorer') %}
+<div class="card metric-explorer" id="{{ metric_id }}">
+    <div class="metric-explorer-header">
+        <div>
+            <div class="card-title" style="margin-bottom:3px">
+                <i class="bi bi-speedometer2"></i> Métricas de negocio
+            </div>
+            <div class="metric-explorer-subtitle">
+                Solo mostramos automáticamente campos con significado cuantitativo probable.
+            </div>
+        </div>
+        <span class="badge badge-purple">
+            {{ summary.default_metrics|length }} visibles de {{ summary.numeric_cols|length }} numéricas
+        </span>
+    </div>
+
+    {% if summary.default_metrics %}
+    <div class="metric-card-grid" data-default-metrics>
+        {% for column in summary.default_metrics %}
+        {% set stats = summary.numeric_summary[column] %}
+        <article class="metric-card" data-metric-key="{{ column }}:sum">
+            <div class="metric-card-label">{{ column }}</div>
+            <div class="metric-card-value">{{ '{:,.2f}'.format(stats.sum) if stats.sum is not none else '—' }}</div>
+            <div class="metric-card-primary">Suma total</div>
+            <div class="metric-card-meta">
+                Promedio {{ '{:,.2f}'.format(stats.mean) if stats.mean is not none else '—' }}
+                · {{ stats.completeness }}% con dato
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="metric-empty">
+        No identificamos una métrica de negocio inequívoca. Puedes agregar una manualmente.
+    </div>
+    {% endif %}
+
+    <details class="metric-builder">
+        <summary><i class="bi bi-plus-circle"></i> Agregar otra métrica o cálculo</summary>
+        <div class="metric-builder-controls">
+            <label>
+                <span>Campo numérico</span>
+                <select class="form-control" data-metric-column>
+                    {% if summary.recommended_metrics %}
+                    <optgroup label="Métricas sugeridas">
+                        {% for column in summary.recommended_metrics %}<option value="{{ column }}" data-role="measure">{{ column }}</option>{% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {% if summary.optional_numeric_cols %}
+                    <optgroup label="Otros campos numéricos">
+                        {% for column in summary.optional_numeric_cols %}<option value="{{ column }}" data-role="optional">{{ column }}</option>{% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {% if summary.identifier_cols %}
+                    <optgroup label="Identificadores — usar solo si lo decides">
+                        {% for column in summary.identifier_cols %}<option value="{{ column }}" data-role="identifier">{{ column }}</option>{% endfor %}
+                    </optgroup>
+                    {% endif %}
+                </select>
+            </label>
+            <label>
+                <span>Cálculo</span>
+                <select class="form-control" data-metric-aggregation>
+                    <option value="sum">Suma total</option>
+                    <option value="mean">Promedio</option>
+                    <option value="min">Mínimo</option>
+                    <option value="max">Máximo</option>
+                    <option value="non_null_count">Registros con dato</option>
+                    <option value="completeness">Porcentaje con dato</option>
+                    <option value="unique_count">Valores únicos</option>
+                    <option value="unique_percentage">Valores únicos / total de filas</option>
+                </select>
+            </label>
+            <button type="button" class="btn btn-secondary" data-add-metric>
+                <i class="bi bi-plus-lg"></i> Agregar
+            </button>
+        </div>
+        <div class="metric-card-grid custom-metric-grid" data-custom-metrics></div>
+        {% if summary.identifier_cols %}
+        <div class="metric-identifier-note">
+            <i class="bi bi-shield-check"></i>
+            {{ summary.identifier_cols|length }} identificador(es) fueron excluidos de los cálculos automáticos.
+        </div>
+        {% endif %}
+    </details>
+</div>
+
+<script type="application/json" id="{{ metric_id }}-data">{{ summary.numeric_summary|tojson }}</script>
+<script>
+(() => {
+    const root = document.getElementById({{ metric_id|tojson }});
+    const catalog = JSON.parse(document.getElementById({{ (metric_id ~ '-data')|tojson }}).textContent);
+    const columnSelect = root.querySelector('[data-metric-column]');
+    const aggregationSelect = root.querySelector('[data-metric-aggregation]');
+    const customGrid = root.querySelector('[data-custom-metrics]');
+    const labels = {
+        sum: 'Suma total', mean: 'Promedio', min: 'Mínimo', max: 'Máximo',
+        non_null_count: 'Registros con dato', completeness: 'Porcentaje con dato',
+        unique_count: 'Valores únicos', unique_percentage: 'Valores únicos / total de filas'
+    };
+    const numberFormat = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 });
+
+    const formatted = (value, aggregation) => {
+        if (value === null || value === undefined) return '—';
+        if (aggregation === 'completeness' || aggregation === 'unique_percentage') {
+            return `${Number(value).toFixed(1)}%`;
+        }
+        return numberFormat.format(value);
+    };
+
+    columnSelect.addEventListener('change', () => {
+        const role = columnSelect.selectedOptions[0]?.dataset.role;
+        aggregationSelect.value = role === 'identifier' ? 'unique_count' : 'sum';
+    });
+
+    root.querySelector('[data-add-metric]').addEventListener('click', () => {
+        const column = columnSelect.value;
+        const aggregation = aggregationSelect.value;
+        if (!column || !catalog[column]) return;
+        const key = `${column}:${aggregation}`;
+        if ([...customGrid.children].some(card => card.dataset.metricKey === key)) return;
+
+        const card = document.createElement('article');
+        card.className = 'metric-card is-custom';
+        card.dataset.metricKey = key;
+
+        const label = document.createElement('div');
+        label.className = 'metric-card-label';
+        label.textContent = column;
+        const value = document.createElement('div');
+        value.className = 'metric-card-value';
+        value.textContent = formatted(catalog[column][aggregation], aggregation);
+        const calculation = document.createElement('div');
+        calculation.className = 'metric-card-primary';
+        calculation.textContent = labels[aggregation];
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'metric-remove';
+        remove.title = 'Quitar métrica';
+        remove.setAttribute('aria-label', 'Quitar métrica');
+        remove.innerHTML = '<i class="bi bi-x"></i>';
+        remove.addEventListener('click', () => card.remove());
+
+        card.append(label, value, calculation, remove);
+        customGrid.appendChild(card);
+    });
+})();
+</script>

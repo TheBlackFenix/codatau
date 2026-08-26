@@ -110,33 +110,8 @@
 <div style="display:grid;grid-template-columns:1fr {% if chart_data.nulls %}1fr{% endif %};gap:16px;margin-bottom:24px">
 
     {% if summary.numeric_summary %}
-    <div class="card">
-        <div class="card-title"><i class="bi bi-calculator"></i> Resumen estadístico</div>
-        <div class="table-wrap">
-            <table class="stats-table">
-                <thead>
-                    <tr>
-                        <th>Columna</th>
-                        <th style="text-align:right">Suma</th>
-                        <th style="text-align:right">Promedio</th>
-                        <th style="text-align:right">Mín</th>
-                        <th style="text-align:right">Máx</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for col, stats in summary.numeric_summary.items() %}
-                    <tr>
-                        <td><span style="font-weight:500">{{ col }}</span></td>
-                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.sum) if stats.sum is not none else '—' }}</td>
-                        <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) if stats.mean is not none else '—' }}</td>
-                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.min) if stats.min is not none else '—' }}</td>
-                        <td style="text-align:right">{{ '{:,.0f}'.format(stats.max) if stats.max is not none else '—' }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+        {% set metric_explorer_id = 'dashboard-metrics' %}
+        {% include 'files/_metric_explorer.html' %}
     {% endif %}
 
     {% if chart_data.nulls %}

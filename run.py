@@ -13,4 +13,7 @@ if __name__ == '__main__':
         host=host,
         port=port,
         debug=app.debug,
+        # The reloader starts a second Python process, which defeats the
+        # single-instance port guard and caused stale versions to coexist.
+        use_reloader=False,
     )

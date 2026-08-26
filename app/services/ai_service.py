@@ -1,6 +1,17 @@
 class AIService:
 
     @staticmethod
+    def generate_display_insights(df, summary):
+        """Return current rule results using the shape expected by templates."""
+        return [
+            {
+                'insight_type': insight['type'],
+                'message': insight['message'],
+            }
+            for insight in AIService.generate_insights(df, summary)
+        ]
+
+    @staticmethod
     def generate_insights(df, summary):
         insights = []
 
@@ -31,7 +42,12 @@ class AIService:
 
         # Insights sobre columnas numéricas
         numeric_summary = summary.get('numeric_summary', {})
+        recommended_metrics = set(
+            summary.get('recommended_metrics', numeric_summary)
+        )
         for col, stats in numeric_summary.items():
+            if col not in recommended_metrics:
+                continue
             mean = stats['mean']
             max_val = stats['max']
             min_val = stats['min']

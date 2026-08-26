@@ -48,9 +48,16 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
     assert upload.headers['Location'].endswith('/files/results/1')
     with client.session_transaction() as browser_session:
         assert browser_session['active_file_id'] == 1
-    assert client.get('/files/results/1').status_code == 200
-    assert client.get('/dashboard').status_code == 200
-    assert client.get('/files/insights').status_code == 200
+    results = client.get('/files/results/1')
+    dashboard = client.get('/dashboard')
+    insights = client.get('/files/insights')
+    assert results.status_code == 200
+    assert dashboard.status_code == 200
+    assert insights.status_code == 200
+    assert b'M\xc3\xa9tricas de negocio' in results.data
+    assert b'M\xc3\xa9tricas de negocio' in dashboard.data
+    assert b'Agregar otra m\xc3\xa9trica o c\xc3\xa1lculo' in insights.data
+    assert b'Columnas num\xc3\xa9ricas:' not in insights.data
     assert client.get('/reports/').status_code == 200
     assert client.get('/files/cleaning').headers['Location'].endswith('/files/cleaning/1')
 
@@ -80,6 +87,45 @@ def test_cleaning_navigation_without_files_explains_next_step(client, auth):
 
     assert response.status_code == 200
     assert 'Carga un archivo antes de iniciar una limpieza'.encode() in response.data
+
+
+def test_upload_page_supports_real_drag_and_drop(client, auth):
+    _login(auth)
+
+    response = client.get('/files/upload')
+
+    assert response.status_code == 200
+    assert b'id="uploadZone"' in response.data
+    assert b"addEventListener('dragover'" in response.data
+    assert b"addEventListener('drop'" in response.data
+    assert b'new DataTransfer()' in response.data
+    assert b'id="selectedFileName"' in response.data
+
+
+def test_metric_explorer_excludes_ids_but_allows_manual_selection(client, auth):
+    _login(auth)
+    source = (
+        b'Numero_de_Guia,IdServicio,Peso,Valor_Total,EstadoNumerico\n'
+        b'7001,1,2.5,10000,1\n'
+        b'7002,2,3.0,20000,2\n'
+    )
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(source), 'envios.csv')},
+        content_type='multipart/form-data',
+    )
+
+    results = client.get('/files/results/1')
+    insights = client.get('/files/insights')
+
+    assert results.status_code == 200
+    assert insights.status_code == 200
+    assert b'<div class="metric-card-label">Peso</div>' in results.data
+    assert b'<div class="metric-card-label">Valor_Total</div>' in results.data
+    assert b'<div class="metric-card-label">Numero_de_Guia</div>' not in results.data
+    assert b'<option value="Numero_de_Guia" data-role="identifier">' in results.data
+    assert b'Valores \xc3\xbanicos / total de filas' in results.data
+    assert b'2</strong><span>Identificadores excluidos</span>' in insights.data
 
 
 def test_xlsx_upload(app, client, auth):

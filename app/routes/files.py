@@ -266,10 +266,10 @@ def results(file_id):
         id=file_id, user_id=current_user.id
     ).first_or_404()
 
-    insights = AIInsight.query.filter_by(file_id=file_id).all()
-
     try:
-        summary = DataService.get_summary(_load_dataframe(upload_record))
+        dataframe = _load_dataframe(upload_record)
+        summary = DataService.get_summary(dataframe)
+        insights = AIService.generate_display_insights(dataframe, summary)
     except Exception as error:
         reference = uuid.uuid4().hex[:8].upper()
         current_app.logger.exception(
@@ -650,14 +650,17 @@ def insights_ia():
 
             # Análisis descriptivo automático
             col_names = summary['column_names']
-            numeric_cols = summary['numeric_cols']
-            text_cols = [c for c in col_names if c not in numeric_cols]
+            numeric_cols = summary['recommended_metrics']
+            physical_numeric_cols = summary['numeric_cols']
+            text_cols = [c for c in col_names if c not in physical_numeric_cols]
 
             analysis = {
                 'summary': summary,
                 'numeric_cols': numeric_cols,
+                'identifier_cols': summary['identifier_cols'],
+                'optional_numeric_cols': summary['optional_numeric_cols'],
                 'text_cols': text_cols,
-                'insights': AIInsight.query.filter_by(file_id=active_file.id).all()
+                'insights': AIService.generate_display_insights(df, summary)
             }
         except Exception:
             current_app.logger.exception(

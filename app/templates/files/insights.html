@@ -51,19 +51,34 @@
         <!-- What kind of data -->
         <div class="card">
             <div class="card-title"><i class="bi bi-cpu"></i> Identificación del archivo</div>
-            <div class="insight-chip insight-info">
-                <i class="bi bi-info-circle"></i>
-                <span>
-                    Este archivo contiene <strong>{{ analysis.summary.rows }} filas</strong>
-                    y <strong>{{ analysis.summary.columns }} columnas</strong>.
-                    {% if analysis.numeric_cols %}
-                        Columnas numéricas: <strong>{{ analysis.numeric_cols|join(', ') }}</strong>.
-                    {% endif %}
-                    {% if analysis.text_cols %}
-                        Columnas de texto: <strong>{{ analysis.text_cols|join(', ') }}</strong>.
-                    {% endif %}
-                </span>
+            <div class="data-role-grid">
+                <div><strong>{{ analysis.summary.rows }}</strong><span>Filas</span></div>
+                <div><strong>{{ analysis.summary.columns }}</strong><span>Columnas</span></div>
+                <div><strong>{{ analysis.numeric_cols|length }}</strong><span>Métricas sugeridas</span></div>
+                <div><strong>{{ analysis.identifier_cols|length }}</strong><span>Identificadores excluidos</span></div>
             </div>
+
+            <details class="column-classification">
+                <summary>Ver clasificación de columnas</summary>
+                <div class="column-classification-body">
+                    <div>
+                        <strong>Métricas sugeridas</strong>
+                        <span>{{ analysis.numeric_cols|join(', ') if analysis.numeric_cols else 'Ninguna detectada automáticamente' }}</span>
+                    </div>
+                    <div>
+                        <strong>Identificadores</strong>
+                        <span>{{ analysis.identifier_cols|join(', ') if analysis.identifier_cols else 'Ninguno' }}</span>
+                    </div>
+                    <div>
+                        <strong>Otros campos numéricos</strong>
+                        <span>{{ analysis.optional_numeric_cols|join(', ') if analysis.optional_numeric_cols else 'Ninguno' }}</span>
+                    </div>
+                    <div>
+                        <strong>Texto y categorías</strong>
+                        <span>{{ analysis.text_cols|length }} columna(s)</span>
+                    </div>
+                </div>
+            </details>
 
             {% set cols_lower = analysis.summary.column_names|map('lower')|list %}
             <div class="insight-chip insight-success" style="margin-top:8px">
@@ -116,7 +131,7 @@
             {% if analysis.numeric_cols %}
             <div class="insight-chip insight-info">
                 <i class="bi bi-graph-up"></i>
-                <span>Las columnas <strong>{{ analysis.numeric_cols|join(', ') }}</strong> pueden usarse para análisis de tendencia.</span>
+                <span>Se detectaron <strong>{{ analysis.numeric_cols|length }} métricas de negocio</strong> candidatas. Puedes decidir cuáles mostrar y con qué cálculo.</span>
             </div>
             {% endif %}
 
@@ -135,43 +150,18 @@
             {% endif %}
         </div>
 
-        <!-- Stats table -->
         {% if analysis.summary.numeric_summary %}
-        <div class="card">
-            <div class="card-title"><i class="bi bi-calculator"></i> Estadísticas detalladas</div>
-            <div class="table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Columna</th>
-                            <th style="text-align:right">Suma total</th>
-                            <th style="text-align:right">Promedio</th>
-                            <th style="text-align:right">Mínimo</th>
-                            <th style="text-align:right">Máximo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for col, stats in analysis.summary.numeric_summary.items() %}
-                        <tr>
-                            <td><strong>{{ col }}</strong></td>
-                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.sum) if stats.sum is not none else '—' }}</td>
-                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.mean) if stats.mean is not none else '—' }}</td>
-                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.min) if stats.min is not none else '—' }}</td>
-                            <td style="text-align:right">{{ '{:,.2f}'.format(stats.max) if stats.max is not none else '—' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            {% set summary = analysis.summary %}
+            {% set metric_explorer_id = 'insights-metrics' %}
+            {% include 'files/_metric_explorer.html' %}
         {% endif %}
     </div>
 
-    <!-- Right panel: saved insights -->
+    <!-- Right panel: current insights -->
     <div>
         {% if analysis.insights %}
         <div class="card" style="position:sticky;top:80px">
-            <div class="card-title"><i class="bi bi-clock-history"></i> Insights guardados</div>
+            <div class="card-title"><i class="bi bi-stars"></i> Insights actuales</div>
             {% for ins in analysis.insights %}
             <div class="ai-suggestion" style="margin-bottom:8px">
                 <div class="ai-dot {% if ins.insight_type == 'success' %}green{% elif ins.insight_type == 'warning' %}orange{% elif ins.insight_type == 'danger' %}orange{% else %}purple{% endif %}"></div>
