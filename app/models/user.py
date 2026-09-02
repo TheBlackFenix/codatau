@@ -20,6 +20,12 @@ class User(UserMixin, db.Model):
     # Relaciones
     uploads = db.relationship('FileUpload', backref='owner', lazy=True, cascade='all, delete-orphan')
     insights = db.relationship('AIInsight', backref='owner', lazy=True, cascade='all, delete-orphan')
+    cleaning_decisions = db.relationship(
+        'CleaningDecision',
+        backref='decider',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

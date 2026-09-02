@@ -23,6 +23,7 @@ from app.extensions import db
 from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.models.dataset_version import DatasetVersion
+from app.models.cleaning_decision import CleaningDecision
 from app.forms.file_forms import CleaningActionForm, UploadForm
 from app.services.data_service import DataService, FileReadError
 from app.services.validation_service import ValidationService
@@ -33,6 +34,7 @@ from app.services.cleaning_executor import (
     CleaningPlanError,
     select_configured_operations,
 )
+from app.services.cleaning_decision_service import CleaningDecisionService
 from app.services.storage_service import LocalStorageService
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
@@ -127,19 +129,81 @@ def _cleaning_parameter_overrides(form_data, operations, selected_ids):
     return overrides
 
 
-def _selected_cleaning_operations(profile_data):
-    selected_ids = request.form.getlist('operation_ids')
+def _submitted_cleaning_decisions(profile_data, resolved_ids=None):
     operations = profile_data['cleaning_plan']['operations']
+    choices = {}
+    has_explicit_choices = False
+    for operation in operations:
+        operation_id = operation['id']
+        choice = request.form.get(f'decision:{operation_id}')
+        if choice is None:
+            continue
+        has_explicit_choices = True
+        if choice not in {'apply', 'keep'}:
+            raise CleaningPlanError('Una decisión de limpieza no es válida.')
+        choices[operation_id] = choice
+
+    # Compatibility with previews submitted before the explicit Yes/No UI.
+    if not has_explicit_choices:
+        choices = {
+            operation_id: 'apply'
+            for operation_id in request.form.getlist('operation_ids')
+        }
+
+    if not choices:
+        raise CleaningPlanError(
+            'Decide Sí o No en al menos una sugerencia para continuar.'
+        )
+
+    resolved_ids = set(resolved_ids or ())
+    if set(choices) & resolved_ids:
+        raise CleaningPlanError(
+            'Una de las sugerencias ya fue resuelta. Actualiza la página e inténtalo de nuevo.'
+        )
+
+    proposed = {operation['id']: operation for operation in operations}
+    unknown = set(choices) - set(proposed)
+    if unknown:
+        raise CleaningPlanError(
+            'El plan contiene decisiones desconocidas o desactualizadas.'
+        )
+
+    selected_ids = [
+        operation_id
+        for operation_id, choice in choices.items()
+        if choice == 'apply'
+    ]
     overrides = _cleaning_parameter_overrides(
         request.form,
         operations,
         selected_ids,
     )
-    return select_configured_operations(
-        profile_data['cleaning_plan'],
-        selected_ids,
-        overrides,
+    selected_operations = (
+        select_configured_operations(
+            profile_data['cleaning_plan'],
+            selected_ids,
+            overrides,
+        )
+        if selected_ids
+        else []
     )
+    configured = {
+        operation['id']: operation
+        for operation in selected_operations
+    }
+    decisions = []
+    for operation_id, choice in choices.items():
+        operation = configured.get(operation_id, proposed[operation_id])
+        decisions.append({
+            'operation_id': operation_id,
+            'operation': operation['operation'],
+            'column': operation.get('column'),
+            'choice': choice,
+            'parameters': operation.get('parameters') or {},
+            'affected_rows': operation.get('affected_rows') or 0,
+            'reason': operation.get('reason'),
+        })
+    return selected_operations, decisions
 
 
 @files_bp.route('/upload', methods=['GET', 'POST'])
@@ -378,7 +442,19 @@ def cleaning(file_id):
             'danger',
         )
         return redirect(url_for('files.results', file_id=record.id))
-    operations = profile_data['cleaning_plan']['operations']
+    if CleaningDecisionService.backfill_applied(record):
+        db.session.commit()
+    resolved_decisions = CleaningDecisionService.active_for_file(record.id)
+    resolved_ids = {decision.operation_id for decision in resolved_decisions}
+    current_operation_ids = {
+        operation['id']
+        for operation in profile_data['cleaning_plan']['operations']
+    }
+    operations = [
+        operation
+        for operation in profile_data['cleaning_plan']['operations']
+        if operation['id'] not in resolved_ids
+    ]
     executable_ids = {
         operation['id']
         for operation in operations
@@ -401,6 +477,8 @@ def cleaning(file_id):
         },
         operation_labels=CLEANING_OPERATION_LABELS,
         versions=versions,
+        resolved_decisions=resolved_decisions,
+        current_operation_ids=current_operation_ids,
         form=CleaningActionForm(),
     )
 
@@ -435,7 +513,16 @@ def cleaning_preview(file_id):
     record = _record_for_user(file_id)
     _, _, source_parquet, profile_data = _cleaning_context(record)
     try:
-        operations = _selected_cleaning_operations(profile_data)
+        if CleaningDecisionService.backfill_applied(record):
+            db.session.commit()
+        resolved_ids = {
+            decision.operation_id
+            for decision in CleaningDecisionService.active_for_file(record.id)
+        }
+        operations, decisions = _submitted_cleaning_decisions(
+            profile_data,
+            resolved_ids,
+        )
         preview = CleaningExecutor().preview(source_parquet, operations)
     except CleaningPlanError as error:
         flash(str(error), 'warning')
@@ -459,6 +546,7 @@ def cleaning_preview(file_id):
         'files/cleaning_preview.html',
         record=record,
         operations=operations,
+        decisions=decisions,
         preview=preview,
         operation_labels=CLEANING_OPERATION_LABELS,
         form=CleaningActionForm(),
@@ -474,9 +562,36 @@ def cleaning_apply(file_id):
     record = _record_for_user(file_id)
     pipeline, _, source_parquet, profile_data = _cleaning_context(record)
     try:
-        operations = _selected_cleaning_operations(profile_data)
+        if CleaningDecisionService.backfill_applied(record):
+            db.session.commit()
+        resolved_ids = {
+            decision.operation_id
+            for decision in CleaningDecisionService.active_for_file(record.id)
+        }
+        operations, decisions = _submitted_cleaning_decisions(
+            profile_data,
+            resolved_ids,
+        )
     except CleaningPlanError as error:
         flash(str(error), 'warning')
+        return redirect(url_for('files.cleaning', file_id=record.id))
+
+    if not operations:
+        try:
+            CleaningDecisionService.save(record, current_user.id, decisions)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                'No se pudieron guardar las decisiones del archivo %s',
+                record.id,
+            )
+            flash('No pudimos guardar las decisiones. Inténtalo de nuevo.', 'danger')
+            return redirect(url_for('files.cleaning', file_id=record.id))
+        flash(
+            f'{len(decisions)} decisión(es) guardada(s). Los datos se conservaron sin cambios.',
+            'success',
+        )
         return redirect(url_for('files.cleaning', file_id=record.id))
 
     latest_version = DatasetVersion.query.filter_by(file_id=record.id).order_by(
@@ -515,6 +630,12 @@ def cleaning_apply(file_id):
             is_active=True,
         )
         db.session.add(version)
+        CleaningDecisionService.save(
+            record,
+            current_user.id,
+            decisions,
+            applied_version_number=version_number,
+        )
         record.row_count = artifact.profile['row_count']
         record.column_count = artifact.profile['column_count']
         db.session.commit()
@@ -536,9 +657,31 @@ def cleaning_apply(file_id):
 
     flash(
         f'Versión {version_number} creada: {metrics["after_rows"]} filas válidas '
-        f'y {metrics["quarantined_rows"]} en cuarentena.',
+        f'y {metrics["quarantined_rows"]} en cuarentena. '
+        f'{len(decisions)} decisión(es) resuelta(s).',
         'success',
     )
+    return redirect(url_for('files.cleaning', file_id=record.id))
+
+
+@files_bp.route(
+    '/cleaning/<int:file_id>/decisions/<int:decision_id>/reopen',
+    methods=['POST'],
+)
+@login_required
+def cleaning_decision_reopen(file_id, decision_id):
+    form = CleaningActionForm()
+    if not form.validate_on_submit():
+        abort(400)
+    record = _record_for_user(file_id)
+    decision = CleaningDecision.query.filter_by(
+        id=decision_id,
+        file_id=record.id,
+        is_active=True,
+    ).first_or_404()
+    CleaningDecisionService.reopen(decision)
+    db.session.commit()
+    flash('La decisión volvió a quedar pendiente para revisión.', 'info')
     return redirect(url_for('files.cleaning', file_id=record.id))
 
 

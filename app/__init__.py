@@ -47,7 +47,13 @@ def create_app(config_name='default', config_overrides=None):
     app.register_blueprint(reports_bp)
 
     # Importar modelos para que SQLAlchemy los registre
-    from app.models import User, FileUpload, AIInsight, DatasetVersion
+    from app.models import (
+        AIInsight,
+        CleaningDecision,
+        DatasetVersion,
+        FileUpload,
+        User,
+    )
 
     # Crear tablas de la base de datos
     with app.app_context():

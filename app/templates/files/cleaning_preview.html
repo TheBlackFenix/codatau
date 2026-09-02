@@ -46,34 +46,40 @@
 {% endif %}
 
 <div class="card" style="margin-bottom:20px">
-    <div class="card-title"><i class="bi bi-file-earmark-text"></i> Operaciones aprobadas</div>
-    {% for operation in operations %}
+    <div class="card-title"><i class="bi bi-file-earmark-text"></i> Decisiones seleccionadas</div>
+    {% for decision in decisions %}
     <div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
-        <strong>{{ operation_labels.get(operation.operation, operation.operation) }}</strong>{% if operation.column %} · {{ operation.column }}{% endif %}
+        <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>{% if decision.column %} · {{ decision.column }}{% endif %}
+        {% if decision.choice == 'apply' %}
+        <span class="badge badge-green" style="margin-left:8px">Sí, aplicar</span>
+        {% else %}
+        <span class="badge badge-gray" style="margin-left:8px">No, conservar</span>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
 
 <form method="POST" action="{{ url_for('files.cleaning_apply', file_id=record.id) }}">
     {{ form.hidden_tag() }}
-    {% for operation in operations %}
-    <input type="hidden" name="operation_ids" value="{{ operation.id }}">
-    {% if operation.operation == 'cast_type' %}
-    <input type="hidden" name="parameter:{{ operation.id }}:decimal_separator"
-           value="{{ operation.parameters.decimal_separator }}">
-    {% elif operation.operation == 'parse_date' %}
-    <input type="hidden" name="parameter:{{ operation.id }}:date_format"
-           value="{{ operation.parameters.date_format }}">
-    {% elif operation.operation == 'normalize_case' %}
-    <input type="hidden" name="parameter:{{ operation.id }}:case_style"
-           value="{{ operation.parameters.case_style }}">
-    {% elif operation.operation == 'normalize_phone' %}
-    <input type="hidden" name="parameter:{{ operation.id }}:phone_style"
-           value="{{ operation.parameters.phone_style }}">
+    {% for decision in decisions %}
+    <input type="hidden" name="decision:{{ decision.operation_id }}" value="{{ decision.choice }}">
+    {% if decision.choice == 'apply' and decision.operation == 'cast_type' %}
+    <input type="hidden" name="parameter:{{ decision.operation_id }}:decimal_separator"
+           value="{{ decision.parameters.decimal_separator }}">
+    {% elif decision.choice == 'apply' and decision.operation == 'parse_date' %}
+    <input type="hidden" name="parameter:{{ decision.operation_id }}:date_format"
+           value="{{ decision.parameters.date_format }}">
+    {% elif decision.choice == 'apply' and decision.operation == 'normalize_case' %}
+    <input type="hidden" name="parameter:{{ decision.operation_id }}:case_style"
+           value="{{ decision.parameters.case_style }}">
+    {% elif decision.choice == 'apply' and decision.operation == 'normalize_phone' %}
+    <input type="hidden" name="parameter:{{ decision.operation_id }}:phone_style"
+           value="{{ decision.parameters.phone_style }}">
     {% endif %}
     {% endfor %}
     <button type="submit" class="btn btn-primary btn-lg">
-        <i class="bi bi-check2-circle"></i> Aprobar y crear nueva versión
+        <i class="bi bi-check2-circle"></i>
+        {% if operations %}Aplicar y guardar decisiones{% else %}Guardar decisiones{% endif %}
     </button>
 </form>
 {% endblock %}

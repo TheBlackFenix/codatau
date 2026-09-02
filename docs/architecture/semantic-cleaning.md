@@ -9,9 +9,10 @@ El motor separa tres responsabilidades:
 3. En una fase posterior, la IA analizará únicamente los casos ambiguos y
    devolverá parámetros para ese catálogo; nunca código arbitrario.
 
-El perfil genera un plan con estado `proposed`. El usuario selecciona operaciones,
-revisa una simulación y confirma explícitamente antes de crear una versión nueva.
-El Parquet de entrada nunca se sobrescribe.
+El perfil genera un plan con estado `proposed`. El usuario responde explícitamente
+`Sí, aplicar` o `No, conservar` en las sugerencias que quiera resolver, revisa una
+simulación y confirma antes de guardar sus decisiones. El Parquet de entrada nunca
+se sobrescribe.
 
 ## Perfil semántico
 
@@ -81,6 +82,24 @@ Cada aplicación crea un registro `DatasetVersion` con las operaciones —inclui
 los parámetros confirmados por el usuario—, métricas y artefactos utilizados. Una
 versión anterior o la base procesada se pueden activar sin eliminar las versiones
 posteriores.
+
+## Decisiones persistentes
+
+`CleaningDecision` guarda el resultado de cada sugerencia por archivo y por
+identificador de operación. Una decisión puede ser:
+
+- `apply`: la regla fue aceptada y, si transforma datos, referencia el número de
+  versión en que se aplicó.
+- `keep`: el usuario decidió conservar los datos sin aplicar esa regla.
+
+Las sugerencias sin respuesta siguen pendientes. Las aceptadas y rechazadas se
+ocultan del listado principal y aparecen en una sección plegada de decisiones
+resueltas. El usuario puede reabrir una decisión cuando la operación todavía se
+detecta en el perfil activo.
+
+Una confirmación que solo contiene respuestas `keep` no crea un artefacto ni una
+versión vacía. Las operaciones de versiones creadas antes de esta funcionalidad
+se incorporan de forma idempotente como decisiones `apply` cuando se abre el plan.
 
 ## Uso futuro de IA
 

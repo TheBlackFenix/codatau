@@ -28,6 +28,12 @@ class FileUpload(db.Model):
         lazy=True,
         cascade='all, delete-orphan',
     )
+    cleaning_decisions = db.relationship(
+        'CleaningDecision',
+        backref='file',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
 
     @property
     def active_version(self):

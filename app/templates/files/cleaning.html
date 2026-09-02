@@ -15,8 +15,8 @@
 <div class="insight-chip insight-info" style="margin-bottom:20px">
     <i class="bi bi-shield-check"></i>
     <span>
-        Elige las reglas, configura las que requieren tu decisión y revisa el resultado
-        antes de aplicarlo. El archivo original nunca se sobrescribe.
+        Responde Sí o No únicamente en las sugerencias que quieras resolver ahora.
+        Después podrás revisar el resultado antes de guardar las decisiones.
     </span>
 </div>
 
@@ -46,22 +46,61 @@
     </div>
 </div>
 
+{% if resolved_decisions %}
+<details class="card resolved-decisions" style="margin-bottom:20px">
+    <summary>
+        <span><i class="bi bi-check2-all"></i> Decisiones resueltas</span>
+        <span class="badge badge-green">{{ resolved_decisions|length }}</span>
+    </summary>
+    <div class="resolved-decision-list">
+        {% for decision in resolved_decisions %}
+        <div class="resolved-decision">
+            <div>
+                <div class="cleaning-operation-title">
+                    <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>
+                    {% if decision.column_name %}<span class="badge badge-gray">{{ decision.column_name }}</span>{% endif %}
+                    {% if decision.choice == 'apply' %}
+                    <span class="badge badge-green">Sí, aplicada{% if decision.applied_version_number %} en v{{ decision.applied_version_number }}{% endif %}</span>
+                    {% else %}
+                    <span class="badge badge-gray">No, conservada</span>
+                    {% endif %}
+                </div>
+                <span class="cleaning-operation-reason">
+                    {{ decision.affected_rows }} fila(s) evaluada(s)
+                </span>
+            </div>
+            {% if decision.operation_id in current_operation_ids %}
+            <form method="POST" action="{{ url_for('files.cleaning_decision_reopen', file_id=record.id, decision_id=decision.id) }}">
+                {{ form.hidden_tag() }}
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reabrir
+                </button>
+            </form>
+            {% else %}
+            <span class="resolved-no-longer-detected"><i class="bi bi-check-circle"></i> Ya no se detecta</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+
 <form method="POST" action="{{ url_for('files.cleaning_preview', file_id=record.id) }}">
     {{ form.hidden_tag() }}
     <div class="card">
         <div class="card-title">
-            <i class="bi bi-list-check"></i> Reglas propuestas
+            <i class="bi bi-list-check"></i> Decisiones pendientes
             <span class="badge badge-gray" style="margin-left:auto">{{ operations|length }}</span>
         </div>
 
         <div class="cleaning-summary">
             <div class="cleaning-summary-item is-automatic">
                 <strong>{{ automatic_ids|length }}</strong>
-                <span>Seguras y preseleccionadas</span>
+                <span>Recomendadas y aplicables</span>
             </div>
             <div class="cleaning-summary-item is-review">
                 <strong>{{ executable_ids|length - automatic_ids|length }}</strong>
-                <span>Disponibles con tu decisión</span>
+                <span>Requieren configuración</span>
             </div>
             <div class="cleaning-summary-item is-ai">
                 <strong>{{ operations|length - executable_ids|length }}</strong>
@@ -74,30 +113,55 @@
             {% for operation in operations %}
             {% set executable = operation.id in executable_ids %}
             {% set automatic = operation.id in automatic_ids %}
-            <div class="cleaning-operation {{ 'is-disabled' if not executable }}">
-                <label class="cleaning-operation-main">
-                    <input type="checkbox" name="operation_ids" value="{{ operation.id }}"
-                           {{ 'checked' if automatic }} {{ 'disabled' if not executable }}>
+            <div class="cleaning-operation" data-decision-card>
+                <div class="cleaning-operation-main">
                     <span style="flex:1">
-                        <span class="cleaning-operation-title">
-                            <strong>{{ operation_labels.get(operation.operation, operation.operation) }}</strong>
-                            {% if operation.column %}<span class="badge badge-gray">{{ operation.column }}</span>{% endif %}
-                            {% if automatic %}
-                                <span class="badge badge-green">Automática</span>
-                            {% elif executable %}
-                                <span class="badge badge-yellow">Requiere tu decisión</span>
-                            {% else %}
-                                <span class="badge badge-purple">Pendiente de IA</span>
-                            {% endif %}
-                        </span>
-                        <span class="cleaning-operation-reason">
-                            {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
-                        </span>
+                    <span class="cleaning-operation-title">
+                        <strong>{{ operation_labels.get(operation.operation, operation.operation) }}</strong>
+                        {% if operation.column %}<span class="badge badge-gray">{{ operation.column }}</span>{% endif %}
+                        {% if automatic %}
+                            <span class="badge badge-green">Recomendada</span>
+                        {% elif executable %}
+                            <span class="badge badge-yellow">Requiere configuración</span>
+                        {% else %}
+                            <span class="badge badge-purple">Necesita IA</span>
+                        {% endif %}
                     </span>
-                </label>
+                    <span class="cleaning-operation-reason">
+                        {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
+                    </span>
+                    </span>
+                </div>
 
-                {% if executable and not automatic %}
-                <div class="cleaning-configuration">
+                <div class="cleaning-decision-question">
+                    <strong>
+                        {% if operation.operation == 'handle_missing' %}
+                            ¿Enviar estas filas a cuarentena?
+                        {% elif operation.operation == 'remove_exact_duplicates' %}
+                            ¿Eliminar los duplicados detectados?
+                        {% else %}
+                            ¿Aplicar esta sugerencia?
+                        {% endif %}
+                    </strong>
+                    <div class="cleaning-decision-options">
+                        {% if executable %}
+                        <label class="decision-option is-yes">
+                            <input type="radio" name="decision:{{ operation.id }}" value="apply" data-operation-decision>
+                            <span><i class="bi bi-check-lg"></i> Sí, aplicar</span>
+                        </label>
+                        {% endif %}
+                        <label class="decision-option is-no">
+                            <input type="radio" name="decision:{{ operation.id }}" value="keep" data-operation-decision>
+                            <span><i class="bi bi-x-lg"></i> No, conservar</span>
+                        </label>
+                    </div>
+                    {% if not executable %}
+                    <small>Por ahora puedes conservar los datos y cerrar la sugerencia, o dejarla sin responder para analizarla después.</small>
+                    {% endif %}
+                </div>
+
+                {% if executable %}
+                <div class="cleaning-configuration" data-operation-configuration hidden>
                     {% if operation.operation == 'cast_type' %}
                     <label>
                         <span>Formato numérico</span>
@@ -135,12 +199,9 @@
                     <span><i class="bi bi-box-arrow-right"></i> Las filas se separarán en un archivo de cuarentena descargable.</span>
                     {% elif operation.operation == 'remove_exact_duplicates' %}
                     <span><i class="bi bi-files"></i> Se conservará una sola copia de cada fila idéntica.</span>
+                    {% else %}
+                    <span><i class="bi bi-check-circle"></i> La regla se aplicará con los parámetros seguros detectados.</span>
                     {% endif %}
-                </div>
-                {% elif not executable %}
-                <div class="cleaning-configuration is-ai-note">
-                    <i class="bi bi-stars"></i>
-                    Esta recomendación necesita analizar excepciones; no se modificará hasta contar con una decisión validada.
                 </div>
                 {% endif %}
             </div>
@@ -149,27 +210,19 @@
 
         <div class="cleaning-submit">
             <div>
-                <strong>El siguiente paso todavía no modifica tus datos.</strong>
-                <span>Verás filas resultantes, cambios y cuarentena antes de confirmar.</span>
+                <strong>Solo se procesarán las sugerencias respondidas.</strong>
+                <span>Las que dejes sin responder seguirán pendientes; todavía no se modificará ningún dato.</span>
             </div>
-            <button type="submit" class="btn btn-primary" {{ 'disabled' if not executable_ids }}>
-                <i class="bi bi-eye"></i> Previsualizar cambios seleccionados
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-eye"></i> Revisar decisiones seleccionadas
             </button>
         </div>
 
-        {% if not executable_ids %}
-        <div class="insight-chip insight-info" style="margin-top:12px">
-            <i class="bi bi-info-circle"></i>
-            <span>
-                Este archivo solo contiene casos ambiguos. Permanecerán sin cambios hasta
-                que el análisis asistido por IA pueda proponer una regla validable.
-            </span>
-        </div>
-        {% endif %}
         {% else %}
         <div class="empty-state">
-            <div class="empty-title">No encontramos correcciones necesarias</div>
-            <div class="empty-desc">El perfil actual no generó reglas de limpieza.</div>
+            <div class="empty-icon"><i class="bi bi-check2-circle"></i></div>
+            <div class="empty-title">No tienes decisiones pendientes</div>
+            <div class="empty-desc">Las sugerencias detectadas ya fueron aplicadas o revisadas.</div>
         </div>
         {% endif %}
     </div>
@@ -183,16 +236,36 @@
 .cleaning-summary-item.is-ai{background:var(--purple-soft)}.cleaning-summary-item.is-ai strong{color:var(--purple)}
 .cleaning-operation-list{display:flex;flex-direction:column;gap:10px}
 .cleaning-operation{padding:14px;border:1px solid var(--gray-200);border-radius:10px;background:white}
-.cleaning-operation.is-disabled{opacity:.65;background:var(--gray-50)}
-.cleaning-operation-main{display:flex;gap:12px;cursor:pointer}.cleaning-operation-main input{margin-top:4px}
+.cleaning-operation-main{display:flex;gap:12px}
 .cleaning-operation-title{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .cleaning-operation-reason{display:block;color:var(--gray-500);font-size:13px;margin-top:5px}
-.cleaning-configuration{margin:12px 0 0 28px;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
+.cleaning-decision-question{margin-top:13px;padding-top:12px;border-top:1px solid var(--gray-100)}
+.cleaning-decision-question>strong{display:block;font-size:13px;margin-bottom:9px}.cleaning-decision-question small{display:block;color:var(--gray-500);margin-top:8px}
+.cleaning-decision-options{display:flex;gap:8px;flex-wrap:wrap}.decision-option{cursor:pointer}.decision-option input{position:absolute;opacity:0;pointer-events:none}.decision-option span{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);font-size:12px;font-weight:600;transition:var(--transition)}
+.decision-option input:focus-visible+span{outline:2px solid var(--purple);outline-offset:2px}.decision-option.is-yes input:checked+span{border-color:#86EFAC;background:#F0FDF4;color:#15803D}.decision-option.is-no input:checked+span{border-color:var(--gray-300);background:var(--gray-100);color:var(--gray-800)}
+.cleaning-configuration[hidden]{display:none}.cleaning-configuration{margin:12px 0 0;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
 .cleaning-configuration label{display:grid;grid-template-columns:minmax(150px,220px) minmax(220px,420px);align-items:center;gap:12px;font-weight:600}
 .cleaning-configuration .form-control{margin:0;background:white}
-.cleaning-configuration.is-ai-note{background:var(--purple-soft);color:var(--purple)}
 .cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
 .cleaning-submit span{display:block;color:var(--gray-500);font-size:12px;margin-top:3px}
+.resolved-decisions{padding:0}.resolved-decisions>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.resolved-decisions>summary::-webkit-details-marker{display:none}.resolved-decisions>summary span:first-child{display:flex;align-items:center;gap:8px}.resolved-decisions>summary i{color:#15803D}.resolved-decision-list{padding:0 20px 16px}.resolved-decision{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--gray-100)}.resolved-no-longer-detected{color:#15803D;font-size:11px;white-space:nowrap}
 @media(max-width:800px){.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-decision-card]').forEach(card => {
+    const configuration = card.querySelector('[data-operation-configuration]');
+    if (!configuration) return;
+    const update = () => {
+        const apply = card.querySelector('[data-operation-decision][value="apply"]');
+        configuration.hidden = !apply?.checked;
+    };
+    card.querySelectorAll('[data-operation-decision]').forEach(input => {
+        input.addEventListener('change', update);
+    });
+    update();
+});
+</script>
 {% endblock %}

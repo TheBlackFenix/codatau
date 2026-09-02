@@ -4,8 +4,10 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from app.extensions import db
 from app.models.file_upload import FileUpload
 from app.models.dataset_version import DatasetVersion
+from app.models.cleaning_decision import CleaningDecision
 
 
 def _login(auth):
@@ -325,6 +327,33 @@ def test_user_cannot_access_another_users_file(app, client, auth):
     assert client.get('/files/cleaning/1').status_code == 404
 
 
+def test_user_cannot_reopen_another_users_cleaning_decision(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+    client.post(
+        '/files/cleaning/1/apply',
+        data={'decision:email:validate_email': 'keep'},
+    )
+    with app.app_context():
+        decision_id = CleaningDecision.query.one().id
+
+    auth.logout()
+    auth.register(username='other', email='other@example.com')
+    auth.login(email='other@example.com')
+
+    response = client.post(
+        f'/files/cleaning/1/decisions/{decision_id}/reopen',
+    )
+
+    assert response.status_code == 404
+    with app.app_context():
+        assert CleaningDecision.query.one().is_active is True
+
+
 def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     _login(auth)
     client.post(
@@ -423,7 +452,7 @@ def test_user_can_configure_preview_and_apply_review_rules(app, client, auth):
 
     plan_page = client.get('/files/cleaning/1')
     assert plan_page.status_code == 200
-    assert 'Disponibles con tu decisión'.encode() in plan_page.data
+    assert 'Requieren configuración'.encode() in plan_page.data
     assert b'parameter:price:cast_type:decimal_separator' in plan_page.data
     assert b'parameter:date:parse_date:date_format' in plan_page.data
     assert b'parameter:city:normalize_case:case_style' in plan_page.data
@@ -460,6 +489,139 @@ def test_user_can_configure_preview_and_apply_review_rules(app, client, auth):
     assert b'10.5,2025-12-31,bogota,+573001234567' in download.data
 
 
+def test_user_can_keep_data_and_resolve_suggestion_without_new_version(
+    app,
+    client,
+    auth,
+):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+
+    plan = client.get('/files/cleaning/1')
+    assert b'name="decision:email:validate_email"' in plan.data
+    assert b'S\xc3\xad, aplicar' in plan.data
+    assert b'No, conservar' in plan.data
+
+    selection = {'decision:email:validate_email': 'keep'}
+    preview = client.post('/files/cleaning/1/preview', data=selection)
+    assert preview.status_code == 200
+    assert b'No, conservar' in preview.data
+    assert b'Guardar decisiones' in preview.data
+
+    saved = client.post(
+        '/files/cleaning/1/apply',
+        data=selection,
+        follow_redirects=True,
+    )
+    assert saved.status_code == 200
+    assert b'Los datos se conservaron sin cambios' in saved.data
+    assert b'name="decision:email:validate_email"' not in saved.data
+    assert b'Decisiones resueltas' in saved.data
+
+    with app.app_context():
+        decision = CleaningDecision.query.one()
+        assert decision.choice == 'keep'
+        assert decision.is_active is True
+        assert decision.applied_version_number is None
+        assert DatasetVersion.query.count() == 0
+        decision_id = decision.id
+
+    reopened = client.post(
+        f'/files/cleaning/1/decisions/{decision_id}/reopen',
+        follow_redirects=True,
+    )
+    assert reopened.status_code == 200
+    assert b'name="decision:email:validate_email"' in reopened.data
+    with app.app_context():
+        assert CleaningDecision.query.one().is_active is False
+
+    reapplied = client.post(
+        '/files/cleaning/1/apply',
+        data={'decision:email:validate_email': 'apply'},
+        follow_redirects=True,
+    )
+    assert reapplied.status_code == 200
+    with app.app_context():
+        decision = CleaningDecision.query.one()
+        assert decision.is_active is True
+        assert decision.choice == 'apply'
+        assert decision.applied_version_number == 1
+        assert DatasetVersion.query.count() == 1
+
+
+def test_mixed_yes_no_decisions_apply_only_selected_rules(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+
+    decisions = {
+        'decision:email:validate_email': 'apply',
+        'decision:dataset:remove_exact_duplicates': 'keep',
+    }
+    preview = client.post('/files/cleaning/1/preview', data=decisions)
+    assert preview.status_code == 200
+    assert b'S\xc3\xad, aplicar' in preview.data
+    assert b'No, conservar' in preview.data
+
+    applied = client.post(
+        '/files/cleaning/1/apply',
+        data=decisions,
+        follow_redirects=True,
+    )
+    assert applied.status_code == 200
+    assert b'2 decisi\xc3\xb3n(es) resuelta(s)' in applied.data
+    assert b'name="decision:email:validate_email"' not in applied.data
+    assert b'name="decision:dataset:remove_exact_duplicates"' not in applied.data
+
+    with app.app_context():
+        stored = {
+            decision.operation_id: decision
+            for decision in CleaningDecision.query.all()
+        }
+        assert stored['email:validate_email'].choice == 'apply'
+        assert stored['email:validate_email'].applied_version_number == 1
+        assert stored['dataset:remove_exact_duplicates'].choice == 'keep'
+        assert stored['dataset:remove_exact_duplicates'].applied_version_number is None
+        assert DatasetVersion.query.one().metrics['duplicates_removed'] == 0
+
+    download = client.get('/reports/download/1')
+    assert download.data.count(b'leo@example.org') == 2
+    assert b'invalid-email' not in download.data
+
+
+def test_existing_version_operations_are_backfilled_as_resolved(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+    client.post(
+        '/files/cleaning/1/apply',
+        data={'operation_ids': ['email:validate_email']},
+    )
+
+    with app.app_context():
+        CleaningDecision.query.delete()
+        db.session.commit()
+
+    plan = client.get('/files/cleaning/1')
+
+    assert plan.status_code == 200
+    assert b'name="decision:email:validate_email"' not in plan.data
+    with app.app_context():
+        decision = CleaningDecision.query.one()
+        assert decision.choice == 'apply'
+        assert decision.applied_version_number == 1
+
+
 def test_delete_removes_database_record_and_file(app, client, auth):
     _login(auth)
     client.post(
@@ -477,5 +639,6 @@ def test_delete_removes_database_record_and_file(app, client, auth):
     assert response.status_code == 302
     with app.app_context():
         assert FileUpload.query.count() == 0
+        assert CleaningDecision.query.count() == 0
     assert not Path(path).exists()
     assert list(Path(analytics_folder).iterdir()) == []
