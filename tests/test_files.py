@@ -8,6 +8,7 @@ from app.extensions import db
 from app.models.file_upload import FileUpload
 from app.models.dataset_version import DatasetVersion
 from app.models.cleaning_decision import CleaningDecision
+from app.models.dashboard_configuration import DashboardConfiguration
 
 
 def _login(auth):
@@ -58,7 +59,7 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
     assert insights.status_code == 200
     assert b'M\xc3\xa9tricas de negocio' in results.data
     assert b'M\xc3\xa9tricas de negocio' in dashboard.data
-    assert b'Agregar otra m\xc3\xa9trica o c\xc3\xa1lculo' in insights.data
+    assert b'Agregar m\xc3\xa9trica' in insights.data
     assert b'Columnas num\xc3\xa9ricas:' not in insights.data
     assert client.get('/reports/').status_code == 200
     assert client.get('/files/cleaning').headers['Location'].endswith('/files/cleaning/1')
@@ -73,7 +74,7 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
     assert profile.json['row_count'] == 3
     assert profile.json['column_count'] == 2
     assert len(profile.json['source_sha256']) == 64
-    assert profile.json['profile_version'] == '1.2'
+    assert profile.json['profile_version'] == '1.3'
     assert profile.json['cleaning_plan']['status'] == 'proposed'
 
     with app.app_context():
@@ -128,6 +129,75 @@ def test_metric_explorer_excludes_ids_but_allows_manual_selection(client, auth):
     assert b'<option value="Numero_de_Guia" data-role="identifier">' in results.data
     assert b'Valores \xc3\xbanicos / total de filas' in results.data
     assert b'2</strong><span>Identificadores excluidos</span>' in insights.data
+
+
+def test_metric_layout_add_remove_and_order_are_persistent(app, client, auth):
+    _login(auth)
+    source = (
+        b'Fecha,Numero_de_Guia,Peso,Valor_Total\n'
+        b'2026-08-01 10:15:03,7001,2.5,10000\n'
+        b'2026-08-01 11:47:59,7002,3.0,20000\n'
+    )
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(source), 'envios.csv')},
+        content_type='multipart/form-data',
+    )
+
+    layout = [
+        {'column': 'Valor_Total', 'aggregation': 'mean'},
+        {'column': 'Numero_de_Guia', 'aggregation': 'unique_count'},
+        {'column': 'Peso', 'aggregation': 'sum'},
+    ]
+    saved = client.post('/dashboard/files/1/metrics', json={'metrics': layout})
+
+    assert saved.status_code == 200
+    assert saved.json['metrics'] == layout
+    with app.app_context():
+        assert DashboardConfiguration.query.one().metrics == layout
+
+    for path in ('/dashboard', '/files/results/1', '/files/insights'):
+        page = client.get(path)
+        assert page.status_code == 200
+        html = page.data.decode()
+        assert html.index('data-card-column="Valor_Total"') < html.index(
+            'data-card-column="Numero_de_Guia"'
+        ) < html.index('data-card-column="Peso"')
+        assert 'draggable="true"' in html
+
+    reduced = [layout[1]]
+    assert client.post(
+        '/dashboard/files/1/metrics',
+        json={'metrics': reduced},
+    ).status_code == 200
+    refreshed = client.get('/dashboard').data.decode()
+    assert 'data-card-column="Numero_de_Guia"' in refreshed
+    assert 'data-card-column="Valor_Total"' not in refreshed
+    assert 'data-card-column="Peso"' not in refreshed
+
+    assert client.post(
+        '/dashboard/files/1/metrics',
+        json={'metrics': []},
+    ).status_code == 200
+    empty = client.get('/dashboard').data
+    assert b'No hay m\xc3\xa9tricas visibles' in empty
+    assert b'data-card-column=' not in empty
+
+
+def test_user_cannot_change_another_users_dashboard(client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_csv_bytes()), 'sales.csv')},
+        content_type='multipart/form-data',
+    )
+    auth.logout()
+    auth.register(username='other', email='other@example.com')
+    auth.login(email='other@example.com')
+
+    response = client.post('/dashboard/files/1/metrics', json={'metrics': []})
+
+    assert response.status_code == 404
 
 
 def test_xlsx_upload(app, client, auth):
@@ -489,6 +559,46 @@ def test_user_can_configure_preview_and_apply_review_rules(app, client, auth):
     assert b'10.5,2025-12-31,bogota,+573001234567' in download.data
 
 
+def test_ai_flagged_date_can_be_configured_manually(app, client, auth):
+    _login(auth)
+    source = (
+        b'fecha,amount\n'
+        b'2026-08-01,10\n'
+        b'valor-invalido,20\n'
+        b'2026-08-03,30\n'
+    )
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(source), 'fechas.csv')},
+        content_type='multipart/form-data',
+    )
+
+    plan = client.get('/files/cleaning/1')
+
+    assert plan.status_code == 200
+    assert b'Configuraci\xc3\xb3n manual disponible' in plan.data
+    assert b'name="decision:fecha:parse_date" value="apply"' in plan.data
+    assert b'name="parameter:fecha:parse_date:date_format"' in plan.data
+    configuration = plan.data.split(b'data-operation-configuration', 1)[1].split(b'>', 1)[0]
+    assert b'hidden' not in configuration
+
+    applied = client.post(
+        '/files/cleaning/1/apply',
+        data={
+            'decision:fecha:parse_date': 'apply',
+            'parameter:fecha:parse_date:date_format': '%Y-%m-%d',
+        },
+        follow_redirects=True,
+    )
+
+    assert applied.status_code == 200
+    assert 'Versión 1 creada'.encode() in applied.data
+    with app.app_context():
+        assert DatasetVersion.query.one().metrics['quarantined_rows'] == 1
+    download = client.get('/reports/download/1')
+    assert b'valor-invalido' not in download.data
+
+
 def test_user_can_keep_data_and_resolve_suggestion_without_new_version(
     app,
     client,
@@ -640,5 +750,6 @@ def test_delete_removes_database_record_and_file(app, client, auth):
     with app.app_context():
         assert FileUpload.query.count() == 0
         assert CleaningDecision.query.count() == 0
+        assert DashboardConfiguration.query.count() == 0
     assert not Path(path).exists()
     assert list(Path(analytics_folder).iterdir()) == []

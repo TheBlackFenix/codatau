@@ -188,26 +188,52 @@ class SemanticProfiler:
                     WHERE value != '' AND lower(value) IN ({boolean_values})
                 ) AS boolean_count,
                 count(*) FILTER (
-                    WHERE value != '' AND try_strptime(value, '%Y-%m-%d') IS NOT NULL
+                    WHERE value != '' AND (
+                        try_strptime(value, '%Y-%m-%d') IS NOT NULL
+                        OR try_strptime(value, '%Y-%m-%d %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%Y-%m-%d %H:%M:%S.%f') IS NOT NULL
+                    )
                 ) AS iso_date_count,
                 count(*) FILTER (
-                    WHERE value != '' AND try_strptime(value, '%d/%m/%Y') IS NOT NULL
+                    WHERE value != '' AND (
+                        try_strptime(value, '%d/%m/%Y') IS NOT NULL
+                        OR try_strptime(value, '%d/%m/%Y %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%d/%m/%Y %H:%M:%S.%f') IS NOT NULL
+                    )
                 ) AS dmy_date_count,
                 count(*) FILTER (
-                    WHERE value != '' AND try_strptime(value, '%m/%d/%Y') IS NOT NULL
+                    WHERE value != '' AND (
+                        try_strptime(value, '%m/%d/%Y') IS NOT NULL
+                        OR try_strptime(value, '%m/%d/%Y %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%m/%d/%Y %H:%M:%S.%f') IS NOT NULL
+                    )
                 ) AS mdy_date_count,
                 count(*) FILTER (
                     WHERE value != ''
                     AND (
                         try_strptime(value, '%Y-%m-%d') IS NOT NULL
+                        OR try_strptime(value, '%Y-%m-%d %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%Y-%m-%d %H:%M:%S.%f') IS NOT NULL
                         OR try_strptime(value, '%d/%m/%Y') IS NOT NULL
+                        OR try_strptime(value, '%d/%m/%Y %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%d/%m/%Y %H:%M:%S.%f') IS NOT NULL
                         OR try_strptime(value, '%m/%d/%Y') IS NOT NULL
+                        OR try_strptime(value, '%m/%d/%Y %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%m/%d/%Y %H:%M:%S.%f') IS NOT NULL
                     )
                 ) AS any_date_count,
                 count(*) FILTER (
                     WHERE value != ''
-                    AND try_strptime(value, '%d/%m/%Y') IS NOT NULL
-                    AND try_strptime(value, '%m/%d/%Y') IS NOT NULL
+                    AND (
+                        try_strptime(value, '%d/%m/%Y') IS NOT NULL
+                        OR try_strptime(value, '%d/%m/%Y %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%d/%m/%Y %H:%M:%S.%f') IS NOT NULL
+                    )
+                    AND (
+                        try_strptime(value, '%m/%d/%Y') IS NOT NULL
+                        OR try_strptime(value, '%m/%d/%Y %H:%M:%S') IS NOT NULL
+                        OR try_strptime(value, '%m/%d/%Y %H:%M:%S.%f') IS NOT NULL
+                    )
                 ) AS ambiguous_date_count
             FROM values
         """
@@ -400,6 +426,17 @@ class SemanticProfiler:
                 else 'Se debe confirmar el formato regional o revisar valores inconsistentes.',
                 {
                     'accepted_formats': ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'],
+                    'date_format': (
+                        '%Y-%m-%d'
+                        if stats['iso_date_count'] >= max(
+                            stats['dmy_date_count'], stats['mdy_date_count']
+                        )
+                        else (
+                            '%d/%m/%Y'
+                            if stats['dmy_date_count'] >= stats['mdy_date_count']
+                            else '%m/%d/%Y'
+                        )
+                    ),
                     'ambiguous_rows': ambiguous,
                     'on_error': 'quarantine',
                 },

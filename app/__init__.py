@@ -50,6 +50,7 @@ def create_app(config_name='default', config_overrides=None):
     from app.models import (
         AIInsight,
         CleaningDecision,
+        DashboardConfiguration,
         DatasetVersion,
         FileUpload,
         User,

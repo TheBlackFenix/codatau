@@ -34,6 +34,12 @@ class FileUpload(db.Model):
         lazy=True,
         cascade='all, delete-orphan',
     )
+    dashboard_configurations = db.relationship(
+        'DashboardConfiguration',
+        backref='file',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
 
     @property
     def active_version(self):

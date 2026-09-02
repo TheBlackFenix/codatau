@@ -35,6 +35,7 @@ from app.services.cleaning_executor import (
     select_configured_operations,
 )
 from app.services.cleaning_decision_service import CleaningDecisionService
+from app.services.dashboard_service import DashboardService
 from app.services.storage_service import LocalStorageService
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
@@ -349,10 +350,13 @@ def results(file_id):
         )
         return redirect(url_for('files.upload'))
 
+    metric_layout = DashboardService.layout_for(upload_record, summary)
     return render_template('files/results.html',
         record=upload_record,
         insights=insights,
-        summary=summary
+        summary=summary,
+        metric_layout=metric_layout,
+        metric_cards=DashboardService.cards_for(metric_layout, summary),
     )
 
 
@@ -805,6 +809,8 @@ def insights_ia():
                 'text_cols': text_cols,
                 'insights': AIService.generate_display_insights(df, summary)
             }
+            metric_layout = DashboardService.layout_for(active_file, summary)
+            metric_cards = DashboardService.cards_for(metric_layout, summary)
         except Exception:
             current_app.logger.exception(
                 'No se pudo cargar el análisis del archivo %s', active_file.id
@@ -818,5 +824,7 @@ def insights_ia():
     return render_template('files/insights.html',
         active_file=active_file,
         all_files=all_files,
-        analysis=analysis
+        analysis=analysis,
+        metric_layout=metric_layout if analysis else [],
+        metric_cards=metric_cards if analysis else [],
     )

@@ -85,6 +85,12 @@ class CleaningExecutor:
         'parse_date',
         'remove_exact_duplicates',
     }
+    SUPPORTED_MANUAL_AI = {
+        'cast_type',
+        'normalize_boolean',
+        'normalize_phone',
+        'parse_date',
+    }
     DATE_FORMATS = {'%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'}
     CASE_STYLES = {'lower', 'upper'}
     PHONE_STYLES = {'digits', 'keep_plus'}
@@ -95,13 +101,20 @@ class CleaningExecutor:
             return operation['operation'] in cls.SUPPORTED_AUTOMATIC
         if operation['decision'] == 'user_review':
             return operation['operation'] in cls.SUPPORTED_REVIEW
+        if operation['decision'] == 'ai_analysis':
+            return operation['operation'] in cls.SUPPORTED_MANUAL_AI
         return False
 
     @classmethod
     def configure(cls, operation, overrides):
         """Validate user choices and return an executable operation copy."""
-        if operation['decision'] != 'user_review':
+        if operation['decision'] == 'automatic':
             return operation
+
+        if not cls.is_executable(operation):
+            raise CleaningPlanError(
+                f'La operación “{operation["operation"]}” todavía requiere análisis adicional.'
+            )
 
         name = operation['operation']
         parameters = operation.setdefault('parameters', {})
@@ -131,6 +144,10 @@ class CleaningExecutor:
             if phone_style not in cls.PHONE_STYLES:
                 raise CleaningPlanError('Selecciona cómo normalizar los teléfonos.')
             parameters['phone_style'] = phone_style
+        elif name == 'normalize_boolean':
+            # The user's Apply/Keep decision is the only required parameter.
+            # Unknown values are quarantined by the allow-listed transformation.
+            pass
         elif name == 'handle_missing':
             if parameters.get('strategy') != 'quarantine_rows':
                 raise CleaningPlanError(
@@ -335,9 +352,15 @@ class CleaningExecutor:
             date_format = parameters.get('date_format', '%Y-%m-%d')
             if date_format not in CleaningExecutor.DATE_FORMATS:
                 raise CleaningPlanError('El formato de fecha no es válido.')
-            transformed = (
-                f'try_strptime({text}, {_sql_literal(date_format)})::DATE'
+            date_formats = (
+                date_format,
+                f'{date_format} %H:%M:%S',
+                f'{date_format} %H:%M:%S.%f',
             )
+            transformed = 'coalesce(' + ', '.join(
+                f'try_strptime({text}, {_sql_literal(format_value)})'
+                for format_value in date_formats
+            ) + ')'
             invalid = f'{present} AND {transformed} IS NULL'
             return transformed, invalid, f'{present} AND {transformed} IS NOT NULL'
         if name == 'normalize_boolean':

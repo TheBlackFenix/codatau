@@ -23,7 +23,7 @@ def test_pipeline_creates_parquet_and_compact_profile(tmp_path):
 
     assert artifact.parquet_path.exists()
     assert artifact.profile_path.exists()
-    assert artifact.profile['profile_version'] == '1.2'
+    assert artifact.profile['profile_version'] == '1.3'
     assert artifact.profile['source_sha256'] == hashlib.sha256(source_bytes).hexdigest()
     assert artifact.profile['row_count'] == 4
     assert artifact.profile['column_count'] == 2
@@ -96,4 +96,4 @@ def test_pipeline_refreshes_an_outdated_profile(tmp_path):
 
     refreshed = pipeline.ensure_current_profile('dataset.csv', source_path)
 
-    assert refreshed['profile_version'] == '1.2'
+    assert refreshed['profile_version'] == '1.3'

@@ -5,6 +5,7 @@ import pytest
 
 from app.services.ai_service import AIService
 from app.services.data_service import DataService, FileReadError
+from app.services.dashboard_service import DashboardService
 from app.services.validation_service import ValidationService
 
 
@@ -121,3 +122,46 @@ def test_csv_content_with_excel_signature_reports_extension_mismatch(tmp_path):
 
     assert error.value.code == 'extension_mismatch'
     assert '.xlsx' in error.value.hint
+
+
+def test_dashboard_time_chart_never_groups_below_the_hour():
+    frame = pd.DataFrame({
+        'FechaEvento': [
+            '2026-08-01 10:15:03',
+            '2026-08-01 10:48:59',
+            '2026-08-01 11:07:21',
+        ],
+        'Valor_Total': [10, 20, 30],
+    })
+    summary = DataService.get_summary(frame)
+
+    charts = DashboardService.build_charts(
+        frame,
+        summary,
+        [{'column': 'Valor_Total', 'aggregation': 'sum'}],
+    )
+
+    assert charts['timeline']['period'] == 'hora'
+    assert charts['timeline']['labels'] == [
+        '01/08/2026 10:00',
+        '01/08/2026 11:00',
+    ]
+    assert charts['timeline']['datos'] == [30.0, 30.0]
+
+
+def test_dashboard_time_chart_uses_days_for_multi_day_data():
+    frame = pd.DataFrame({
+        'fecha': ['2026-08-01 10:59:59', '2026-08-02 11:00:01'],
+        'amount': [10, 15],
+    })
+    summary = DataService.get_summary(frame)
+
+    chart = DashboardService.build_charts(
+        frame,
+        summary,
+        [{'column': 'amount', 'aggregation': 'sum'}],
+    )['timeline']
+
+    assert chart['period'] == 'día'
+    assert chart['labels'] == ['01/08/2026', '02/08/2026']
+    assert all(':' not in label for label in chart['labels'])

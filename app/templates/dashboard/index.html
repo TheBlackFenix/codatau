@@ -59,29 +59,29 @@
 </div>
 
 <!-- Charts + AI panel -->
-<div style="display:grid;grid-template-columns:1fr 1fr 320px;gap:16px;margin-bottom:24px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:24px">
 
-    {% if chart_data.bar %}
+    {% if chart_data.timeline %}
     <div class="chart-area">
         <div class="chart-header">
             <div>
-                <div class="chart-title"><i class="bi bi-bar-chart" style="color:var(--purple)"></i> Promedio por columna</div>
-                <div class="chart-subtitle">Valores numéricos del archivo activo</div>
+                <div class="chart-title"><i class="bi bi-graph-up" style="color:var(--purple)"></i> Evolución por {{ chart_data.timeline.period }}</div>
+                <div class="chart-subtitle">{{ chart_data.timeline.value_label }} · fecha: {{ chart_data.timeline.date_col }}</div>
             </div>
         </div>
-        <canvas id="barChart" height="180"></canvas>
+        <canvas id="timelineChart" height="180"></canvas>
     </div>
     {% endif %}
 
-    {% if chart_data.grouped %}
+    {% if chart_data.category %}
     <div class="chart-area">
         <div class="chart-header">
             <div>
-                <div class="chart-title"><i class="bi bi-pie-chart" style="color:var(--orange)"></i> {{ chart_data.grouped.num_col }}</div>
-                <div class="chart-subtitle">Agrupado por {{ chart_data.grouped.group_col }}</div>
+                <div class="chart-title"><i class="bi bi-bar-chart" style="color:var(--orange)"></i> {{ chart_data.category.value_label }}</div>
+                <div class="chart-subtitle">Principales grupos de {{ chart_data.category.group_col }}</div>
             </div>
         </div>
-        <canvas id="groupedChart" height="180"></canvas>
+        <canvas id="categoryChart" height="180"></canvas>
     </div>
     {% endif %}
 
@@ -111,6 +111,7 @@
 
     {% if summary.numeric_summary %}
         {% set metric_explorer_id = 'dashboard-metrics' %}
+        {% set metric_file = active_file %}
         {% include 'files/_metric_explorer.html' %}
     {% endif %}
 
@@ -186,29 +187,33 @@ const baseOpts = {
     }
 };
 
-{% if chart_data.bar %}
-new Chart(document.getElementById('barChart'), {
-    type: 'bar',
+{% if chart_data.timeline %}
+new Chart(document.getElementById('timelineChart'), {
+    type: 'line',
     data: {
-        labels: {{ chart_data.bar.labels | tojson }},
-        datasets: [{ data: {{ chart_data.bar.datos | tojson }}, backgroundColor: purple + 'CC', borderRadius: 6, borderSkipped: false }]
+        labels: {{ chart_data.timeline.labels | tojson }},
+        datasets: [{
+            data: {{ chart_data.timeline.datos | tojson }},
+            borderColor: purple,
+            backgroundColor: purple + '1A',
+            fill: true,
+            tension: 0.25,
+            pointRadius: 3,
+            pointHoverRadius: 5
+        }]
     },
     options: baseOpts
 });
 {% endif %}
 
-{% if chart_data.grouped %}
-new Chart(document.getElementById('groupedChart'), {
-    type: 'doughnut',
+{% if chart_data.category %}
+new Chart(document.getElementById('categoryChart'), {
+    type: 'bar',
     data: {
-        labels: {{ chart_data.grouped.labels | tojson }},
-        datasets: [{ data: {{ chart_data.grouped.datos | tojson }}, backgroundColor: colors, borderWidth: 0 }]
+        labels: {{ chart_data.category.labels | tojson }},
+        datasets: [{ data: {{ chart_data.category.datos | tojson }}, backgroundColor: colors, borderRadius: 6, borderSkipped: false }]
     },
-    options: {
-        responsive: true,
-        cutout: '65%',
-        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } } }
-    }
+    options: baseOpts
 });
 {% endif %}
 

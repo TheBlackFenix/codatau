@@ -121,6 +121,8 @@
                         {% if operation.column %}<span class="badge badge-gray">{{ operation.column }}</span>{% endif %}
                         {% if automatic %}
                             <span class="badge badge-green">Recomendada</span>
+                        {% elif executable and operation.decision == 'ai_analysis' %}
+                            <span class="badge badge-purple">Configuración manual disponible</span>
                         {% elif executable %}
                             <span class="badge badge-yellow">Requiere configuración</span>
                         {% else %}
@@ -161,7 +163,14 @@
                 </div>
 
                 {% if executable %}
-                <div class="cleaning-configuration" data-operation-configuration hidden>
+                <div class="cleaning-configuration" data-operation-configuration {% if automatic %}hidden{% endif %}>
+                    {% if not automatic %}
+                    <div class="cleaning-configuration-heading">
+                        <i class="bi bi-sliders"></i>
+                        Configuración de la regla
+                        <small>Al modificar una opción se seleccionará “Sí, aplicar”.</small>
+                    </div>
+                    {% endif %}
                     {% if operation.operation == 'cast_type' %}
                     <label>
                         <span>Formato numérico</span>
@@ -174,9 +183,9 @@
                     <label>
                         <span>Formato de fecha</span>
                         <select class="form-control" name="parameter:{{ operation.id }}:date_format">
-                            <option value="%d/%m/%Y">Día/Mes/Año — 31/12/2026</option>
-                            <option value="%m/%d/%Y">Mes/Día/Año — 12/31/2026</option>
-                            <option value="%Y-%m-%d">Año-Mes-Día — 2026-12-31</option>
+                            <option value="%d/%m/%Y" {{ 'selected' if operation.parameters.get('date_format') == '%d/%m/%Y' }}>Día/Mes/Año — admite hora opcional</option>
+                            <option value="%m/%d/%Y" {{ 'selected' if operation.parameters.get('date_format') == '%m/%d/%Y' }}>Mes/Día/Año — admite hora opcional</option>
+                            <option value="%Y-%m-%d" {{ 'selected' if operation.parameters.get('date_format') == '%Y-%m-%d' }}>Año-Mes-Día — admite hora opcional</option>
                         </select>
                     </label>
                     {% elif operation.operation == 'normalize_case' %}
@@ -243,7 +252,8 @@
 .cleaning-decision-question>strong{display:block;font-size:13px;margin-bottom:9px}.cleaning-decision-question small{display:block;color:var(--gray-500);margin-top:8px}
 .cleaning-decision-options{display:flex;gap:8px;flex-wrap:wrap}.decision-option{cursor:pointer}.decision-option input{position:absolute;opacity:0;pointer-events:none}.decision-option span{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);font-size:12px;font-weight:600;transition:var(--transition)}
 .decision-option input:focus-visible+span{outline:2px solid var(--purple);outline-offset:2px}.decision-option.is-yes input:checked+span{border-color:#86EFAC;background:#F0FDF4;color:#15803D}.decision-option.is-no input:checked+span{border-color:var(--gray-300);background:var(--gray-100);color:var(--gray-800)}
-.cleaning-configuration[hidden]{display:none}.cleaning-configuration{margin:12px 0 0;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
+.cleaning-configuration{margin:12px 0 0;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
+.cleaning-configuration-heading{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:#9A3412;font-weight:700}.cleaning-configuration-heading small{margin-left:auto;color:var(--gray-500);font-weight:400}
 .cleaning-configuration label{display:grid;grid-template-columns:minmax(150px,220px) minmax(220px,420px);align-items:center;gap:12px;font-weight:600}
 .cleaning-configuration .form-control{margin:0;background:white}
 .cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
@@ -258,14 +268,12 @@
 document.querySelectorAll('[data-decision-card]').forEach(card => {
     const configuration = card.querySelector('[data-operation-configuration]');
     if (!configuration) return;
-    const update = () => {
-        const apply = card.querySelector('[data-operation-decision][value="apply"]');
-        configuration.hidden = !apply?.checked;
-    };
-    card.querySelectorAll('[data-operation-decision]').forEach(input => {
-        input.addEventListener('change', update);
+    configuration.querySelectorAll('select, input').forEach(input => {
+        input.addEventListener('change', () => {
+            const apply = card.querySelector('[data-operation-decision][value="apply"]');
+            if (apply) apply.checked = true;
+        });
     });
-    update();
 });
 </script>
 {% endblock %}

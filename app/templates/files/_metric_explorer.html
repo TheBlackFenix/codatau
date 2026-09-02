@@ -1,42 +1,43 @@
 {% set metric_id = metric_explorer_id|default('metric-explorer') %}
-<div class="card metric-explorer" id="{{ metric_id }}">
+<div class="card metric-explorer"
+     id="{{ metric_id }}"
+     data-save-url="{{ url_for('dashboard.save_metrics', file_id=metric_file.id) }}">
     <div class="metric-explorer-header">
         <div>
             <div class="card-title" style="margin-bottom:3px">
                 <i class="bi bi-speedometer2"></i> Métricas de negocio
             </div>
             <div class="metric-explorer-subtitle">
-                Solo mostramos automáticamente campos con significado cuantitativo probable.
+                Agrega, elimina y arrastra las tarjetas. El orden se guarda para este archivo.
             </div>
         </div>
-        <span class="badge badge-purple">
-            {{ summary.default_metrics|length }} visibles de {{ summary.numeric_cols|length }} numéricas
-        </span>
+        <span class="badge badge-purple" data-metric-count>{{ metric_cards|length }} visibles</span>
     </div>
 
-    {% if summary.default_metrics %}
-    <div class="metric-card-grid" data-default-metrics>
-        {% for column in summary.default_metrics %}
-        {% set stats = summary.numeric_summary[column] %}
-        <article class="metric-card" data-metric-key="{{ column }}:sum">
-            <div class="metric-card-label">{{ column }}</div>
-            <div class="metric-card-value">{{ '{:,.2f}'.format(stats.sum) if stats.sum is not none else '—' }}</div>
-            <div class="metric-card-primary">Suma total</div>
-            <div class="metric-card-meta">
-                Promedio {{ '{:,.2f}'.format(stats.mean) if stats.mean is not none else '—' }}
-                · {{ stats.completeness }}% con dato
+    <div class="metric-card-grid" data-metric-grid>
+        {% for card in metric_cards %}
+        <article class="metric-card"
+                 draggable="true"
+                 data-metric-key="{{ card.column }}:{{ card.aggregation }}"
+                 data-card-column="{{ card.column }}"
+                 data-card-aggregation="{{ card.aggregation }}">
+            <button type="button" class="metric-drag-handle" title="Arrastrar para ordenar" aria-label="Arrastrar para ordenar"><i class="bi bi-grip-vertical"></i></button>
+            <button type="button" class="metric-remove" title="Quitar métrica" aria-label="Quitar métrica"><i class="bi bi-x"></i></button>
+            <div class="metric-card-label">{{ card.column }}</div>
+            <div class="metric-card-value">
+                {% if card.value is none %}—{% elif card.aggregation in ('completeness', 'unique_percentage') %}{{ '%.1f'|format(card.value) }}%{% else %}{{ '{:,.2f}'.format(card.value) }}{% endif %}
             </div>
+            <div class="metric-card-primary">{{ card.label }}</div>
+            <div class="metric-card-meta">{{ card.completeness }}% de registros con dato</div>
         </article>
         {% endfor %}
     </div>
-    {% else %}
-    <div class="metric-empty">
-        No identificamos una métrica de negocio inequívoca. Puedes agregar una manualmente.
+    <div class="metric-empty" data-metric-empty {% if metric_cards %}hidden{% endif %}>
+        No hay métricas visibles. Puedes agregar las que sean útiles para este dashboard.
     </div>
-    {% endif %}
 
     <details class="metric-builder">
-        <summary><i class="bi bi-plus-circle"></i> Agregar otra métrica o cálculo</summary>
+        <summary><i class="bi bi-plus-circle"></i> Agregar métrica</summary>
         <div class="metric-builder-controls">
             <label>
                 <span>Campo numérico</span>
@@ -71,11 +72,8 @@
                     <option value="unique_percentage">Valores únicos / total de filas</option>
                 </select>
             </label>
-            <button type="button" class="btn btn-secondary" data-add-metric>
-                <i class="bi bi-plus-lg"></i> Agregar
-            </button>
+            <button type="button" class="btn btn-secondary" data-add-metric><i class="bi bi-plus-lg"></i> Agregar</button>
         </div>
-        <div class="metric-card-grid custom-metric-grid" data-custom-metrics></div>
         {% if summary.identifier_cols %}
         <div class="metric-identifier-note">
             <i class="bi bi-shield-check"></i>
@@ -83,6 +81,7 @@
         </div>
         {% endif %}
     </details>
+    <div class="metric-save-status" data-metric-status aria-live="polite"></div>
 </div>
 
 <script type="application/json" id="{{ metric_id }}-data">{{ summary.numeric_summary|tojson }}</script>
@@ -92,57 +91,132 @@
     const catalog = JSON.parse(document.getElementById({{ (metric_id ~ '-data')|tojson }}).textContent);
     const columnSelect = root.querySelector('[data-metric-column]');
     const aggregationSelect = root.querySelector('[data-metric-aggregation]');
-    const customGrid = root.querySelector('[data-custom-metrics]');
+    const grid = root.querySelector('[data-metric-grid]');
+    const empty = root.querySelector('[data-metric-empty]');
+    const count = root.querySelector('[data-metric-count]');
+    const status = root.querySelector('[data-metric-status]');
     const labels = {
         sum: 'Suma total', mean: 'Promedio', min: 'Mínimo', max: 'Máximo',
         non_null_count: 'Registros con dato', completeness: 'Porcentaje con dato',
         unique_count: 'Valores únicos', unique_percentage: 'Valores únicos / total de filas'
     };
     const numberFormat = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 });
+    let dragged = null;
+    let saveTimer = null;
+    let saveInFlight = false;
+    let saveQueued = false;
 
     const formatted = (value, aggregation) => {
         if (value === null || value === undefined) return '—';
-        if (aggregation === 'completeness' || aggregation === 'unique_percentage') {
-            return `${Number(value).toFixed(1)}%`;
-        }
+        if (aggregation === 'completeness' || aggregation === 'unique_percentage') return `${Number(value).toFixed(1)}%`;
         return numberFormat.format(value);
+    };
+    const layout = () => [...grid.querySelectorAll('[data-metric-key]')].map(card => ({
+        column: card.dataset.cardColumn,
+        aggregation: card.dataset.cardAggregation
+    }));
+    const refreshState = () => {
+        const visible = grid.querySelectorAll('[data-metric-key]').length;
+        count.textContent = `${visible} visible${visible === 1 ? '' : 's'}`;
+        empty.hidden = visible !== 0;
+    };
+    const persist = async () => {
+        if (saveInFlight) {
+            saveQueued = true;
+            return;
+        }
+        saveInFlight = true;
+        status.className = 'metric-save-status is-saving';
+        status.textContent = 'Guardando…';
+        try {
+            const response = await fetch(root.dataset.saveUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': {{ csrf_token()|tojson }}
+                },
+                body: JSON.stringify({ metrics: layout() })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'No se pudo guardar.');
+            status.className = 'metric-save-status is-saved';
+            status.textContent = 'Cambios guardados';
+        } catch (error) {
+            status.className = 'metric-save-status is-error';
+            status.textContent = error.message;
+        } finally {
+            saveInFlight = false;
+            if (saveQueued) {
+                saveQueued = false;
+                persist();
+            }
+        }
+    };
+    const schedulePersist = () => {
+        window.clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(persist, 180);
+    };
+    const makeCard = (column, aggregation) => {
+        const stats = catalog[column];
+        const card = document.createElement('article');
+        card.className = 'metric-card is-custom';
+        card.draggable = true;
+        card.dataset.metricKey = `${column}:${aggregation}`;
+        card.dataset.cardColumn = column;
+        card.dataset.cardAggregation = aggregation;
+        card.innerHTML = `
+            <button type="button" class="metric-drag-handle" title="Arrastrar para ordenar" aria-label="Arrastrar para ordenar"><i class="bi bi-grip-vertical"></i></button>
+            <button type="button" class="metric-remove" title="Quitar métrica" aria-label="Quitar métrica"><i class="bi bi-x"></i></button>
+            <div class="metric-card-label"></div><div class="metric-card-value"></div>
+            <div class="metric-card-primary"></div><div class="metric-card-meta"></div>`;
+        card.querySelector('.metric-card-label').textContent = column;
+        card.querySelector('.metric-card-value').textContent = formatted(stats[aggregation], aggregation);
+        card.querySelector('.metric-card-primary').textContent = labels[aggregation];
+        card.querySelector('.metric-card-meta').textContent = `${stats.completeness}% de registros con dato`;
+        return card;
     };
 
     columnSelect.addEventListener('change', () => {
-        const role = columnSelect.selectedOptions[0]?.dataset.role;
-        aggregationSelect.value = role === 'identifier' ? 'unique_count' : 'sum';
+        aggregationSelect.value = columnSelect.selectedOptions[0]?.dataset.role === 'identifier' ? 'unique_count' : 'sum';
     });
-
     root.querySelector('[data-add-metric]').addEventListener('click', () => {
         const column = columnSelect.value;
         const aggregation = aggregationSelect.value;
-        if (!column || !catalog[column]) return;
         const key = `${column}:${aggregation}`;
-        if ([...customGrid.children].some(card => card.dataset.metricKey === key)) return;
-
-        const card = document.createElement('article');
-        card.className = 'metric-card is-custom';
-        card.dataset.metricKey = key;
-
-        const label = document.createElement('div');
-        label.className = 'metric-card-label';
-        label.textContent = column;
-        const value = document.createElement('div');
-        value.className = 'metric-card-value';
-        value.textContent = formatted(catalog[column][aggregation], aggregation);
-        const calculation = document.createElement('div');
-        calculation.className = 'metric-card-primary';
-        calculation.textContent = labels[aggregation];
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'metric-remove';
-        remove.title = 'Quitar métrica';
-        remove.setAttribute('aria-label', 'Quitar métrica');
-        remove.innerHTML = '<i class="bi bi-x"></i>';
-        remove.addEventListener('click', () => card.remove());
-
-        card.append(label, value, calculation, remove);
-        customGrid.appendChild(card);
+        if (!column || !catalog[column] || [...grid.children].some(card => card.dataset.metricKey === key)) return;
+        grid.appendChild(makeCard(column, aggregation));
+        refreshState();
+        schedulePersist();
     });
+    grid.addEventListener('click', event => {
+        const remove = event.target.closest('.metric-remove');
+        if (!remove) return;
+        remove.closest('[data-metric-key]').remove();
+        refreshState();
+        schedulePersist();
+    });
+    grid.addEventListener('dragstart', event => {
+        dragged = event.target.closest('[data-metric-key]');
+        if (!dragged) return;
+        dragged.classList.add('is-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+    });
+    grid.addEventListener('dragover', event => {
+        if (!dragged) return;
+        event.preventDefault();
+        const target = event.target.closest('[data-metric-key]');
+        if (!target || target === dragged) return;
+        const box = target.getBoundingClientRect();
+        const before = event.clientY < box.top + box.height / 2 ||
+            (Math.abs(event.clientY - (box.top + box.height / 2)) < box.height / 3 && event.clientX < box.left + box.width / 2);
+        grid.insertBefore(dragged, before ? target : target.nextSibling);
+    });
+    grid.addEventListener('dragend', () => {
+        if (!dragged) return;
+        dragged.classList.remove('is-dragging');
+        dragged = null;
+        schedulePersist();
+    });
+    refreshState();
 })();
 </script>

@@ -1627,7 +1627,13 @@ body {
     border: 1px solid var(--gray-100);
     border-radius: var(--radius-lg);
     background: linear-gradient(145deg, var(--white), var(--gray-50));
+    cursor: grab;
+    transition: box-shadow 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
 }
+
+.metric-card:active { cursor: grabbing; }
+.metric-card.is-dragging { opacity: 0.48; transform: scale(0.98); }
+.metric-card:hover { box-shadow: 0 8px 22px rgba(38, 22, 62, 0.08); }
 
 .metric-card.is-custom {
     border-color: #DDD0F0;
@@ -1635,6 +1641,7 @@ body {
 }
 
 .metric-card-label {
+    padding: 0 42px 0 20px;
     overflow: hidden;
     color: var(--gray-600);
     font-size: 11px;
@@ -1715,6 +1722,30 @@ body {
 }
 
 .metric-remove:hover { background: var(--white); color: #B91C1C; }
+
+.metric-drag-handle {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 24px;
+    height: 25px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--gray-400);
+    cursor: grab;
+}
+
+.metric-save-status {
+    min-height: 17px;
+    margin-top: 9px;
+    font-size: 11px;
+    text-align: right;
+}
+
+.metric-save-status.is-saving { color: var(--gray-500); }
+.metric-save-status.is-saved { color: #15803D; }
+.metric-save-status.is-error { color: #B91C1C; }
 
 .metric-identifier-note {
     display: flex;

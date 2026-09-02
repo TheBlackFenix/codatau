@@ -74,6 +74,13 @@ cuarentena tras selección manual, sin inventar una imputación. Los duplicados
 exactos también son ejecutables únicamente tras selección manual, porque dos
 eventos reales pueden tener los mismos valores.
 
+Si una fecha, un número, un teléfono o un booleano contiene excepciones y queda
+marcado para análisis con IA, el usuario también puede resolverlo manualmente. La
+interfaz mantiene visible la configuración segura del catálogo (formato regional,
+separador o normalización) y envía a cuarentena cualquier valor que no cumpla la
+regla elegida. Las operaciones sin una alternativa determinista permanecen
+reservadas para la fase de IA.
+
 Las filas que no superan una conversión o validación salen de la versión limpia y
 se escriben en un Parquet de cuarentena con la operación que causó el rechazo. El
 usuario puede descargarlo como CSV para corregirlo.

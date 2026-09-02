@@ -183,3 +183,36 @@ def test_executor_rejects_missing_user_configuration(tmp_path):
             artifact.profile['cleaning_plan'],
             ['price:cast_type'],
         )
+
+
+def test_date_cleaning_preserves_optional_time_and_fractional_seconds(tmp_path):
+    dataframe = pd.DataFrame({
+        'fecha_evento': [
+            '2026-08-01 10:15:03.125',
+            '2026-08-01 11:20:59',
+        ]
+    })
+    source = tmp_path / 'dates.csv'
+    dataframe.to_csv(source, index=False)
+    artifact = DatasetPipeline(tmp_path / 'artifacts').ingest_dataframe(
+        dataframe,
+        'dates.csv',
+        source,
+    )
+    operation = next(
+        operation
+        for operation in artifact.profile['cleaning_plan']['operations']
+        if operation['id'] == 'fecha_evento:parse_date'
+    )
+
+    assert operation['decision'] == 'automatic'
+    assert operation['parameters']['date_format'] == '%Y-%m-%d'
+    selected = select_executable_operations(
+        artifact.profile['cleaning_plan'],
+        ['fecha_evento:parse_date'],
+    )
+    preview = CleaningExecutor().preview(artifact.parquet_path, selected)
+
+    assert preview.metrics['quarantined_rows'] == 0
+    assert preview.after[0]['fecha_evento'].startswith('2026-08-01T10:15:03.125')
+    assert preview.after[1]['fecha_evento'].startswith('2026-08-01T11:20:59')

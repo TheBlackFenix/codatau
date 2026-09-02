@@ -17,7 +17,7 @@ from app.services.semantic_profiler import (
 )
 
 
-PROFILE_VERSION = '1.2'
+PROFILE_VERSION = '1.3'
 
 
 @dataclass(frozen=True)

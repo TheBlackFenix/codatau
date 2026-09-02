@@ -1,14 +1,18 @@
-import math
 import os
 
-from flask import Blueprint, current_app, render_template, session
+from flask import Blueprint, current_app, jsonify, render_template, request, session
 from flask_login import login_required, current_user
 
+from app.extensions import db
 from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.services.data_service import DataService
 from app.services.dataset_pipeline import DatasetPipeline
 from app.services.ai_service import AIService
+from app.services.dashboard_service import (
+    DashboardConfigurationError,
+    DashboardService,
+)
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -54,73 +58,9 @@ def index():
             )
             summary = DataService.get_summary(df)
             insights = AIService.generate_display_insights(df, summary)
-
-            numeric_cols = [
-                column
-                for column in summary['default_metrics']
-                if df[column].notna().sum() > 0
-            ]
-            col_names = list(df.columns)
-
-            # Gráfica 1: promedio por columna numérica
-            if numeric_cols:
-                bar_labels = []
-                bar_data = []
-                for c in numeric_cols:
-                    val = df[c].mean()
-                    if val == val and math.isfinite(float(val)):
-                        bar_labels.append(str(c))
-                        bar_data.append(round(float(val), 2))
-                if bar_labels:
-                    chart_data['bar'] = {
-                        'labels': bar_labels,
-                        'datos': bar_data,
-                    }
-
-            # Gráfica 2: nulos por columna
-            null_dict = {}
-            for col in col_names:
-                n = int(df[col].isnull().sum())
-                if n > 0:
-                    null_dict[str(col)] = n
-            if null_dict:
-                chart_data['nulls'] = {
-                    'labels': list(null_dict.keys()),
-                    'datos': list(null_dict.values()),
-                }
-
-            # Gráfica 3: columna texto agrupada por columna numérica
-            text_cols = DataService.text_columns(df)
-            if text_cols and numeric_cols:
-                group_col = text_cols[0]
-                num_col = numeric_cols[0]
-                try:
-                    grouped = (
-                        df.groupby(group_col)[num_col]
-                        .sum()
-                        .dropna()
-                        .head(10)
-                    )
-                    pairs = [
-                        (str(label), round(float(value), 2))
-                        for label, value in grouped.items()
-                        if math.isfinite(float(value))
-                    ]
-                    g_labels = [label for label, _ in pairs]
-                    g_datos = [value for _, value in pairs]
-                    if g_labels:
-                        chart_data['grouped'] = {
-                            'labels': g_labels,
-                            'datos': g_datos,
-                            'group_col': str(group_col),
-                            'num_col': str(num_col),
-                        }
-                except (TypeError, ValueError):
-                    current_app.logger.warning(
-                        'No se pudo construir la gráfica agrupada para %s y %s',
-                        group_col,
-                        num_col,
-                    )
+            metric_layout = DashboardService.layout_for(active_file, summary)
+            metric_cards = DashboardService.cards_for(metric_layout, summary)
+            chart_data = DashboardService.build_charts(df, summary, metric_layout)
 
         except Exception:
             current_app.logger.exception(
@@ -129,6 +69,10 @@ def index():
             )
             summary = None
             chart_data = {}
+
+    if not active_file or not summary:
+        metric_layout = []
+        metric_cards = []
 
     total_files = len(all_files)
     total_rows = sum(f.row_count or 0 for f in all_files)
@@ -139,8 +83,53 @@ def index():
         active_file=active_file,
         summary=summary,
         chart_data=chart_data,
+        metric_layout=metric_layout,
+        metric_cards=metric_cards,
         insights=insights,
         total_files=total_files,
         total_rows=total_rows,
         total_insights=total_insights,
     )
+
+
+@dashboard_bp.route('/dashboard/files/<int:file_id>/metrics', methods=['POST'])
+@login_required
+def save_metrics(file_id):
+    record = FileUpload.query.filter_by(
+        id=file_id,
+        user_id=current_user.id,
+    ).first_or_404()
+    payload = request.get_json(silent=True) or {}
+    try:
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
+        pipeline = DatasetPipeline(
+            current_app.config['ANALYTICS_FOLDER'],
+            current_app.config['PROFILE_SAMPLE_SIZE'],
+        )
+        dataframe = pipeline.load_dataframe_or_source(
+            record.active_stored_filename,
+            filepath,
+        )
+        summary = DataService.get_summary(dataframe)
+        layout = DashboardService.save_layout(
+            record,
+            current_user.id,
+            payload.get('metrics'),
+            summary,
+        )
+        db.session.commit()
+    except DashboardConfigurationError as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            'No se pudo guardar el dashboard del archivo %s',
+            record.id,
+        )
+        return jsonify({'error': 'No pudimos guardar el dashboard.'}), 500
+
+    return jsonify({
+        'metrics': layout,
+        'message': 'Dashboard guardado.',
+    })

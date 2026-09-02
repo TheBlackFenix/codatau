@@ -153,6 +153,7 @@
         {% if analysis.summary.numeric_summary %}
             {% set summary = analysis.summary %}
             {% set metric_explorer_id = 'insights-metrics' %}
+            {% set metric_file = active_file %}
             {% include 'files/_metric_explorer.html' %}
         {% endif %}
     </div>

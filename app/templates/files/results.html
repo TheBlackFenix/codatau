@@ -75,6 +75,7 @@
 
 {% if summary.numeric_summary %}
     {% set metric_explorer_id = 'results-metrics' %}
+    {% set metric_file = record %}
     {% include 'files/_metric_explorer.html' %}
     <div style="height:20px"></div>
 {% endif %}
