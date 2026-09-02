@@ -20,6 +20,12 @@ class User(UserMixin, db.Model):
     # Relaciones
     uploads = db.relationship('FileUpload', backref='owner', lazy=True, cascade='all, delete-orphan')
     insights = db.relationship('AIInsight', backref='owner', lazy=True, cascade='all, delete-orphan')
+    ai_analysis_runs = db.relationship(
+        'AIAnalysisRun',
+        backref='requester',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
     cleaning_decisions = db.relationship(
         'CleaningDecision',
         backref='decider',

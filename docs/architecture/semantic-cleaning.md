@@ -6,8 +6,8 @@ El motor separa tres responsabilidades:
 
 1. DuckDB detecta tipos, patrones y excepciones sobre las columnas completas.
 2. Un catálogo cerrado propone operaciones conocidas y comprobables.
-3. En una fase posterior, la IA analizará únicamente los casos ambiguos y
-   devolverá parámetros para ese catálogo; nunca código arbitrario.
+3. Bajo solicitud del usuario, la IA analiza únicamente los casos ambiguos y
+   devuelve recomendaciones para ese catálogo; nunca código arbitrario.
 
 El perfil genera un plan con estado `proposed`. El usuario responde explícitamente
 `Sí, aplicar` o `No, conservar` en las sugerencias que quiera resolver, revisa una
@@ -108,13 +108,16 @@ Una confirmación que solo contiene respuestas `keep` no crea un artefacto ni un
 versión vacía. Las operaciones de versiones creadas antes de esta funcionalidad
 se incorporan de forma idempotente como decisiones `apply` cuando se abre el plan.
 
-## Uso futuro de IA
+## Uso de IA
 
 La solicitud al modelo contendrá únicamente las columnas de
 `ai_candidate_columns`, sus métricas, patrones anómalos y una muestra mínima
-enmascarada cuando resulte necesaria. La respuesta deberá ajustarse a un esquema
-JSON y elegir una operación del catálogo. Esos parámetros pasarán por el mismo
-ejecutor, la vista previa y la aprobación ya implementados.
+enmascarada cuando resulte necesaria. La respuesta se ajusta a un esquema JSON,
+solo puede referirse a operaciones existentes y se valida otra vez en el
+servidor. Los análisis iguales se reutilizan por huella para reducir consumo. La
+recomendación se muestra en la operación, pero nunca se selecciona ni ejecuta por
+sí sola: requiere una decisión explícita del usuario. Consulta el contrato completo en
+[`ai-integration.md`](ai-integration.md).
 
 ## Limitación transitoria
 

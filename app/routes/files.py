@@ -28,6 +28,8 @@ from app.forms.file_forms import CleaningActionForm, UploadForm
 from app.services.data_service import DataService, FileReadError
 from app.services.validation_service import ValidationService
 from app.services.ai_service import AIService
+from app.services.ai_cleaning_service import AICleaningService
+from app.services.ai_providers import AIProviderError, AIProviderFactory
 from app.services.dataset_pipeline import DatasetPipeline
 from app.services.cleaning_executor import (
     CleaningExecutor,
@@ -464,6 +466,22 @@ def cleaning(file_id):
         for operation in operations
         if CleaningExecutor.is_executable(operation)
     }
+    ai_candidate_count = sum(
+        operation['decision'] == 'ai_analysis'
+        for operation in operations
+    )
+    ai_configured = AIProviderFactory.is_configured(current_app.config)
+    ai_outcome = AICleaningService.latest(
+        record,
+        profile_data,
+        current_user.id,
+        current_app.config,
+    )
+    ai_suggestions = {
+        suggestion['operation_id']: suggestion
+        for suggestion in (ai_outcome.suggestions if ai_outcome else [])
+        if suggestion['operation_id'] not in resolved_ids
+    }
     versions = DatasetVersion.query.filter_by(file_id=record.id).order_by(
         DatasetVersion.version_number.desc()
     ).all()
@@ -483,8 +501,74 @@ def cleaning(file_id):
         versions=versions,
         resolved_decisions=resolved_decisions,
         current_operation_ids=current_operation_ids,
+        ai_candidate_count=ai_candidate_count,
+        ai_configured=ai_configured,
+        ai_provider=current_app.config.get('AI_PROVIDER'),
+        ai_model=current_app.config.get('AI_MODEL'),
+        ai_outcome=ai_outcome,
+        ai_suggestions=ai_suggestions,
         form=CleaningActionForm(),
     )
+
+
+@files_bp.route('/cleaning/<int:file_id>/ai-analysis', methods=['POST'])
+@login_required
+def cleaning_ai_analysis(file_id):
+    form = CleaningActionForm()
+    if not form.validate_on_submit():
+        abort(400)
+    record = _record_for_user(file_id)
+    try:
+        _, _, _, profile_data = _cleaning_context(record)
+        outcome = AICleaningService.analyze(
+            record,
+            profile_data,
+            current_user.id,
+            current_app.config,
+        )
+        db.session.commit()
+    except AIProviderError as error:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        if error.detail:
+            current_app.logger.warning(
+                'Falló el análisis IA del archivo %s (%s): %s',
+                record.id,
+                error.code,
+                error.detail,
+            )
+        flash(error.user_message, 'warning')
+        return redirect(url_for('files.cleaning', file_id=record.id))
+    except Exception as error:
+        db.session.rollback()
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo guardar el análisis IA del archivo %s: %s',
+            reference,
+            record.id,
+            error,
+        )
+        flash(
+            'No pudimos completar el análisis con IA. Ningún dato fue modificado. '
+            f'Referencia: {reference}.',
+            'danger',
+        )
+        return redirect(url_for('files.cleaning', file_id=record.id))
+
+    if outcome.cached:
+        flash(
+            'Se reutilizó el análisis IA existente para evitar un consumo innecesario.',
+            'info',
+        )
+    else:
+        flash(
+            f'La IA analizó {outcome.run.candidate_count} caso(s) ambiguo(s). '
+            'Revisa sus recomendaciones antes de decidir.',
+            'success',
+        )
+    return redirect(url_for('files.cleaning', file_id=record.id))
 
 
 @files_bp.route('/cleaning')

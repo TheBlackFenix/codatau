@@ -9,6 +9,8 @@ from app.models.file_upload import FileUpload
 from app.models.dataset_version import DatasetVersion
 from app.models.cleaning_decision import CleaningDecision
 from app.models.dashboard_configuration import DashboardConfiguration
+from app.models.ai_analysis_run import AIAnalysisRun
+from app.services.ai_providers import AIProviderResult
 
 
 def _login(auth):
@@ -36,6 +38,27 @@ def _configurable_cleaning_csv_bytes():
         '"10,50",31/12/2025,Bogota,+57 300 123 4567\n'
         '"20,75",15/01/2026,BOGOTA,(601) 555-1234\n'
     ).encode()
+
+
+class _RouteAIProvider:
+    def __init__(self):
+        self.calls = 0
+
+    def generate_json(self, _instructions, _payload, _schema):
+        self.calls += 1
+        return AIProviderResult(
+            data={
+                'suggestions': [{
+                    'operation_id': 'email:review_invalid_values',
+                    'recommendation': 'user_review',
+                    'confidence': 0.93,
+                    'rationale': 'El valor no permite reconstruir el correo con certeza.',
+                    'parameters': [],
+                }]
+            },
+            input_tokens=50,
+            output_tokens=15,
+        )
 
 
 def test_csv_flow_from_upload_to_download(app, client, auth):
@@ -90,6 +113,66 @@ def test_cleaning_navigation_without_files_explains_next_step(client, auth):
 
     assert response.status_code == 200
     assert 'Carga un archivo antes de iniciar una limpieza'.encode() in response.data
+
+
+def test_ai_cleaning_analysis_is_advisory_visible_and_cached(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+    app.config.update(
+        AI_PROVIDER='openai_compatible',
+        AI_MODEL='test-model',
+        AI_BASE_URL='http://provider.test/v1',
+        AI_API_KEY='test-key',
+    )
+    provider = _RouteAIProvider()
+
+    with patch(
+        'app.services.ai_cleaning_service.AIProviderFactory.create',
+        return_value=provider,
+    ):
+        first = client.post(
+            '/files/cleaning/1/ai-analysis',
+            follow_redirects=True,
+        )
+        second = client.post(
+            '/files/cleaning/1/ai-analysis',
+            follow_redirects=True,
+        )
+
+    assert first.status_code == 200
+    assert 'Recomendación IA'.encode() in first.data
+    assert 'Revisión humana'.encode() in first.data
+    assert b'93% confianza' in first.data
+    assert 'ningún dato se modifica automáticamente'.encode() in first.data
+    assert 'reutilizó el análisis IA existente'.encode() in second.data
+    assert provider.calls == 1
+    with app.app_context():
+        assert AIAnalysisRun.query.count() == 1
+        assert DatasetVersion.query.count() == 0
+        assert CleaningDecision.query.count() == 0
+
+
+def test_ai_cleaning_analysis_disabled_has_safe_message(app, client, auth):
+    _login(auth)
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+        content_type='multipart/form-data',
+    )
+
+    response = client.post(
+        '/files/cleaning/1/ai-analysis',
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert 'integración con IA todavía no está configurada'.encode() in response.data
+    with app.app_context():
+        assert AIAnalysisRun.query.count() == 0
 
 
 def test_upload_page_supports_real_drag_and_drop(client, auth):

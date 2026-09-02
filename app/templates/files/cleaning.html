@@ -20,6 +20,29 @@
     </span>
 </div>
 
+<div class="card ai-analysis-card" style="margin-bottom:20px">
+    <div class="ai-analysis-copy">
+        <div class="card-title"><i class="bi bi-stars"></i> Análisis IA bajo demanda</div>
+        <p>
+            Analiza únicamente los casos ambiguos con estadísticas y unas pocas muestras
+            anonimizadas. La IA recomienda; tú decides y ningún dato se modifica automáticamente.
+        </p>
+        {% if ai_configured %}
+        <small>{{ ai_provider }} · {{ ai_model }} · Los resultados idénticos se reutilizan para ahorrar tokens.</small>
+        {% else %}
+        <small>Para habilitarlo configura AI_PROVIDER, AI_MODEL, AI_BASE_URL y, cuando aplique, AI_API_KEY.</small>
+        {% endif %}
+    </div>
+    <form method="POST" action="{{ url_for('files.cleaning_ai_analysis', file_id=record.id) }}">
+        {{ form.hidden_tag() }}
+        <button type="submit" class="btn btn-purple" {% if not ai_configured or not ai_candidate_count %}disabled{% endif %}>
+            <i class="bi bi-stars"></i>
+            {% if ai_outcome %}Consultar análisis guardado{% else %}Analizar {{ ai_candidate_count }} caso(s){% endif %}
+        </button>
+        {% if not ai_candidate_count %}<span class="ai-analysis-empty">No hay casos ambiguos pendientes.</span>{% endif %}
+    </form>
+</div>
+
 <div class="card" style="margin-bottom:20px">
     <div class="card-title"><i class="bi bi-clock-history"></i> Historial de versiones</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
@@ -113,6 +136,7 @@
             {% for operation in operations %}
             {% set executable = operation.id in executable_ids %}
             {% set automatic = operation.id in automatic_ids %}
+            {% set ai_suggestion = ai_suggestions.get(operation.id) %}
             <div class="cleaning-operation" data-decision-card>
                 <div class="cleaning-operation-main">
                     <span style="flex:1">
@@ -134,6 +158,31 @@
                     </span>
                     </span>
                 </div>
+
+                {% if ai_suggestion %}
+                <div class="ai-recommendation">
+                    <div class="ai-recommendation-heading">
+                        <span><i class="bi bi-stars"></i> Recomendación IA</span>
+                        {% if ai_suggestion.recommendation == 'apply' %}
+                        <span class="badge badge-green">Aplicar</span>
+                        {% elif ai_suggestion.recommendation == 'keep' %}
+                        <span class="badge badge-gray">Conservar</span>
+                        {% else %}
+                        <span class="badge badge-yellow">Revisión humana</span>
+                        {% endif %}
+                        <span class="ai-confidence">{{ (ai_suggestion.confidence * 100)|round|int }}% confianza</span>
+                    </div>
+                    <p>{{ ai_suggestion.rationale }}</p>
+                    {% if ai_suggestion.parameters %}
+                    <div class="ai-parameters">
+                        Parámetros sugeridos:
+                        {% for name, value in ai_suggestion.parameters.items() %}
+                        <code>{{ name }}={{ value }}</code>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
 
                 <div class="cleaning-decision-question">
                     <strong>
@@ -248,6 +297,8 @@
 .cleaning-operation-main{display:flex;gap:12px}
 .cleaning-operation-title{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .cleaning-operation-reason{display:block;color:var(--gray-500);font-size:13px;margin-top:5px}
+.ai-analysis-card{display:flex;justify-content:space-between;align-items:center;gap:24px;background:linear-gradient(135deg,#FAF5FF,#FFFFFF)}.ai-analysis-copy p{margin:0 0 5px;color:var(--gray-600);font-size:13px;max-width:780px}.ai-analysis-copy small{color:var(--gray-500)}.ai-analysis-card form{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:0 0 auto}.ai-analysis-card button:disabled{opacity:.55;cursor:not-allowed}.ai-analysis-empty{font-size:11px;color:var(--gray-500)}
+.ai-recommendation{margin-top:12px;padding:11px 12px;border:1px solid #DDD6FE;border-radius:9px;background:#FAF5FF}.ai-recommendation-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--purple)}.ai-confidence{margin-left:auto;color:var(--gray-500);font-weight:500}.ai-recommendation p{margin:7px 0 0;color:var(--gray-700);font-size:13px}.ai-parameters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;color:var(--gray-500);font-size:11px}.ai-parameters code{padding:2px 5px;border-radius:4px;background:white;color:var(--gray-700)}
 .cleaning-decision-question{margin-top:13px;padding-top:12px;border-top:1px solid var(--gray-100)}
 .cleaning-decision-question>strong{display:block;font-size:13px;margin-bottom:9px}.cleaning-decision-question small{display:block;color:var(--gray-500);margin-top:8px}
 .cleaning-decision-options{display:flex;gap:8px;flex-wrap:wrap}.decision-option{cursor:pointer}.decision-option input{position:absolute;opacity:0;pointer-events:none}.decision-option span{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);font-size:12px;font-weight:600;transition:var(--transition)}
@@ -259,7 +310,7 @@
 .cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
 .cleaning-submit span{display:block;color:var(--gray-500);font-size:12px;margin-top:3px}
 .resolved-decisions{padding:0}.resolved-decisions>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.resolved-decisions>summary::-webkit-details-marker{display:none}.resolved-decisions>summary span:first-child{display:flex;align-items:center;gap:8px}.resolved-decisions>summary i{color:#15803D}.resolved-decision-list{padding:0 20px 16px}.resolved-decision{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--gray-100)}.resolved-no-longer-detected{color:#15803D;font-size:11px;white-space:nowrap}
-@media(max-width:800px){.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
+@media(max-width:800px){.ai-analysis-card{align-items:stretch;flex-direction:column}.ai-analysis-card form{align-items:stretch}.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
 </style>
 {% endblock %}
 

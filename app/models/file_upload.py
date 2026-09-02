@@ -22,6 +22,12 @@ class FileUpload(db.Model):
 
     # Relación con insights
     insights = db.relationship('AIInsight', backref='file', lazy=True, cascade='all, delete-orphan')
+    ai_analysis_runs = db.relationship(
+        'AIAnalysisRun',
+        backref='file',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
     versions = db.relationship(
         'DatasetVersion',
         backref='file',

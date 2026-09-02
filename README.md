@@ -129,6 +129,8 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Alertas de calidad: nulos, duplicados, filas insuficientes
 - [x] Análisis de valores extremos por columna numérica
 - [x] Insights persistentes en base de datos
+- [x] Análisis IA bajo demanda para limpiezas ambiguas, con muestras anonimizadas
+- [x] Proveedores intercambiables, JSON validado, auditoría y caché por contexto
 
 ### 📄 Reportes
 - [x] Listado completo de archivos con métricas
@@ -369,6 +371,10 @@ MAX_CONTENT_LENGTH=52428800
 UPLOAD_FOLDER=uploads
 ANALYTICS_FOLDER=artifacts
 PROFILE_SAMPLE_SIZE=12
+AI_PROVIDER=disabled
+AI_MODEL=
+AI_API_KEY=
+AI_BASE_URL=https://api.openai.com/v1
 ```
 
 > ⚠️ **Nunca subas el archivo `.env` a GitHub.** Ya está incluido en `.gitignore`.
@@ -463,6 +469,7 @@ rm instance/pymes_ai.db        # macOS/Linux
 | GET | `/files/results/<id>` | Resultados de un archivo | ✅ |
 | GET | `/files/profile/<id>` | Perfil analítico estructurado | ✅ |
 | GET | `/files/cleaning/<id>` | Plan y versiones de limpieza | ✅ |
+| POST | `/files/cleaning/<id>/ai-analysis` | Analizar casos ambiguos sin modificar datos | ✅ |
 | GET | `/files/cleaning` | Abrir limpieza del archivo activo | ✅ |
 | POST | `/files/cleaning/<id>/preview` | Vista previa de operaciones | ✅ |
 | POST | `/files/cleaning/<id>/apply` | Crear una nueva versión | ✅ |
@@ -556,7 +563,9 @@ Este README contiene la guía funcional general. La decisión y evolución del
 pipeline analítico se documentan en
 [`docs/architecture/data-pipeline.md`](docs/architecture/data-pipeline.md). El
 contrato del motor de limpieza está en
-[`docs/architecture/semantic-cleaning.md`](docs/architecture/semantic-cleaning.md).
+[`docs/architecture/semantic-cleaning.md`](docs/architecture/semantic-cleaning.md)
+y la capa intercambiable de proveedores de IA en
+[`docs/architecture/ai-integration.md`](docs/architecture/ai-integration.md).
 
 ---
 
@@ -565,7 +574,8 @@ contrato del motor de limpieza está en
 - [x] Perfilado semántico y propuestas estructuradas de limpieza
 - [x] Ejecutor inicial con vista previa, aprobación y trazabilidad
 - [x] Parámetros interactivos para fechas, teléfonos y separadores regionales
-- [ ] Análisis de casos ambiguos mediante IA
+- [x] Análisis de casos ambiguos mediante IA
+- [ ] Evals de calidad por proveedor y presupuesto por usuario
 - [ ] Consultas y visualizaciones ejecutadas directamente en DuckDB
 - [ ] Integración con almacenamiento de objetos (S3 compatible)
 - [ ] Procesamiento asíncrono con **Celery + Redis** para archivos muy grandes

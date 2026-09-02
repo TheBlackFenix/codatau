@@ -49,6 +49,7 @@ def create_app(config_name='default', config_overrides=None):
     # Importar modelos para que SQLAlchemy los registre
     from app.models import (
         AIInsight,
+        AIAnalysisRun,
         CleaningDecision,
         DashboardConfiguration,
         DatasetVersion,
