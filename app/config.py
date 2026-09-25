@@ -24,6 +24,7 @@ class Config:
     PROFILE_SAMPLE_SIZE = _env_int('PROFILE_SAMPLE_SIZE', 12)
     ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
     WTF_CSRF_ENABLED = True
+    AUTO_CREATE_DATABASE = False
     AI_PROVIDER = os.environ.get('AI_PROVIDER', 'disabled')
     AI_MODEL = os.environ.get('AI_MODEL', '')
     AI_API_KEY = os.environ.get('AI_API_KEY', '')
@@ -49,6 +50,7 @@ class ProductionConfig(Config):
 class TestingConfig(Config):
     TESTING = True
     WTF_CSRF_ENABLED = False
+    AUTO_CREATE_DATABASE = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
 
 config = {

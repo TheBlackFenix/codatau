@@ -23,6 +23,11 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Artefactos locales de generación y revisión documental
+.codex-finalizer/
+.tmp/
+output/
+
 # VS Code
 .vscode/
 

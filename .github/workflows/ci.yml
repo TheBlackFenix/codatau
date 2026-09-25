@@ -29,5 +29,12 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app run.py
 
+      - name: Validate database migrations
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/codatau-ci.db
+        run: |
+          python -m flask --app run.py db upgrade
+          python -m flask --app run.py db check
+
       - name: Run tests
         run: python -m pytest

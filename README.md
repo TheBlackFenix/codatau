@@ -146,7 +146,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 | **Lenguaje** | Python | 3.13 |
 | **Framework web** | Flask | 3.x |
 | **ORM** | SQLAlchemy | 3.x |
-| **Base de datos** | SQLite | 3.x |
+| **Base de datos y migraciones** | SQLite + SQLAlchemy + Alembic | 3.x / 2.x / 1.x |
 | **Autenticación** | Flask-Login + Werkzeug | — |
 | **Formularios** | Flask-WTF | — |
 | **Procesamiento datos** | pandas + DuckDB + Parquet | 2.2 / 1.5 / — |
@@ -289,7 +289,7 @@ pymes_ai/
 │           └── logo_full.png    # Logo horizontal
 │
 ├── instance/
-│   └── pymes_ai.db              # Base de datos SQLite (auto-generada)
+│   └── pymes_ai.db              # Base de datos SQLite administrada por Alembic
 │
 ├── uploads/                     # Archivos subidos por usuarios
 ├── artifacts/                   # Parquet y perfiles (auto-generados)
@@ -381,6 +381,14 @@ AI_BASE_URL=https://api.openai.com/v1
 
 ### 5. Ejecutar la aplicación
 
+Inicializa o actualiza el esquema de base de datos:
+
+```bash
+python -m flask --app run.py db upgrade
+```
+
+Luego inicia la aplicación:
+
 ```bash
 python run.py
 ```
@@ -391,7 +399,8 @@ El arranque comprueba que el puerto esté libre. Si ya existe otra instancia de
 CoDataU, se detiene con un mensaje explícito en lugar de servir versiones distintas
 de la aplicación sobre el mismo puerto.
 
-La base de datos se crea automáticamente en `instance/pymes_ai.db` al primer arranque.
+La base de datos se administra mediante migraciones de Alembic. El comando
+`db upgrade` crea una base nueva o adopta de forma segura una instalación anterior.
 
 ---
 
@@ -429,7 +438,8 @@ python run.py
 # Reiniciar la base de datos (borra todos los datos)
 del instance\pymes_ai.db       # Windows
 rm instance/pymes_ai.db        # macOS/Linux
-# Luego vuelve a ejecutar python run.py
+# Luego ejecuta: python -m flask --app run.py db upgrade
+# Y finalmente: python run.py
 ```
 
 ---
@@ -565,7 +575,9 @@ pipeline analítico se documentan en
 contrato del motor de limpieza está en
 [`docs/architecture/semantic-cleaning.md`](docs/architecture/semantic-cleaning.md)
 y la capa intercambiable de proveedores de IA en
-[`docs/architecture/ai-integration.md`](docs/architecture/ai-integration.md).
+[`docs/architecture/ai-integration.md`](docs/architecture/ai-integration.md). La
+operación y adopción del esquema están en
+[`docs/architecture/database-migrations.md`](docs/architecture/database-migrations.md).
 
 ---
 

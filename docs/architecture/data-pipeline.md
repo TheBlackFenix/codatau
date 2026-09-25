@@ -16,8 +16,8 @@ analizarlo:
 6. Una limpieza aprobada crea un nuevo Parquet y, cuando corresponde, un artefacto
    de cuarentena; la versión activa puede cambiarse sin sobrescribir las anteriores.
 
-Por ahora, SQLite solo almacena usuarios, metadatos e insights. No contiene los
-datos tabulares cargados.
+SQLite almacena usuarios, metadatos, versiones, decisiones, configuración del
+dashboard y auditoría de IA. No contiene los datos tabulares cargados.
 
 ## Por qué Parquet + DuckDB
 

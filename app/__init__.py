@@ -3,7 +3,7 @@ import os
 from flask import Flask, redirect, url_for, render_template
 from flask_login import current_user
 from app.config import config
-from app.extensions import db, login_manager, csrf
+from app.extensions import db, login_manager, csrf, migrate
 
 
 def create_app(config_name='default', config_overrides=None):
@@ -27,6 +27,7 @@ def create_app(config_name='default', config_overrides=None):
 
     # Inicializar extensiones
     db.init_app(app)
+    migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
 
@@ -57,9 +58,11 @@ def create_app(config_name='default', config_overrides=None):
         User,
     )
 
-    # Crear tablas de la base de datos
-    with app.app_context():
-        db.create_all()
+    # Las pruebas conservan una base efímera autocontenida. En desarrollo y
+    # producción el esquema se administra exclusivamente con `flask db upgrade`.
+    if app.config.get('AUTO_CREATE_DATABASE'):
+        with app.app_context():
+            db.create_all()
 
     # Ruta raíz
     @app.route('/')
