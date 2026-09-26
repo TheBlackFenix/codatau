@@ -377,6 +377,19 @@ AI_API_KEY=
 AI_BASE_URL=https://api.openai.com/v1
 ```
 
+Para usar Gemini desde Google AI Studio:
+
+```env
+AI_PROVIDER=openai_compatible
+AI_MODEL=gemini-3.5-flash-lite
+AI_API_KEY=tu-clave
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+AI_RESPONSE_MODE=json_schema
+```
+
+Consulta [la arquitectura de integración con IA](docs/architecture/ai-integration.md)
+para conocer el aislamiento de datos, el caché y la prueba en vivo opcional.
+
 > ⚠️ **Nunca subas el archivo `.env` a GitHub.** Ya está incluido en `.gitignore`.
 
 ### 5. Ejecutar la aplicación

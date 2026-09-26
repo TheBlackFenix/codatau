@@ -59,8 +59,38 @@ AI_SAMPLE_VALUES=4
 `AI_PROVIDER=openai_compatible`; `AI_RESPONSE_MODE=json_object` existe para
 servidores que aún no admiten esquemas JSON estrictos.
 
+### Gemini mediante Google AI Studio
+
+Gemini expone un endpoint compatible con Chat Completions, por lo que no
+requiere un adaptador específico:
+
+```env
+AI_PROVIDER=openai_compatible
+AI_MODEL=gemini-3.5-flash-lite
+AI_API_KEY=tu-clave-de-google-ai-studio
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+AI_RESPONSE_MODE=json_schema
+```
+
+Los proyectos nuevos de Google ya no tienen acceso general a los modelos 2.5.
+La configuración validada usa `gemini-3.5-flash-lite`, que admite respuestas
+estructuradas. La clave debe rotarse si aparece en una terminal, captura o log.
+
 La credencial solo se lee desde el entorno, se envía como Bearer al proveedor y
 no se persiste en SQLite ni en resultados de análisis.
+
+## Prueba en vivo opcional
+
+La suite normal nunca llama a un proveedor externo. Para comprobar de forma
+explícita la credencial y el contrato del proveedor configurado:
+
+```powershell
+$env:RUN_LIVE_AI_TEST='1'
+python -m pytest tests/test_ai_provider_live.py -q --tb=short
+```
+
+Esta prueba realiza una solicitud pequeña y puede consumir cuota. Los errores
+se resumen sin imprimir encabezados de autorización.
 
 ## Funciones previstas sobre la misma capa
 

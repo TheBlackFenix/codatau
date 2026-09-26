@@ -117,6 +117,10 @@ def test_context_is_minimal_redacted_and_limited():
         '<masked:email>xxxxxx xxxxxxxx xxxxxxxxxxxx@xxxxxxx.xxx',
     ]
     assert 'example' not in email['evidence']
+    assert email['allowed_response_parameters'] == {}
+    assert amount['allowed_response_parameters'] == {
+        'decimal_separator': ['.', ','],
+    }
     assert len(amount['redacted_samples']) == 2
     assert all('source_sha256' not in item for item in context['candidates'])
 
@@ -190,3 +194,25 @@ def test_result_cannot_invent_operations_or_parameters():
             pass
         else:
             raise AssertionError('Unsafe provider output was accepted')
+
+
+def test_result_must_cover_every_requested_operation():
+    candidates = AICleaningService.build_context(_profile(), _config())['candidates']
+
+    try:
+        AICleaningService.validate_result(
+            {
+                'suggestions': [{
+                    'operation_id': 'email:review_invalid_values',
+                    'recommendation': 'user_review',
+                    'confidence': 0.9,
+                    'rationale': 'Se requiere una revisión humana.',
+                    'parameters': [],
+                }]
+            },
+            candidates,
+        )
+    except ValueError as error:
+        assert 'todos los operation_id' in str(error)
+    else:
+        raise AssertionError('An incomplete provider response was accepted')

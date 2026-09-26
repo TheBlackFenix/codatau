@@ -14,6 +14,11 @@ def app(tmp_path):
             'SECRET_KEY': 'test-secret-key',
             'UPLOAD_FOLDER': str(upload_folder),
             'ANALYTICS_FOLDER': str(analytics_folder),
+            # Keep the suite independent from a developer's local .env. Tests
+            # that exercise an AI provider opt in and supply their own stub.
+            'AI_PROVIDER': 'disabled',
+            'AI_MODEL': '',
+            'AI_API_KEY': '',
         },
     )
 
