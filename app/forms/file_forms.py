@@ -9,3 +9,7 @@ class UploadForm(FlaskForm):
         FileAllowed(['xlsx', 'xls', 'csv'], message='Solo se permiten archivos .xlsx, .xls o .csv')
     ])
     submit = SubmitField('Cargar y procesar')
+
+
+class CleaningActionForm(FlaskForm):
+    submit = SubmitField('Continuar')

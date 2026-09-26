@@ -34,6 +34,10 @@
                class="nav-link {% if request.endpoint == 'files.insights_ia' %}active{% endif %}">
                 <i class="bi bi-stars"></i> Análisis
             </a>
+            <a href="{{ url_for('files.cleaning_current') }}"
+               class="nav-link {% if request.endpoint and request.endpoint.startswith('files.cleaning') %}active{% endif %}">
+                <i class="bi bi-magic"></i> Limpieza
+            </a>
             <a href="{{ url_for('reports.index') }}"
                class="nav-link {% if request.endpoint == 'reports.index' %}active{% endif %}">
                 <i class="bi bi-bar-chart-line"></i> Reportes
@@ -65,9 +69,13 @@
                         <i class="bi bi-shield-lock"></i> Cambiar contraseña
                     </a>
                     <div class="dropdown-divider"></div>
-                    <a class="dropdown-item danger" href="{{ url_for('auth.logout') }}">
-                        <i class="bi bi-box-arrow-right"></i> Cerrar sesión
-                    </a>
+                    <form method="POST" action="{{ url_for('auth.logout') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="dropdown-item danger" type="submit"
+                                style="width:100%;border:0;background:none;text-align:left">
+                            <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

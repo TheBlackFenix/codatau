@@ -1,10 +1,22 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy.exc import IntegrityError
+from urllib.parse import urlsplit
+
 from app.extensions import db
 from app.models.user import User
 from app.forms.auth_forms import LoginForm, RegisterForm
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+
+
+def _safe_next_url(target):
+    if not target:
+        return None
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc or not target.startswith('/'):
+        return None
+    return target
 
 
 @auth_bp.route('/inicio')
@@ -27,12 +39,15 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        email = form.email.data.strip().lower()
+        user = User.query.filter_by(email=email).first()
         if user and user.check_password(form.password.data):
-            login_user(user, remember=form.remember.data)
-            next_page = request.args.get('next')
-            flash(f'Hola {user.username}, bienvenido de nuevo a PYMES-AI.', 'success')
-            return redirect(next_page or url_for('auth.bienvenida'))
+            if login_user(user, remember=form.remember.data):
+                next_page = _safe_next_url(request.args.get('next'))
+                flash(f'Hola {user.username}, bienvenido de nuevo a CoDataU.', 'success')
+                return redirect(next_page or url_for('auth.bienvenida'))
+            flash('Tu cuenta está inactiva.', 'danger')
+            return render_template('auth/login.html', form=form)
         flash('Correo o contraseña incorrectos.', 'danger')
 
     return render_template('auth/login.html', form=form)
@@ -45,10 +60,18 @@ def register():
 
     form = RegisterForm()
     if form.validate_on_submit():
-        user = User(username=form.username.data, email=form.email.data)
+        user = User(
+            username=form.username.data.strip(),
+            email=form.email.data.strip().lower(),
+        )
         user.set_password(form.password.data)
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash('El usuario o correo ya está registrado.', 'danger')
+            return render_template('auth/register.html', form=form)
         flash('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success')
         return redirect(url_for('auth.login'))
 
@@ -61,7 +84,7 @@ def edit_profile():
     form = EditProfileForm(original_username=current_user.username)
 
     if form.validate_on_submit():
-        current_user.username = form.username.data
+        current_user.username = form.username.data.strip()
         db.session.commit()
         flash('Perfil actualizado correctamente.', 'success')
         return redirect(url_for('auth.edit_profile'))
@@ -88,7 +111,7 @@ def change_password():
     return render_template('auth/change_password.html', form=form)
 
 
-@auth_bp.route('/logout')
+@auth_bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()

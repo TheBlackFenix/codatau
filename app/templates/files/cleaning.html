@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+{% block title %}Limpieza — CoDataU{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Limpieza de datos</div>
+        <div class="page-subtitle">{{ record.original_name }} · Perfil {{ profile.profile_version }}</div>
+    </div>
+    <a href="{{ url_for('files.results', file_id=record.id) }}" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Resultados
+    </a>
+</div>
+
+<div class="insight-chip insight-info" style="margin-bottom:20px">
+    <i class="bi bi-shield-check"></i>
+    <span>
+        Responde Sí o No únicamente en las sugerencias que quieras resolver ahora.
+        Después podrás revisar el resultado antes de guardar las decisiones.
+    </span>
+</div>
+
+<div class="card ai-analysis-card" style="margin-bottom:20px">
+    <div class="ai-analysis-copy">
+        <div class="card-title"><i class="bi bi-stars"></i> Análisis IA bajo demanda</div>
+        <p>
+            Analiza únicamente los casos ambiguos con estadísticas y unas pocas muestras
+            anonimizadas. La IA recomienda; tú decides y ningún dato se modifica automáticamente.
+        </p>
+        {% if ai_configured %}
+        <small>{{ ai_provider }} · {{ ai_model }} · Los resultados idénticos se reutilizan para ahorrar tokens.</small>
+        {% else %}
+        <small>Para habilitarlo configura AI_PROVIDER, AI_MODEL, AI_BASE_URL y, cuando aplique, AI_API_KEY.</small>
+        {% endif %}
+    </div>
+    <form method="POST" action="{{ url_for('files.cleaning_ai_analysis', file_id=record.id) }}">
+        {{ form.hidden_tag() }}
+        <button type="submit" class="btn btn-purple" {% if not ai_configured or not ai_candidate_count %}disabled{% endif %}>
+            <i class="bi bi-stars"></i>
+            {% if ai_outcome %}Consultar análisis guardado{% else %}Analizar {{ ai_candidate_count }} caso(s){% endif %}
+        </button>
+        {% if not ai_candidate_count %}<span class="ai-analysis-empty">No hay casos ambiguos pendientes.</span>{% endif %}
+    </form>
+</div>
+
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title"><i class="bi bi-clock-history"></i> Historial de versiones</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=0) }}">
+            {{ form.hidden_tag() }}
+            <button class="btn btn-sm {{ 'btn-purple' if not record.active_version else 'btn-secondary' }}">
+                Original procesado
+            </button>
+        </form>
+        {% for version in versions %}
+        <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=version.id) }}">
+            {{ form.hidden_tag() }}
+            <button class="btn btn-sm {{ 'btn-purple' if version.is_active else 'btn-secondary' }}">
+                Versión {{ version.version_number }} · {{ version.metrics.get('after_rows', '—') }} filas
+            </button>
+        </form>
+        {% if version.quarantine_filename %}
+        <a class="btn btn-danger-outline btn-sm"
+           href="{{ url_for('files.cleaning_quarantine', file_id=record.id, version_id=version.id) }}">
+            <i class="bi bi-download"></i> Cuarentena v{{ version.version_number }}
+        </a>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+{% if resolved_decisions %}
+<details class="card resolved-decisions" style="margin-bottom:20px">
+    <summary>
+        <span><i class="bi bi-check2-all"></i> Decisiones resueltas</span>
+        <span class="badge badge-green">{{ resolved_decisions|length }}</span>
+    </summary>
+    <div class="resolved-decision-list">
+        {% for decision in resolved_decisions %}
+        <div class="resolved-decision">
+            <div>
+                <div class="cleaning-operation-title">
+                    <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>
+                    {% if decision.column_name %}<span class="badge badge-gray">{{ decision.column_name }}</span>{% endif %}
+                    {% if decision.choice == 'apply' %}
+                    <span class="badge badge-green">Sí, aplicada{% if decision.applied_version_number %} en v{{ decision.applied_version_number }}{% endif %}</span>
+                    {% else %}
+                    <span class="badge badge-gray">No, conservada</span>
+                    {% endif %}
+                </div>
+                <span class="cleaning-operation-reason">
+                    {{ decision.affected_rows }} fila(s) evaluada(s)
+                </span>
+            </div>
+            {% if decision.operation_id in current_operation_ids %}
+            <form method="POST" action="{{ url_for('files.cleaning_decision_reopen', file_id=record.id, decision_id=decision.id) }}">
+                {{ form.hidden_tag() }}
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reabrir
+                </button>
+            </form>
+            {% else %}
+            <span class="resolved-no-longer-detected"><i class="bi bi-check-circle"></i> Ya no se detecta</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+
+<form method="POST" action="{{ url_for('files.cleaning_preview', file_id=record.id) }}">
+    {{ form.hidden_tag() }}
+    <div class="card">
+        <div class="card-title">
+            <i class="bi bi-list-check"></i> Decisiones pendientes
+            <span class="badge badge-gray" style="margin-left:auto">{{ operations|length }}</span>
+        </div>
+
+        <div class="cleaning-summary">
+            <div class="cleaning-summary-item is-automatic">
+                <strong>{{ automatic_ids|length }}</strong>
+                <span>Recomendadas y aplicables</span>
+            </div>
+            <div class="cleaning-summary-item is-review">
+                <strong>{{ executable_ids|length - automatic_ids|length }}</strong>
+                <span>Requieren configuración</span>
+            </div>
+            <div class="cleaning-summary-item is-ai">
+                <strong>{{ operations|length - executable_ids|length }}</strong>
+                <span>Reservadas para análisis con IA</span>
+            </div>
+        </div>
+
+        {% if operations %}
+        <div class="cleaning-operation-list">
+            {% for operation in operations %}
+            {% set executable = operation.id in executable_ids %}
+            {% set automatic = operation.id in automatic_ids %}
+            {% set ai_suggestion = ai_suggestions.get(operation.id) %}
+            <div class="cleaning-operation" data-decision-card>
+                <div class="cleaning-operation-main">
+                    <span style="flex:1">
+                    <span class="cleaning-operation-title">
+                        <strong>{{ operation_labels.get(operation.operation, operation.operation) }}</strong>
+                        {% if operation.column %}<span class="badge badge-gray">{{ operation.column }}</span>{% endif %}
+                        {% if automatic %}
+                            <span class="badge badge-green">Recomendada</span>
+                        {% elif executable and operation.decision == 'ai_analysis' %}
+                            <span class="badge badge-purple">Configuración manual disponible</span>
+                        {% elif executable %}
+                            <span class="badge badge-yellow">Requiere configuración</span>
+                        {% else %}
+                            <span class="badge badge-purple">Necesita IA</span>
+                        {% endif %}
+                    </span>
+                    <span class="cleaning-operation-reason">
+                        {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
+                    </span>
+                    </span>
+                </div>
+
+                {% if ai_suggestion %}
+                <div class="ai-recommendation">
+                    <div class="ai-recommendation-heading">
+                        <span><i class="bi bi-stars"></i> Recomendación IA</span>
+                        {% if ai_suggestion.recommendation == 'apply' %}
+                        <span class="badge badge-green">Aplicar</span>
+                        {% elif ai_suggestion.recommendation == 'keep' %}
+                        <span class="badge badge-gray">Conservar</span>
+                        {% else %}
+                        <span class="badge badge-yellow">Revisión humana</span>
+                        {% endif %}
+                        <span class="ai-confidence">{{ (ai_suggestion.confidence * 100)|round|int }}% confianza</span>
+                    </div>
+                    <p>{{ ai_suggestion.rationale }}</p>
+                    {% if ai_suggestion.parameters %}
+                    <div class="ai-parameters">
+                        Parámetros sugeridos:
+                        {% for name, value in ai_suggestion.parameters.items() %}
+                        <code>{{ name }}={{ value }}</code>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="cleaning-decision-question">
+                    <strong>
+                        {% if operation.operation == 'handle_missing' %}
+                            ¿Enviar estas filas a cuarentena?
+                        {% elif operation.operation == 'remove_exact_duplicates' %}
+                            ¿Eliminar los duplicados detectados?
+                        {% else %}
+                            ¿Aplicar esta sugerencia?
+                        {% endif %}
+                    </strong>
+                    <div class="cleaning-decision-options">
+                        {% if executable %}
+                        <label class="decision-option is-yes">
+                            <input type="radio" name="decision:{{ operation.id }}" value="apply" data-operation-decision>
+                            <span><i class="bi bi-check-lg"></i> Sí, aplicar</span>
+                        </label>
+                        {% endif %}
+                        <label class="decision-option is-no">
+                            <input type="radio" name="decision:{{ operation.id }}" value="keep" data-operation-decision>
+                            <span><i class="bi bi-x-lg"></i> No, conservar</span>
+                        </label>
+                    </div>
+                    {% if not executable %}
+                    <small>Por ahora puedes conservar los datos y cerrar la sugerencia, o dejarla sin responder para analizarla después.</small>
+                    {% endif %}
+                </div>
+
+                {% if executable %}
+                <div class="cleaning-configuration" data-operation-configuration {% if automatic %}hidden{% endif %}>
+                    {% if not automatic %}
+                    <div class="cleaning-configuration-heading">
+                        <i class="bi bi-sliders"></i>
+                        Configuración de la regla
+                        <small>Al modificar una opción se seleccionará “Sí, aplicar”.</small>
+                    </div>
+                    {% endif %}
+                    {% if operation.operation == 'cast_type' %}
+                    <label>
+                        <span>Formato numérico</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:decimal_separator">
+                            <option value="," {{ 'selected' if operation.parameters.get('decimal_separator') == ',' }}>1.234,56 — coma decimal</option>
+                            <option value="." {{ 'selected' if operation.parameters.get('decimal_separator') == '.' }}>1,234.56 — punto decimal</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'parse_date' %}
+                    <label>
+                        <span>Formato de fecha</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:date_format">
+                            <option value="%d/%m/%Y" {{ 'selected' if operation.parameters.get('date_format') == '%d/%m/%Y' }}>Día/Mes/Año — admite hora opcional</option>
+                            <option value="%m/%d/%Y" {{ 'selected' if operation.parameters.get('date_format') == '%m/%d/%Y' }}>Mes/Día/Año — admite hora opcional</option>
+                            <option value="%Y-%m-%d" {{ 'selected' if operation.parameters.get('date_format') == '%Y-%m-%d' }}>Año-Mes-Día — admite hora opcional</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'normalize_case' %}
+                    <label>
+                        <span>Normalización de texto</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:case_style">
+                            <option value="lower">Convertir todo a minúsculas</option>
+                            <option value="upper">Convertir todo a MAYÚSCULAS</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'normalize_phone' %}
+                    <label>
+                        <span>Normalización de teléfono</span>
+                        <select class="form-control" name="parameter:{{ operation.id }}:phone_style">
+                            <option value="digits">Conservar únicamente dígitos</option>
+                            <option value="keep_plus">Conservar prefijo + y dígitos</option>
+                        </select>
+                    </label>
+                    {% elif operation.operation == 'handle_missing' %}
+                    <span><i class="bi bi-box-arrow-right"></i> Las filas se separarán en un archivo de cuarentena descargable.</span>
+                    {% elif operation.operation == 'remove_exact_duplicates' %}
+                    <span><i class="bi bi-files"></i> Se conservará una sola copia de cada fila idéntica.</span>
+                    {% else %}
+                    <span><i class="bi bi-check-circle"></i> La regla se aplicará con los parámetros seguros detectados.</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="cleaning-submit">
+            <div>
+                <strong>Solo se procesarán las sugerencias respondidas.</strong>
+                <span>Las que dejes sin responder seguirán pendientes; todavía no se modificará ningún dato.</span>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-eye"></i> Revisar decisiones seleccionadas
+            </button>
+        </div>
+
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon"><i class="bi bi-check2-circle"></i></div>
+            <div class="empty-title">No tienes decisiones pendientes</div>
+            <div class="empty-desc">Las sugerencias detectadas ya fueron aplicadas o revisadas.</div>
+        </div>
+        {% endif %}
+    </div>
+</form>
+
+<style>
+.cleaning-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.cleaning-summary-item{padding:13px;border-radius:10px}.cleaning-summary-item strong{display:block;font-size:20px}.cleaning-summary-item span{font-size:12px;color:var(--gray-600)}
+.cleaning-summary-item.is-automatic{background:#F0FDF4}.cleaning-summary-item.is-automatic strong{color:#15803D}
+.cleaning-summary-item.is-review{background:#FFF7ED}.cleaning-summary-item.is-review strong{color:#C2410C}
+.cleaning-summary-item.is-ai{background:var(--purple-soft)}.cleaning-summary-item.is-ai strong{color:var(--purple)}
+.cleaning-operation-list{display:flex;flex-direction:column;gap:10px}
+.cleaning-operation{padding:14px;border:1px solid var(--gray-200);border-radius:10px;background:white}
+.cleaning-operation-main{display:flex;gap:12px}
+.cleaning-operation-title{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cleaning-operation-reason{display:block;color:var(--gray-500);font-size:13px;margin-top:5px}
+.ai-analysis-card{display:flex;justify-content:space-between;align-items:center;gap:24px;background:linear-gradient(135deg,#FAF5FF,#FFFFFF)}.ai-analysis-copy p{margin:0 0 5px;color:var(--gray-600);font-size:13px;max-width:780px}.ai-analysis-copy small{color:var(--gray-500)}.ai-analysis-card form{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:0 0 auto}.ai-analysis-card button:disabled{opacity:.55;cursor:not-allowed}.ai-analysis-empty{font-size:11px;color:var(--gray-500)}
+.ai-recommendation{margin-top:12px;padding:11px 12px;border:1px solid #DDD6FE;border-radius:9px;background:#FAF5FF}.ai-recommendation-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--purple)}.ai-confidence{margin-left:auto;color:var(--gray-500);font-weight:500}.ai-recommendation p{margin:7px 0 0;color:var(--gray-700);font-size:13px}.ai-parameters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;color:var(--gray-500);font-size:11px}.ai-parameters code{padding:2px 5px;border-radius:4px;background:white;color:var(--gray-700)}
+.cleaning-decision-question{margin-top:13px;padding-top:12px;border-top:1px solid var(--gray-100)}
+.cleaning-decision-question>strong{display:block;font-size:13px;margin-bottom:9px}.cleaning-decision-question small{display:block;color:var(--gray-500);margin-top:8px}
+.cleaning-decision-options{display:flex;gap:8px;flex-wrap:wrap}.decision-option{cursor:pointer}.decision-option input{position:absolute;opacity:0;pointer-events:none}.decision-option span{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);font-size:12px;font-weight:600;transition:var(--transition)}
+.decision-option input:focus-visible+span{outline:2px solid var(--purple);outline-offset:2px}.decision-option.is-yes input:checked+span{border-color:#86EFAC;background:#F0FDF4;color:#15803D}.decision-option.is-no input:checked+span{border-color:var(--gray-300);background:var(--gray-100);color:var(--gray-800)}
+.cleaning-configuration{margin:12px 0 0;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
+.cleaning-configuration-heading{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:#9A3412;font-weight:700}.cleaning-configuration-heading small{margin-left:auto;color:var(--gray-500);font-weight:400}
+.cleaning-configuration label{display:grid;grid-template-columns:minmax(150px,220px) minmax(220px,420px);align-items:center;gap:12px;font-weight:600}
+.cleaning-configuration .form-control{margin:0;background:white}
+.cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
+.cleaning-submit span{display:block;color:var(--gray-500);font-size:12px;margin-top:3px}
+.resolved-decisions{padding:0}.resolved-decisions>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.resolved-decisions>summary::-webkit-details-marker{display:none}.resolved-decisions>summary span:first-child{display:flex;align-items:center;gap:8px}.resolved-decisions>summary i{color:#15803D}.resolved-decision-list{padding:0 20px 16px}.resolved-decision{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--gray-100)}.resolved-no-longer-detected{color:#15803D;font-size:11px;white-space:nowrap}
+@media(max-width:800px){.ai-analysis-card{align-items:stretch;flex-direction:column}.ai-analysis-card form{align-items:stretch}.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-decision-card]').forEach(card => {
+    const configuration = card.querySelector('[data-operation-configuration]');
+    if (!configuration) return;
+    configuration.querySelectorAll('select, input').forEach(input => {
+        input.addEventListener('change', () => {
+            const apply = card.querySelector('[data-operation-decision][value="apply"]');
+            if (apply) apply.checked = true;
+        });
+    });
+});
+</script>
+{% endblock %}

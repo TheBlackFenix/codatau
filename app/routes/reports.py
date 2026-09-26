@@ -1,11 +1,21 @@
-import os
 import io
-from flask import Blueprint, render_template, send_file, abort
+import os
+import uuid
+
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    send_file,
+    url_for,
+)
 from flask_login import login_required, current_user
+from werkzeug.utils import secure_filename
+
 from app.models.file_upload import FileUpload
-from app.models.ai_insight import AIInsight
-from app.services.data_service import DataService
-from flask import current_app
+from app.services.dataset_pipeline import DatasetPipeline
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -34,17 +44,36 @@ def download(file_id):
         record.filename
     )
 
-    if not os.path.exists(filepath):
-        abort(404)
-
-    df = DataService.read_file(filepath)
-    df = DataService.clean_dataframe(df)
+    pipeline = DatasetPipeline(
+        current_app.config['ANALYTICS_FOLDER'],
+        current_app.config['PROFILE_SAMPLE_SIZE'],
+    )
+    try:
+        df = pipeline.load_dataframe_or_source(
+            record.active_stored_filename,
+            filepath,
+        )
+    except Exception as error:
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo descargar el archivo %s: %s',
+            reference,
+            record.id,
+            error,
+        )
+        flash(
+            'El archivo procesado no está disponible para descarga. '
+            f'Referencia: {reference}.',
+            'danger',
+        )
+        return redirect(url_for('reports.index'))
 
     buffer = io.BytesIO()
     df.to_csv(buffer, index=False, encoding='utf-8-sig')
     buffer.seek(0)
 
-    download_name = f"procesado_{record.original_name.rsplit('.', 1)[0]}.csv"
+    base_name = secure_filename(record.original_name.rsplit('.', 1)[0]) or 'archivo'
+    download_name = f"procesado_{base_name}.csv"
 
     return send_file(
         buffer,

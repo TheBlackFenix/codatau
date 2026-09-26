@@ -1,21 +1,40 @@
+import os
+
 from flask import Flask, redirect, url_for, render_template
 from flask_login import current_user
 from app.config import config
-from app.extensions import db, login_manager, csrf
+from app.extensions import db, login_manager, csrf, migrate
 
 
-def create_app(config_name='default'):
+def create_app(config_name='default', config_overrides=None):
+    if config_name not in config:
+        raise ValueError(f'Configuración desconocida: {config_name}')
+
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+    if config_overrides:
+        app.config.update(config_overrides)
+
+    if config_name == 'production':
+        missing = [
+            name for name in ('SECRET_KEY', 'SQLALCHEMY_DATABASE_URI')
+            if not app.config.get(name)
+        ]
+        if missing:
+            raise RuntimeError(
+                'Faltan variables requeridas para producción: ' + ', '.join(missing)
+            )
 
     # Inicializar extensiones
     db.init_app(app)
+    migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
 
-    # Crear carpeta de uploads si no existe
-    import os
+    # Crear carpetas de datos si no existen
+    os.makedirs(app.instance_path, exist_ok=True)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['ANALYTICS_FOLDER'], exist_ok=True)
 
     # Registrar blueprints
     from app.routes.auth import auth_bp
@@ -29,11 +48,21 @@ def create_app(config_name='default'):
     app.register_blueprint(reports_bp)
 
     # Importar modelos para que SQLAlchemy los registre
-    from app.models import User, FileUpload, AIInsight
+    from app.models import (
+        AIInsight,
+        AIAnalysisRun,
+        CleaningDecision,
+        DashboardConfiguration,
+        DatasetVersion,
+        FileUpload,
+        User,
+    )
 
-    # Crear tablas de la base de datos
-    with app.app_context():
-        db.create_all()
+    # Las pruebas conservan una base efímera autocontenida. En desarrollo y
+    # producción el esquema se administra exclusivamente con `flask db upgrade`.
+    if app.config.get('AUTO_CREATE_DATABASE'):
+        with app.app_context():
+            db.create_all()
 
     # Ruta raíz
     @app.route('/')

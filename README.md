@@ -12,6 +12,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
 [![pandas](https://img.shields.io/badge/pandas-2.x-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org)
+[![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
 [![SQLite](https://img.shields.io/badge/SQLite-3.x-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384?style=for-the-badge&logo=chartdotjs&logoColor=white)](https://chartjs.org)
 
@@ -72,7 +73,7 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 ```
 1. Sube tu archivo CSV o Excel
          ↓
-2. La IA lo analiza automáticamente
+2. El motor lo analiza automáticamente
          ↓
 3. Visualiza gráficas, insights y descarga el reporte limpio
 ```
@@ -92,13 +93,21 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 
 ### 📁 Gestión de Archivos
 - [x] Carga de archivos `.csv`, `.xls`, `.xlsx` (hasta 50 MB)
+- [x] Detección de separadores CSV y errores de carga accionables
 - [x] Nombres únicos UUID para evitar colisiones
 - [x] Vista de todos los archivos con acciones: ver, activar, eliminar
 - [x] Eliminación de archivos (físico + registro en BD)
 
-### 🧪 Procesamiento con IA (pandas)
+### 🧪 Procesamiento de datos (pandas + DuckDB)
 - [x] Lectura automática con detección de encoding (UTF-8 / Latin-1)
 - [x] Limpieza automática: eliminar filas/columnas vacías, strip de texto
+- [x] Persistencia analítica en Parquet comprimido con Zstandard
+- [x] Perfil estructurado con tipos, nulos, cardinalidad, duplicados y muestra
+- [x] Inferencia semántica y plan de limpieza seguro (`automatic` / revisión / IA)
+- [x] Vista previa, aprobación por operación y versiones reversibles
+- [x] Configuración interactiva de fechas, teléfonos, texto y separadores regionales
+- [x] Cuarentena descargable para filas que no superan una validación
+- [x] Flujo de limpieza accesible desde navegación, dashboard, análisis y archivos
 - [x] Detección de valores nulos y filas duplicadas
 - [x] Cálculo de estadísticas: suma, promedio, mínimo, máximo por columna
 - [x] Generación de datos para gráficas (promedios, agrupaciones)
@@ -114,12 +123,14 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 - [x] Tabla de resumen estadístico
 - [x] Vista previa de las primeras 10 filas
 
-### 🤖 Insights IA
+### 🤖 Insights automáticos (base para IA)
 - [x] Identificación automática del tipo de archivo
 - [x] Sugerencias de mejora categorizadas (success / warning / danger / info)
 - [x] Alertas de calidad: nulos, duplicados, filas insuficientes
 - [x] Análisis de valores extremos por columna numérica
 - [x] Insights persistentes en base de datos
+- [x] Análisis IA bajo demanda para limpiezas ambiguas, con muestras anonimizadas
+- [x] Proveedores intercambiables, JSON validado, auditoría y caché por contexto
 
 ### 📄 Reportes
 - [x] Listado completo de archivos con métricas
@@ -135,10 +146,10 @@ Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), 
 | **Lenguaje** | Python | 3.13 |
 | **Framework web** | Flask | 3.x |
 | **ORM** | SQLAlchemy | 3.x |
-| **Base de datos** | SQLite | 3.x |
+| **Base de datos y migraciones** | SQLite + SQLAlchemy + Alembic | 3.x / 2.x / 1.x |
 | **Autenticación** | Flask-Login + Werkzeug | — |
 | **Formularios** | Flask-WTF | — |
-| **Procesamiento datos** | pandas + openpyxl | 2.x |
+| **Procesamiento datos** | pandas + DuckDB + Parquet | 2.2 / 1.5 / — |
 | **Frontend CSS** | Sistema propio (Inter) | — |
 | **Gráficas** | Chart.js | 4.4.1 |
 | **Iconos** | Bootstrap Icons | 1.11.0 |
@@ -172,7 +183,8 @@ CoDataU implementa el patrón **MVC** con **Application Factory** de Flask:
 │             │                                            │
 │  ┌──────────▼──────────────────────────────────────┐    │
 │  │                   SERVICES                       │    │
-│  │  DataService │ ValidationService │ AIService     │    │
+│  │ DataService │ DatasetPipeline │ StorageService   │    │
+│  │ ValidationService │ AIService                      │    │
 │  └──────────┬──────────────────────────────────────┘    │
 │             │                                            │
 │  ┌──────────▼──────────────────────────────────────┐    │
@@ -183,8 +195,8 @@ CoDataU implementa el patrón **MVC** con **Application Factory** de Flask:
               │
 ┌─────────────▼───────────────────────────────────────────┐
 │                       DATOS                              │
-│        SQLite (instance/pymes_ai.db)                     │
-│        Archivos subidos (uploads/)                       │
+│ SQLite (usuarios/metadatos) │ uploads/ (originales)      │
+│ artifacts/ (Parquet canónico + perfil JSON)              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -195,17 +207,19 @@ Usuario sube archivo
        ↓
 Flask-WTF valida el formulario + tipo de archivo
        ↓
-Archivo guardado con nombre UUID único en uploads/
+Original inmutable guardado con nombre UUID en uploads/
        ↓
 DataService.read_file() → pandas lee CSV/XLS/XLSX
        ↓
 ValidationService.validate_file() → detecta errores
        ↓
-DataService.clean_dataframe() → limpia datos
+DataService.clean_dataframe() → normaliza datos
        ↓
-DataService.get_summary() → calcula estadísticas
+DatasetPipeline → DuckDB escribe Parquet y genera el perfil
        ↓
-AIService.generate_insights() → genera insights IA
+La aplicación consulta el Parquet; la IA podrá consumir perfil + muestra
+       ↓
+AIService.generate_insights() → genera insights basados en reglas
        ↓
 FileUpload + AIInsight guardados en SQLite
        ↓
@@ -228,6 +242,7 @@ pymes_ai/
 │   │   ├── __init__.py
 │   │   ├── user.py              # Modelo User
 │   │   ├── file_upload.py       # Modelo FileUpload
+│   │   ├── dataset_version.py   # Versiones de limpieza reversibles
 │   │   └── ai_insight.py        # Modelo AIInsight
 │   │
 │   ├── routes/
@@ -238,6 +253,9 @@ pymes_ai/
 │   │
 │   ├── services/
 │   │   ├── data_service.py      # Procesamiento con pandas
+│   │   ├── dataset_pipeline.py  # Parquet y perfilado con DuckDB
+│   │   ├── cleaning_executor.py # Vista previa y ejecución SQL controlada
+│   │   ├── storage_service.py   # Abstracción de almacenamiento local
 │   │   ├── validation_service.py # Validación de calidad
 │   │   └── ai_service.py        # Generación de insights IA
 │   │
@@ -271,14 +289,19 @@ pymes_ai/
 │           └── logo_full.png    # Logo horizontal
 │
 ├── instance/
-│   └── pymes_ai.db              # Base de datos SQLite (auto-generada)
+│   └── pymes_ai.db              # Base de datos SQLite administrada por Alembic
 │
 ├── uploads/                     # Archivos subidos por usuarios
+├── artifacts/                   # Parquet y perfiles (auto-generados)
+├── docs/architecture/           # Decisiones técnicas del pipeline
 │
 ├── .env                         # Variables de entorno (NO subir a Git)
 ├── .env.example                 # Plantilla de variables de entorno
 ├── .gitignore
 ├── requirements.txt
+├── requirements-dev.txt         # Dependencias de pruebas
+├── pytest.ini                   # Configuración de pytest
+├── tests/                       # Pruebas automatizadas
 ├── run.py                       # Punto de entrada
 └── README.md
 ```
@@ -289,14 +312,14 @@ pymes_ai/
 
 ### Prerrequisitos
 
-- Python 3.10 o superior
+- Python 3.10 o superior (probado también con Python 3.14)
 - pip
 - Git
 
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/kevinsarmiento/codatau.git
+git clone https://github.com/TheBlackFenix/codatau.git
 cd codatau
 ```
 
@@ -316,6 +339,13 @@ source venv/bin/activate
 
 ```bash
 pip install -r requirements.txt
+```
+
+Para desarrollo y pruebas:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
 ```
 
 ### 4. Configurar variables de entorno
@@ -339,11 +369,25 @@ SECRET_KEY=tu-clave-secreta-muy-larga-y-segura
 DATABASE_URL=sqlite:///pymes_ai.db
 MAX_CONTENT_LENGTH=52428800
 UPLOAD_FOLDER=uploads
+ANALYTICS_FOLDER=artifacts
+PROFILE_SAMPLE_SIZE=12
+AI_PROVIDER=disabled
+AI_MODEL=
+AI_API_KEY=
+AI_BASE_URL=https://api.openai.com/v1
 ```
 
 > ⚠️ **Nunca subas el archivo `.env` a GitHub.** Ya está incluido en `.gitignore`.
 
 ### 5. Ejecutar la aplicación
+
+Inicializa o actualiza el esquema de base de datos:
+
+```bash
+python -m flask --app run.py db upgrade
+```
+
+Luego inicia la aplicación:
 
 ```bash
 python run.py
@@ -351,7 +395,12 @@ python run.py
 
 La aplicación estará disponible en: **http://127.0.0.1:5000**
 
-La base de datos se crea automáticamente en `instance/pymes_ai.db` al primer arranque.
+El arranque comprueba que el puerto esté libre. Si ya existe otra instancia de
+CoDataU, se detiene con un mensaje explícito en lugar de servir versiones distintas
+de la aplicación sobre el mismo puerto.
+
+La base de datos se administra mediante migraciones de Alembic. El comando
+`db upgrade` crea una base nueva o adopta de forma segura una instalación anterior.
 
 ---
 
@@ -365,7 +414,8 @@ La base de datos se crea automáticamente en `instance/pymes_ai.db` al primer ar
 4. Ve a **Archivos** y sube tu primer CSV o Excel
 5. Explora el **Dashboard** con las gráficas automáticas
 6. Visita **Análisis** para ver los insights generados por IA
-7. Desde **Reportes** descarga el archivo procesado y limpio
+7. En **Limpieza**, selecciona reglas, configura decisiones regionales y revisa la vista previa
+8. Aprueba una versión y desde **Reportes** descarga el archivo limpio
 
 ### Formatos de archivo soportados
 
@@ -388,7 +438,8 @@ python run.py
 # Reiniciar la base de datos (borra todos los datos)
 del instance\pymes_ai.db       # Windows
 rm instance/pymes_ai.db        # macOS/Linux
-# Luego vuelve a ejecutar python run.py
+# Luego ejecuta: python -m flask --app run.py db upgrade
+# Y finalmente: python run.py
 ```
 
 ---
@@ -416,7 +467,7 @@ rm instance/pymes_ai.db        # macOS/Linux
 | POST | `/auth/login` | Procesar inicio de sesión | ❌ |
 | GET | `/auth/register` | Formulario de registro | ❌ |
 | POST | `/auth/register` | Procesar registro | ❌ |
-| GET | `/auth/logout` | Cerrar sesión | ✅ |
+| POST | `/auth/logout` | Cerrar sesión | ✅ |
 | GET | `/auth/bienvenida` | Página de bienvenida | ✅ |
 | GET | `/auth/perfil` | Editar perfil | ✅ |
 | POST | `/auth/perfil` | Guardar perfil | ✅ |
@@ -426,6 +477,14 @@ rm instance/pymes_ai.db        # macOS/Linux
 | GET | `/files/upload` | Vista de archivos | ✅ |
 | POST | `/files/upload` | Cargar archivo | ✅ |
 | GET | `/files/results/<id>` | Resultados de un archivo | ✅ |
+| GET | `/files/profile/<id>` | Perfil analítico estructurado | ✅ |
+| GET | `/files/cleaning/<id>` | Plan y versiones de limpieza | ✅ |
+| POST | `/files/cleaning/<id>/ai-analysis` | Analizar casos ambiguos sin modificar datos | ✅ |
+| GET | `/files/cleaning` | Abrir limpieza del archivo activo | ✅ |
+| POST | `/files/cleaning/<id>/preview` | Vista previa de operaciones | ✅ |
+| POST | `/files/cleaning/<id>/apply` | Crear una nueva versión | ✅ |
+| POST | `/files/cleaning/<id>/activate/<version>` | Activar o revertir versión | ✅ |
+| GET | `/files/cleaning/<id>/quarantine/<version>` | Descargar cuarentena | ✅ |
 | GET | `/files/select/<id>` | Activar archivo en dashboard | ✅ |
 | POST | `/files/delete/<id>` | Eliminar archivo | ✅ |
 | GET | `/files/insights` | Análisis IA | ✅ |
@@ -510,19 +569,27 @@ Este proyecto fue desarrollado como **Proyecto de Grado de Décimo Semestre** en
 
 ## 📚 Documentación
 
-La documentación completa del proyecto está disponible en la carpeta `/docs` del repositorio:
-
-- 📄 `Entrega1_Avance_Prototipo_CoDataU.docx` — Definición y diseño inicial
-- 📄 `Entrega2_MVP_Funcional_CoDataU.docx` — Desarrollo del MVP
-- 📄 `Entrega3_Final_CoDataU.docx` — Informe técnico final
-- 📘 `Manual_Usuario_CoDataU.docx` — Guía de uso para usuarios finales
-- 🔧 `Manual_Tecnico_CoDataU.docx` — Guía técnica para desarrolladores
+Este README contiene la guía funcional general. La decisión y evolución del
+pipeline analítico se documentan en
+[`docs/architecture/data-pipeline.md`](docs/architecture/data-pipeline.md). El
+contrato del motor de limpieza está en
+[`docs/architecture/semantic-cleaning.md`](docs/architecture/semantic-cleaning.md)
+y la capa intercambiable de proveedores de IA en
+[`docs/architecture/ai-integration.md`](docs/architecture/ai-integration.md). La
+operación y adopción del esquema están en
+[`docs/architecture/database-migrations.md`](docs/architecture/database-migrations.md).
 
 ---
 
 ## 🚀 Roadmap — Próximas funcionalidades
 
-- [ ] Integración con **OpenAI / Claude API** para asistente conversacional real
+- [x] Perfilado semántico y propuestas estructuradas de limpieza
+- [x] Ejecutor inicial con vista previa, aprobación y trazabilidad
+- [x] Parámetros interactivos para fechas, teléfonos y separadores regionales
+- [x] Análisis de casos ambiguos mediante IA
+- [ ] Evals de calidad por proveedor y presupuesto por usuario
+- [ ] Consultas y visualizaciones ejecutadas directamente en DuckDB
+- [ ] Integración con almacenamiento de objetos (S3 compatible)
 - [ ] Procesamiento asíncrono con **Celery + Redis** para archivos muy grandes
 - [ ] Gráficas avanzadas: correlaciones, series de tiempo, mapas de calor
 - [ ] Soporte para archivos **JSON**

@@ -1,11 +1,13 @@
 # Entorno virtual
 venv/
+.venv/
 
 # Base de datos
 instance/
 
 # Archivos subidos por usuarios
 uploads/
+artifacts/
 
 # Variables de entorno (NUNCA subir)
 .env
@@ -16,6 +18,15 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+.pytest_cache/
+.pytest-tmp/
+.coverage
+htmlcov/
+
+# Artefactos locales de generación y revisión documental
+.codex-finalizer/
+.tmp/
+output/
 
 # VS Code
 .vscode/

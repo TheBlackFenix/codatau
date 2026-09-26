@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.13', '3.14']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Compile Python sources
+        run: python -m compileall -q app run.py
+
+      - name: Validate database migrations
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/codatau-ci.db
+        run: |
+          python -m flask --app run.py db upgrade
+          python -m flask --app run.py db check
+
+      - name: Run tests
+        run: python -m pytest
