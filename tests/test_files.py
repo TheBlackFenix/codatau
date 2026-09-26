@@ -94,6 +94,28 @@ class _RouteDatasetContextProvider:
         )
 
 
+class _RouteSemanticContextProvider:
+    def generate_json(self, _instructions, _payload, _schema):
+        return AIProviderResult(
+            data={
+                'domain': 'Envíos y mensajería',
+                'description': 'Registros de paquetes con dimensiones físicas.',
+                'confidence': 0.96,
+                'column_roles': [
+                    {
+                        'column': 'alto',
+                        'role': 'dimension',
+                        'description': 'Altura física del paquete.',
+                        'aggregate': True,
+                        'suggested_constraints': ['positive'],
+                    },
+                ],
+            },
+            input_tokens=90,
+            output_tokens=28,
+        )
+
+
 def test_csv_flow_from_upload_to_download(app, client, auth):
     _login(auth)
 
@@ -841,6 +863,47 @@ def test_user_can_replace_invalid_cells_and_keep_complete_rows(app, client, auth
         assert decisions['nombre:handle_missing'].parameters[
             'replacement_value'
         ] == 'No tiene'
+
+
+def test_semantic_context_proposes_actionable_positive_range_rule(
+    app,
+    client,
+    auth,
+):
+    _login(auth)
+    app.config.update(
+        AI_PROVIDER='openai_compatible',
+        AI_MODEL='test-model',
+        AI_BASE_URL='http://provider.test/v1',
+    )
+    source = b'guia,alto\n1,-10\n2,20\n3,30\n'
+    with patch(
+        'app.services.dataset_context_service.AIProviderFactory.create',
+        return_value=_RouteSemanticContextProvider(),
+    ):
+        client.post(
+            '/files/upload',
+            data={'file': (BytesIO(source), 'envios.csv')},
+            content_type='multipart/form-data',
+        )
+
+    plan = client.get('/files/cleaning/1')
+    assert plan.status_code == 200
+    assert b'alto:validate_range:positive' in plan.data
+    assert 'debe ser mayor que cero'.encode() in plan.data
+    assert b'parameter:alto:validate_range:positive:invalid_action' in plan.data
+
+    preview = client.post(
+        '/files/cleaning/1/preview',
+        data={
+            'decision:alto:validate_range:positive': 'apply',
+            'parameter:alto:validate_range:positive:invalid_action': 'set_null',
+        },
+    )
+    assert preview.status_code == 200
+    assert b'3</div><div class="stat-label">Filas resultantes' in preview.data
+    assert b'0</div><div class="stat-label">Filas separadas' in preview.data
+    assert 'Sí, dejar celdas nulas'.encode() in preview.data
 
 
 def test_ai_flagged_date_can_be_configured_manually(app, client, auth):

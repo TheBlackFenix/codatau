@@ -85,6 +85,7 @@ class CleaningExecutor:
         'parse_date',
         'remove_exact_duplicates',
         'validate_email',
+        'validate_range',
     }
     SUPPORTED_MANUAL_AI = {
         'cast_type',
@@ -150,12 +151,12 @@ class CleaningExecutor:
             # The user's Apply/Keep decision is the only required parameter.
             # Unknown values are quarantined by the allow-listed transformation.
             pass
-        elif name in {'handle_missing', 'validate_email'}:
+        elif name in {'handle_missing', 'validate_email', 'validate_range'}:
             action = overrides.get('invalid_action') or parameters.get(
                 'invalid_action'
             )
             allowed_actions = {'quarantine_rows', 'replace_value'}
-            if name == 'validate_email':
+            if name in {'validate_email', 'validate_range'}:
                 allowed_actions.add('set_null')
             if action not in allowed_actions:
                 raise CleaningPlanError(
@@ -397,6 +398,30 @@ class CleaningExecutor:
                 )
                 return transformed, None, invalid
             raise CleaningPlanError('La estrategia para correos inválidos no es válida.')
+        if name == 'validate_range':
+            constraint = parameters.get('constraint')
+            threshold = parameters.get('threshold')
+            if constraint not in {'positive', 'non_negative'} or threshold != 0:
+                raise CleaningPlanError('La restricción numérica no es válida.')
+            comparison = '<= 0' if constraint == 'positive' else '< 0'
+            invalid = f'{current} IS NOT NULL AND {current} {comparison}'
+            action = parameters.get('invalid_action', 'quarantine_rows')
+            if action == 'quarantine_rows':
+                return current, invalid, None
+            if action == 'set_null':
+                transformed = f'CASE WHEN {invalid} THEN NULL ELSE {current} END'
+                return transformed, None, invalid
+            if action == 'replace_value':
+                replacement = parameters.get('replacement_value')
+                if not isinstance(replacement, str) or not replacement:
+                    raise CleaningPlanError('El valor de reemplazo no es válido.')
+                transformed = (
+                    f'CASE WHEN {invalid} THEN '
+                    f'cast_to_type({_sql_literal(replacement)}, {current}) '
+                    f'ELSE {current} END'
+                )
+                return transformed, None, invalid
+            raise CleaningPlanError('La estrategia para valores fuera de rango no es válida.')
         if name == 'parse_date':
             date_format = parameters.get('date_format', '%Y-%m-%d')
             if date_format not in CleaningExecutor.DATE_FORMATS:

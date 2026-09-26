@@ -43,6 +43,7 @@ OPERATION_CATALOG = frozenset(
         'review_invalid_values',
         'trim_text',
         'validate_email',
+        'validate_range',
     }
 )
 

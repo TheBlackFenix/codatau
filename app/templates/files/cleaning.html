@@ -247,7 +247,7 @@
                             <select class="form-control" name="parameter:{{ operation.id }}:invalid_action" data-invalid-action>
                                 <option value="quarantine_rows" {{ 'selected' if operation.parameters.get('invalid_action') == 'quarantine_rows' }}>Separar la fila en cuarentena</option>
                                 <option value="replace_value" {{ 'selected' if operation.parameters.get('invalid_action') == 'replace_value' }}>Conservar la fila y reemplazar la celda</option>
-                                {% if operation.operation == 'validate_email' %}
+                                {% if operation.operation in ['validate_email', 'validate_range'] %}
                                 <option value="set_null" {{ 'selected' if operation.parameters.get('invalid_action') == 'set_null' }}>Conservar la fila y dejar la celda nula</option>
                                 {% endif %}
                             </select>

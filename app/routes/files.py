@@ -32,6 +32,7 @@ from app.services.ai_cleaning_service import AICleaningService
 from app.services.ai_providers import AIProviderError, AIProviderFactory
 from app.services.dataset_context_service import DatasetContextService
 from app.services.dataset_pipeline import DatasetPipeline
+from app.services.semantic_constraint_service import SemanticConstraintService
 from app.services.cleaning_executor import (
     CleaningExecutor,
     CleaningPlanError,
@@ -50,9 +51,14 @@ CLEANING_PARAMETER_FIELDS = {
     'normalize_case': ('case_style',),
     'normalize_phone': ('phone_style',),
     'validate_email': ('invalid_action', 'replacement_value'),
+    'validate_range': ('invalid_action', 'replacement_value'),
 }
 
-INVALID_ACTION_OPERATIONS = {'handle_missing', 'validate_email'}
+INVALID_ACTION_OPERATIONS = {
+    'handle_missing',
+    'validate_email',
+    'validate_range',
+}
 
 CLEANING_OPERATION_LABELS = {
     'blank_to_null': 'Convertir textos vacíos en valores nulos',
@@ -66,11 +72,13 @@ CLEANING_OPERATION_LABELS = {
     'review_invalid_values': 'Revisar valores inválidos con IA',
     'trim_text': 'Eliminar espacios externos',
     'validate_email': 'Resolver correos inválidos',
+    'validate_range': 'Resolver valores fuera del rango esperado',
 }
 
 QUARANTINE_EFFECTS = {
     'handle_missing': 'Las filas con valores vacíos se separarán del resultado.',
     'validate_email': 'Las filas con correos inválidos se separarán del resultado.',
+    'validate_range': 'Las filas con valores fuera del rango se separarán del resultado.',
     'cast_type': 'Los valores que no puedan convertirse a número se separarán del resultado.',
     'parse_date': 'Las fechas que no coincidan con el formato se separarán del resultado.',
     'normalize_boolean': 'Los valores que no representen Sí o No se separarán del resultado.',
@@ -80,6 +88,7 @@ QUARANTINE_EFFECTS = {
 QUARANTINE_REASON_LABELS = {
     'handle_missing': 'Valor faltante',
     'validate_email': 'Correo inválido',
+    'validate_range': 'Valor fuera del rango esperado',
     'cast_type': 'Valor no convertible a número',
     'parse_date': 'Fecha no reconocida',
     'normalize_boolean': 'Valor Sí/No no reconocido',
@@ -138,6 +147,18 @@ def _cleaning_context(record):
         profile_data = pipeline.ensure_current_profile(stored_filename, source_path)
     except OSError:
         abort(404)
+    context_outcome = DatasetContextService.latest(
+        record,
+        profile_data,
+        current_user.id,
+        current_app.config,
+    )
+    if context_outcome:
+        profile_data = SemanticConstraintService.enrich_plan(
+            profile_data,
+            context_outcome.context,
+            source_parquet,
+        )
     return pipeline, stored_filename, source_parquet, profile_data
 
 
