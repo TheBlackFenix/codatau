@@ -519,6 +519,10 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     assert plan_page.status_code == 200
     assert b'email:validate_email' in plan_page.data
     assert b'dataset:remove_exact_duplicates' in plan_page.data
+    assert 'Separar correos inválidos en cuarentena'.encode() in plan_page.data
+    assert 'Sí, separar filas'.encode() in plan_page.data
+    assert b'No, conservar filas' in plan_page.data
+    assert 'Las filas con correos inválidos se separarán del resultado'.encode() in plan_page.data
 
     dashboard = client.get('/dashboard')
     insights = client.get('/files/insights')
@@ -538,6 +542,10 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     assert preview.status_code == 200
     assert b'Vista previa de limpieza' in preview.data
     assert b'invalid-email' in preview.data
+    assert 'fila se separaría'.encode() in preview.data
+    assert 'Correo inválido'.encode() in preview.data
+    assert b'columna email' in preview.data
+    assert b'No, conservar filas' in preview.data
 
     applied = client.post(
         '/files/cleaning/1/apply',
@@ -760,7 +768,7 @@ def test_mixed_yes_no_decisions_apply_only_selected_rules(app, client, auth):
     }
     preview = client.post('/files/cleaning/1/preview', data=decisions)
     assert preview.status_code == 200
-    assert b'S\xc3\xad, aplicar' in preview.data
+    assert 'Sí, separar filas inválidas'.encode() in preview.data
     assert b'No, conservar' in preview.data
 
     applied = client.post(

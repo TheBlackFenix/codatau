@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 {% block title %}Vista previa de limpieza — CoDataU{% endblock %}
 
-{% macro preview_table(rows, empty_message) %}
+{% macro preview_table(rows, empty_message, reason_labels=None) %}
     {% if rows %}
     <div class="table-wrap"><table class="data-table">
-        <thead><tr>{% for column in rows[0].keys() %}<th>{{ column }}</th>{% endfor %}</tr></thead>
-        <tbody>{% for row in rows %}<tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        <thead><tr>{% for column in rows[0].keys() %}<th>{{ 'MOTIVO DE CUARENTENA' if column == '__quarantine_reason' else column }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in rows %}<tr>{% for column, value in row.items() %}<td>{% if column == '__quarantine_reason' and reason_labels %}{% for reason in value.split('; ') %}<span class="badge badge-yellow">{{ reason_labels.get(reason, reason) }}</span>{% if not loop.last %} {% endif %}{% endfor %}{% else %}{{ value }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
     </table></div>
     {% else %}<div class="empty-desc">{{ empty_message }}</div>{% endif %}
 {% endmacro %}
@@ -26,7 +26,7 @@
         (preview.metrics.before_rows, 'Filas iniciales'),
         (preview.metrics.after_rows, 'Filas resultantes'),
         (preview.metrics.changed_rows, 'Filas transformadas'),
-        (preview.metrics.quarantined_rows, 'En cuarentena'),
+        (preview.metrics.quarantined_rows, 'Filas separadas'),
         (preview.metrics.duplicates_removed, 'Duplicados removidos')
     ] %}
     <div class="stat-card" style="padding:14px"><div class="stat-body"><div class="stat-value">{{ value }}</div><div class="stat-label">{{ label }}</div></div></div>
@@ -40,8 +40,26 @@
 
 {% if preview.quarantine %}
 <div class="card" style="margin-bottom:20px;border-color:#FCA5A5">
-    <div class="card-title" style="color:#B91C1C"><i class="bi bi-shield-exclamation"></i> Cuarentena</div>
-    {{ preview_table(preview.quarantine, 'No hay filas en cuarentena.') }}
+    <div class="card-title" style="color:#B91C1C"><i class="bi bi-shield-exclamation"></i>
+        {{ preview.metrics.quarantined_rows }}
+        {% if preview.metrics.quarantined_rows == 1 %}fila se separaría{% else %}filas se separarían{% endif %}
+        en cuarentena
+    </div>
+    <p class="empty-desc" style="margin-bottom:12px">
+        Estas filas se separan únicamente por reglas que marcaste afirmativamente. Las decisiones “No, conservar filas” no generan cuarentena.
+    </p>
+    <div style="margin-bottom:14px">
+        {% for decision in decisions %}
+            {% if decision.choice == 'apply' and decision.operation in quarantine_effects %}
+            <div style="margin:5px 0;color:var(--gray-700);font-size:13px">
+                <i class="bi bi-arrow-right" style="color:#B91C1C"></i>
+                <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>{% if decision.column %} · {{ decision.column }}{% endif %}:
+                {{ quarantine_effects[decision.operation] }}
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {{ preview_table(preview.quarantine, 'No hay filas en cuarentena.', quarantine_reason_labels) }}
 </div>
 {% endif %}
 
@@ -51,9 +69,13 @@
     <div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
         <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>{% if decision.column %} · {{ decision.column }}{% endif %}
         {% if decision.choice == 'apply' %}
-        <span class="badge badge-green" style="margin-left:8px">Sí, aplicar</span>
+        <span class="badge badge-green" style="margin-left:8px">
+            {% if decision.operation in quarantine_effects %}Sí, separar filas inválidas{% else %}Sí, aplicar{% endif %}
+        </span>
         {% else %}
-        <span class="badge badge-gray" style="margin-left:8px">No, conservar</span>
+        <span class="badge badge-gray" style="margin-left:8px">
+            {% if decision.operation in quarantine_effects %}No, conservar filas{% else %}No, conservar{% endif %}
+        </span>
         {% endif %}
     </div>
     {% endfor %}

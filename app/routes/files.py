@@ -60,8 +60,40 @@ CLEANING_OPERATION_LABELS = {
     'remove_exact_duplicates': 'Eliminar filas duplicadas exactas',
     'review_invalid_values': 'Revisar valores inválidos con IA',
     'trim_text': 'Eliminar espacios externos',
-    'validate_email': 'Validar correos electrónicos',
+    'validate_email': 'Separar correos inválidos en cuarentena',
 }
+
+QUARANTINE_EFFECTS = {
+    'handle_missing': 'Las filas con valores vacíos se separarán del resultado.',
+    'validate_email': 'Las filas con correos inválidos se separarán del resultado.',
+    'cast_type': 'Los valores que no puedan convertirse a número se separarán del resultado.',
+    'parse_date': 'Las fechas que no coincidan con el formato se separarán del resultado.',
+    'normalize_boolean': 'Los valores que no representen Sí o No se separarán del resultado.',
+    'normalize_phone': 'Los teléfonos con una longitud inválida se separarán del resultado.',
+}
+
+QUARANTINE_REASON_LABELS = {
+    'handle_missing': 'Valor faltante',
+    'validate_email': 'Correo inválido',
+    'cast_type': 'Valor no convertible a número',
+    'parse_date': 'Fecha no reconocida',
+    'normalize_boolean': 'Valor Sí/No no reconocido',
+    'normalize_phone': 'Teléfono con longitud inválida',
+}
+
+
+def _quarantine_reason_labels(decisions):
+    labels = {}
+    for decision in decisions:
+        operation = decision['operation']
+        label = QUARANTINE_REASON_LABELS.get(operation)
+        if not label:
+            continue
+        column = decision.get('column')
+        if column:
+            label = f'{label} · columna {column}'
+        labels[decision['operation_id']] = label
+    return labels
 
 
 def _pipeline():
@@ -498,6 +530,7 @@ def cleaning(file_id):
             and operation['id'] in executable_ids
         },
         operation_labels=CLEANING_OPERATION_LABELS,
+        quarantine_effects=QUARANTINE_EFFECTS,
         versions=versions,
         resolved_decisions=resolved_decisions,
         current_operation_ids=current_operation_ids,
@@ -637,6 +670,8 @@ def cleaning_preview(file_id):
         decisions=decisions,
         preview=preview,
         operation_labels=CLEANING_OPERATION_LABELS,
+        quarantine_effects=QUARANTINE_EFFECTS,
+        quarantine_reason_labels=_quarantine_reason_labels(decisions),
         form=CleaningActionForm(),
     )
 

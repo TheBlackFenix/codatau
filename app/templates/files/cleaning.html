@@ -156,6 +156,12 @@
                     <span class="cleaning-operation-reason">
                         {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
                     </span>
+                    {% if operation.operation in quarantine_effects %}
+                    <span class="cleaning-operation-impact">
+                        <i class="bi bi-shield-exclamation"></i>
+                        {{ quarantine_effects[operation.operation] }}
+                    </span>
+                    {% endif %}
                     </span>
                 </div>
 
@@ -186,8 +192,8 @@
 
                 <div class="cleaning-decision-question">
                     <strong>
-                        {% if operation.operation == 'handle_missing' %}
-                            ¿Enviar estas filas a cuarentena?
+                        {% if operation.operation in quarantine_effects %}
+                            ¿Separar estas filas del resultado y enviarlas a cuarentena?
                         {% elif operation.operation == 'remove_exact_duplicates' %}
                             ¿Eliminar los duplicados detectados?
                         {% else %}
@@ -198,12 +204,16 @@
                         {% if executable %}
                         <label class="decision-option is-yes">
                             <input type="radio" name="decision:{{ operation.id }}" value="apply" data-operation-decision>
-                            <span><i class="bi bi-check-lg"></i> Sí, aplicar</span>
+                            <span><i class="bi bi-check-lg"></i>
+                                {% if operation.operation in quarantine_effects %}Sí, separar filas{% else %}Sí, aplicar{% endif %}
+                            </span>
                         </label>
                         {% endif %}
                         <label class="decision-option is-no">
                             <input type="radio" name="decision:{{ operation.id }}" value="keep" data-operation-decision>
-                            <span><i class="bi bi-x-lg"></i> No, conservar</span>
+                            <span><i class="bi bi-x-lg"></i>
+                                {% if operation.operation in quarantine_effects %}No, conservar filas{% else %}No, conservar{% endif %}
+                            </span>
                         </label>
                     </div>
                     {% if not executable %}
@@ -302,6 +312,7 @@
 .cleaning-decision-question{margin-top:13px;padding-top:12px;border-top:1px solid var(--gray-100)}
 .cleaning-decision-question>strong{display:block;font-size:13px;margin-bottom:9px}.cleaning-decision-question small{display:block;color:var(--gray-500);margin-top:8px}
 .cleaning-decision-options{display:flex;gap:8px;flex-wrap:wrap}.decision-option{cursor:pointer}.decision-option input{position:absolute;opacity:0;pointer-events:none}.decision-option span{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;color:var(--gray-600);font-size:12px;font-weight:600;transition:var(--transition)}
+.cleaning-operation-impact{display:flex;align-items:flex-start;gap:6px;margin-top:7px;color:#B45309;font-size:12px;font-weight:600}
 .decision-option input:focus-visible+span{outline:2px solid var(--purple);outline-offset:2px}.decision-option.is-yes input:checked+span{border-color:#86EFAC;background:#F0FDF4;color:#15803D}.decision-option.is-no input:checked+span{border-color:var(--gray-300);background:var(--gray-100);color:var(--gray-800)}
 .cleaning-configuration{margin:12px 0 0;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
 .cleaning-configuration-heading{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:#9A3412;font-weight:700}.cleaning-configuration-heading small{margin-left:auto;color:var(--gray-500);font-weight:400}
