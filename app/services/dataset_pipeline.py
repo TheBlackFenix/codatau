@@ -17,7 +17,7 @@ from app.services.semantic_profiler import (
 )
 
 
-PROFILE_VERSION = '1.3'
+PROFILE_VERSION = '1.4'
 
 
 @dataclass(frozen=True)
@@ -216,7 +216,10 @@ class DatasetPipeline:
                             'decision': 'user_review',
                             'affected_rows': null_count,
                             'confidence': 1.0,
-                            'parameters': {'strategy': 'quarantine_rows'},
+                            'parameters': {
+                                'invalid_action': 'quarantine_rows',
+                                'physical_type': type_name,
+                            },
                             'reason': (
                                 'Puedes conservar estas filas o moverlas a cuarentena; '
                                 'no se imputan valores sin una regla de negocio.'

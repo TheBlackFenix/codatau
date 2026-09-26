@@ -159,7 +159,12 @@
                     <span class="cleaning-operation-reason">
                         {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
                     </span>
-                    {% if operation.operation in quarantine_effects %}
+                    {% if operation.operation in invalid_action_operations %}
+                    <span class="cleaning-operation-impact">
+                        <i class="bi bi-sliders"></i>
+                        Puedes conservar la fila y modificar solamente la celda problemática.
+                    </span>
+                    {% elif operation.operation in quarantine_effects %}
                     <span class="cleaning-operation-impact">
                         <i class="bi bi-shield-exclamation"></i>
                         {{ quarantine_effects[operation.operation] }}
@@ -195,7 +200,9 @@
 
                 <div class="cleaning-decision-question">
                     <strong>
-                        {% if operation.operation in quarantine_effects %}
+                        {% if operation.operation in invalid_action_operations %}
+                            ¿Quieres resolver estos valores y elegir su tratamiento?
+                        {% elif operation.operation in quarantine_effects %}
                             ¿Separar estas filas del resultado y enviarlas a cuarentena?
                         {% elif operation.operation == 'remove_exact_duplicates' %}
                             ¿Eliminar los duplicados detectados?
@@ -208,14 +215,14 @@
                         <label class="decision-option is-yes">
                             <input type="radio" name="decision:{{ operation.id }}" value="apply" data-operation-decision>
                             <span><i class="bi bi-check-lg"></i>
-                                {% if operation.operation in quarantine_effects %}Sí, separar filas{% else %}Sí, aplicar{% endif %}
+                                {% if operation.operation in invalid_action_operations %}Sí, configurar solución{% elif operation.operation in quarantine_effects %}Sí, separar filas{% else %}Sí, aplicar{% endif %}
                             </span>
                         </label>
                         {% endif %}
                         <label class="decision-option is-no">
                             <input type="radio" name="decision:{{ operation.id }}" value="keep" data-operation-decision>
                             <span><i class="bi bi-x-lg"></i>
-                                {% if operation.operation in quarantine_effects %}No, conservar filas{% else %}No, conservar{% endif %}
+                                {% if operation.operation in invalid_action_operations %}No, conservar como está{% elif operation.operation in quarantine_effects %}No, conservar filas{% else %}No, conservar{% endif %}
                             </span>
                         </label>
                     </div>
@@ -233,7 +240,27 @@
                         <small>Al modificar una opción se seleccionará “Sí, aplicar”.</small>
                     </div>
                     {% endif %}
-                    {% if operation.operation == 'cast_type' %}
+                    {% if operation.operation in invalid_action_operations %}
+                    <div class="invalid-action-fields">
+                        <label>
+                            <span>Tratamiento</span>
+                            <select class="form-control" name="parameter:{{ operation.id }}:invalid_action" data-invalid-action>
+                                <option value="quarantine_rows" {{ 'selected' if operation.parameters.get('invalid_action') == 'quarantine_rows' }}>Separar la fila en cuarentena</option>
+                                <option value="replace_value" {{ 'selected' if operation.parameters.get('invalid_action') == 'replace_value' }}>Conservar la fila y reemplazar la celda</option>
+                                {% if operation.operation == 'validate_email' %}
+                                <option value="set_null" {{ 'selected' if operation.parameters.get('invalid_action') == 'set_null' }}>Conservar la fila y dejar la celda nula</option>
+                                {% endif %}
+                            </select>
+                        </label>
+                        <label data-replacement-field>
+                            <span>Valor de reemplazo</span>
+                            <input class="form-control" type="text" maxlength="200"
+                                   name="parameter:{{ operation.id }}:replacement_value"
+                                   value="{{ operation.parameters.get('replacement_value', '') }}"
+                                   placeholder="Ejemplo: N/A o No tiene">
+                        </label>
+                    </div>
+                    {% elif operation.operation == 'cast_type' %}
                     <label>
                         <span>Formato numérico</span>
                         <select class="form-control" name="parameter:{{ operation.id }}:decimal_separator">
@@ -266,8 +293,6 @@
                             <option value="keep_plus">Conservar prefijo + y dígitos</option>
                         </select>
                     </label>
-                    {% elif operation.operation == 'handle_missing' %}
-                    <span><i class="bi bi-box-arrow-right"></i> Las filas se separarán en un archivo de cuarentena descargable.</span>
                     {% elif operation.operation == 'remove_exact_duplicates' %}
                     <span><i class="bi bi-files"></i> Se conservará una sola copia de cada fila idéntica.</span>
                     {% else %}
@@ -320,6 +345,7 @@
 .cleaning-configuration{margin:12px 0 0;padding:12px;background:#FFF7ED;border-radius:8px;color:var(--gray-700);font-size:13px}
 .cleaning-configuration-heading{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:#9A3412;font-weight:700}.cleaning-configuration-heading small{margin-left:auto;color:var(--gray-500);font-weight:400}
 .cleaning-configuration label{display:grid;grid-template-columns:minmax(150px,220px) minmax(220px,420px);align-items:center;gap:12px;font-weight:600}
+.invalid-action-fields{display:flex;flex-direction:column;gap:10px}
 .cleaning-configuration .form-control{margin:0;background:white}
 .cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
 .cleaning-submit span{display:block;color:var(--gray-500);font-size:12px;margin-top:3px}
@@ -339,6 +365,15 @@ document.querySelectorAll('[data-decision-card]').forEach(card => {
             if (apply) apply.checked = true;
         });
     });
+    const invalidAction = configuration.querySelector('[data-invalid-action]');
+    const replacementField = configuration.querySelector('[data-replacement-field]');
+    if (invalidAction && replacementField) {
+        const syncReplacement = () => {
+            replacementField.hidden = invalidAction.value !== 'replace_value';
+        };
+        invalidAction.addEventListener('change', syncReplacement);
+        syncReplacement();
+    }
 });
 </script>
 {% endblock %}

@@ -398,10 +398,13 @@ class SemanticProfiler:
             invalid_count = non_blank - stats['email_count']
             add(
                 'validate_email',
-                'automatic',
-                non_blank,
-                'Validar el formato no modifica los correos originales.',
-                {'invalid_action': 'flag'},
+                'user_review',
+                invalid_count,
+                'Elige si quieres conservar, reemplazar o separar los correos inválidos.',
+                {
+                    'invalid_action': 'quarantine_rows',
+                    'physical_type': physical_type,
+                },
             )
             if invalid_count:
                 add(

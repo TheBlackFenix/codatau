@@ -50,7 +50,7 @@
     </p>
     <div style="margin-bottom:14px">
         {% for decision in decisions %}
-            {% if decision.choice == 'apply' and decision.operation in quarantine_effects %}
+            {% if decision.choice == 'apply' and decision.operation in quarantine_effects and (decision.operation not in invalid_action_operations or decision.parameters.get('invalid_action') == 'quarantine_rows') %}
             <div style="margin:5px 0;color:var(--gray-700);font-size:13px">
                 <i class="bi bi-arrow-right" style="color:#B91C1C"></i>
                 <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>{% if decision.column %} · {{ decision.column }}{% endif %}:
@@ -70,11 +70,15 @@
         <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>{% if decision.column %} · {{ decision.column }}{% endif %}
         {% if decision.choice == 'apply' %}
         <span class="badge badge-green" style="margin-left:8px">
-            {% if decision.operation in quarantine_effects %}Sí, separar filas inválidas{% else %}Sí, aplicar{% endif %}
+            {% if decision.operation in invalid_action_operations and decision.parameters.get('invalid_action') == 'replace_value' %}
+                Sí, reemplazar celdas por “{{ decision.parameters.get('replacement_value') }}”
+            {% elif decision.operation in invalid_action_operations and decision.parameters.get('invalid_action') == 'set_null' %}
+                Sí, dejar celdas nulas
+            {% elif decision.operation in quarantine_effects %}Sí, separar filas inválidas{% else %}Sí, aplicar{% endif %}
         </span>
         {% else %}
         <span class="badge badge-gray" style="margin-left:8px">
-            {% if decision.operation in quarantine_effects %}No, conservar filas{% else %}No, conservar{% endif %}
+            {% if decision.operation in invalid_action_operations %}No, conservar como está{% elif decision.operation in quarantine_effects %}No, conservar filas{% else %}No, conservar{% endif %}
         </span>
         {% endif %}
     </div>
@@ -85,7 +89,14 @@
     {{ form.hidden_tag() }}
     {% for decision in decisions %}
     <input type="hidden" name="decision:{{ decision.operation_id }}" value="{{ decision.choice }}">
-    {% if decision.choice == 'apply' and decision.operation == 'cast_type' %}
+    {% if decision.choice == 'apply' and decision.operation in invalid_action_operations %}
+    <input type="hidden" name="parameter:{{ decision.operation_id }}:invalid_action"
+           value="{{ decision.parameters.invalid_action }}">
+    {% if decision.parameters.get('invalid_action') == 'replace_value' %}
+    <input type="hidden" name="parameter:{{ decision.operation_id }}:replacement_value"
+           value="{{ decision.parameters.replacement_value }}">
+    {% endif %}
+    {% elif decision.choice == 'apply' and decision.operation == 'cast_type' %}
     <input type="hidden" name="parameter:{{ decision.operation_id }}:decimal_separator"
            value="{{ decision.parameters.decimal_separator }}">
     {% elif decision.choice == 'apply' and decision.operation == 'parse_date' %}

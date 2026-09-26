@@ -134,11 +134,26 @@ class DatasetContextService:
     )
 
     @classmethod
-    def analyze(cls, record, profile, user_id, app_config, provider=None):
+    def analyze(
+        cls,
+        record,
+        profile,
+        user_id,
+        app_config,
+        provider=None,
+        force=False,
+    ):
         configuration = AIProviderFactory.configuration_from_app(app_config)
         request_context = cls.build_request_context(profile, app_config)
         fingerprint = cls.fingerprint(profile, request_context, configuration)
-        cached = cls._cached_run(record.id, user_id, configuration, fingerprint)
+        cached = None
+        if not force:
+            cached = cls._cached_run(
+                record.id,
+                user_id,
+                configuration,
+                fingerprint,
+            )
         if cached:
             return DatasetContextOutcome(
                 run=cached,
@@ -215,7 +230,10 @@ class DatasetContextService:
             model=configuration.model,
             status='success',
             request_fingerprint=fingerprint,
-        ).order_by(AIAnalysisRun.created_at.desc()).first()
+        ).order_by(
+            AIAnalysisRun.created_at.desc(),
+            AIAnalysisRun.id.desc(),
+        ).first()
 
     @classmethod
     def build_request_context(cls, profile, app_config):

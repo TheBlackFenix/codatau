@@ -45,15 +45,19 @@ files_bp = Blueprint('files', __name__, url_prefix='/files')
 
 CLEANING_PARAMETER_FIELDS = {
     'cast_type': ('decimal_separator',),
+    'handle_missing': ('invalid_action', 'replacement_value'),
     'parse_date': ('date_format',),
     'normalize_case': ('case_style',),
     'normalize_phone': ('phone_style',),
+    'validate_email': ('invalid_action', 'replacement_value'),
 }
+
+INVALID_ACTION_OPERATIONS = {'handle_missing', 'validate_email'}
 
 CLEANING_OPERATION_LABELS = {
     'blank_to_null': 'Convertir textos vacíos en valores nulos',
     'cast_type': 'Convertir a número',
-    'handle_missing': 'Enviar filas incompletas a cuarentena',
+    'handle_missing': 'Resolver valores vacíos',
     'normalize_boolean': 'Normalizar valores Sí/No',
     'normalize_case': 'Unificar mayúsculas y minúsculas',
     'normalize_phone': 'Normalizar teléfonos',
@@ -61,7 +65,7 @@ CLEANING_OPERATION_LABELS = {
     'remove_exact_duplicates': 'Eliminar filas duplicadas exactas',
     'review_invalid_values': 'Revisar valores inválidos con IA',
     'trim_text': 'Eliminar espacios externos',
-    'validate_email': 'Separar correos inválidos en cuarentena',
+    'validate_email': 'Resolver correos inválidos',
 }
 
 QUARANTINE_EFFECTS = {
@@ -440,6 +444,9 @@ def results(file_id):
         record=upload_record,
         insights=insights,
         dataset_context=dataset_context,
+        context_record=upload_record,
+        context_form=CleaningActionForm(),
+        ai_configured=AIProviderFactory.is_configured(current_app.config),
         summary=summary,
         metric_layout=metric_layout,
         metric_cards=DashboardService.cards_for(metric_layout, summary),
@@ -585,6 +592,7 @@ def cleaning(file_id):
         },
         operation_labels=CLEANING_OPERATION_LABELS,
         quarantine_effects=QUARANTINE_EFFECTS,
+        invalid_action_operations=INVALID_ACTION_OPERATIONS,
         versions=versions,
         resolved_decisions=resolved_decisions,
         current_operation_ids=current_operation_ids,
@@ -595,6 +603,8 @@ def cleaning(file_id):
         ai_outcome=ai_outcome,
         ai_suggestions=ai_suggestions,
         dataset_context=dataset_context,
+        context_record=record,
+        context_form=CleaningActionForm(),
         form=CleaningActionForm(),
     )
 
@@ -659,6 +669,51 @@ def cleaning_ai_analysis(file_id):
             'success',
         )
     return redirect(url_for('files.cleaning', file_id=record.id))
+
+
+@files_bp.route('/context/<int:file_id>/analyze', methods=['POST'])
+@login_required
+def dataset_context_analyze(file_id):
+    form = CleaningActionForm()
+    if not form.validate_on_submit():
+        abort(400)
+    record = _record_for_user(file_id)
+    try:
+        _, _, _, profile_data = _cleaning_context(record)
+        outcome = DatasetContextService.analyze(
+            record,
+            profile_data,
+            current_user.id,
+            current_app.config,
+            force=request.form.get('force') == '1',
+        )
+        db.session.commit()
+    except AIProviderError as error:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        flash(error.user_message, 'warning')
+        return redirect(url_for('files.results', file_id=record.id))
+    except Exception:
+        db.session.rollback()
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo generar el contexto del archivo %s',
+            reference,
+            record.id,
+        )
+        flash(
+            f'No pudimos generar el contexto semántico. Referencia: {reference}.',
+            'danger',
+        )
+        return redirect(url_for('files.results', file_id=record.id))
+
+    if outcome.cached:
+        flash('Se reutilizó el contexto semántico existente.', 'info')
+    else:
+        flash('El contexto semántico del archivo quedó actualizado.', 'success')
+    return redirect(url_for('files.results', file_id=record.id))
 
 
 @files_bp.route('/cleaning')
@@ -728,6 +783,7 @@ def cleaning_preview(file_id):
         preview=preview,
         operation_labels=CLEANING_OPERATION_LABELS,
         quarantine_effects=QUARANTINE_EFFECTS,
+        invalid_action_operations=INVALID_ACTION_OPERATIONS,
         quarantine_reason_labels=_quarantine_reason_labels(decisions),
         form=CleaningActionForm(),
     )
@@ -1004,6 +1060,9 @@ def insights_ia():
         all_files=all_files,
         analysis=analysis,
         dataset_context=dataset_context if analysis else None,
+        context_record=active_file,
+        context_form=CleaningActionForm(),
+        ai_configured=AIProviderFactory.is_configured(current_app.config),
         metric_layout=metric_layout if analysis else [],
         metric_cards=metric_cards if analysis else [],
     )

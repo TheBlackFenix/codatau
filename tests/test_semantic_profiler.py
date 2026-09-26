@@ -68,7 +68,10 @@ def test_semantic_profile_escalates_invalid_email_and_mixed_number(tmp_path):
 
     assert columns['email']['semantic']['type'] == 'email'
     assert columns['email']['semantic']['needs_ai'] is True
-    assert operations['email:validate_email']['decision'] == 'automatic'
+    assert operations['email:validate_email']['decision'] == 'user_review'
+    assert operations['email:validate_email']['parameters']['invalid_action'] == (
+        'quarantine_rows'
+    )
     assert operations['email:review_invalid_values']['affected_rows'] == 1
     assert operations['email:review_invalid_values']['decision'] == 'ai_analysis'
 

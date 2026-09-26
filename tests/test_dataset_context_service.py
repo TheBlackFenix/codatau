@@ -171,15 +171,27 @@ def test_context_is_validated_audited_and_cached(app):
             _config(),
             provider=provider,
         )
+        refreshed = DatasetContextService.analyze(
+            record,
+            _profile(),
+            user.id,
+            _config(),
+            provider=provider,
+            force=True,
+        )
+        db.session.commit()
 
         assert first.cached is False
         assert second.cached is True
+        assert refreshed.cached is False
         assert first.context['domain'] == 'Envíos y mensajería'
         assert first.context['column_roles'][1]['suggested_constraints'] == [
             'positive'
         ]
-        assert len(provider.calls) == 1
-        run = AIAnalysisRun.query.one()
+        assert len(provider.calls) == 2
+        runs = AIAnalysisRun.query.order_by(AIAnalysisRun.id).all()
+        assert len(runs) == 2
+        run = runs[0]
         assert run.purpose == 'dataset_context'
         assert run.status == 'success'
         assert run.input_tokens == 140

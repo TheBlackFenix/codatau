@@ -119,6 +119,73 @@ def test_executor_can_quarantine_rows_with_missing_values(tmp_path):
     assert preview.quarantine[0]['amount'] == 20
 
 
+def test_executor_can_replace_invalid_cells_without_losing_rows(tmp_path):
+    dataframe = pd.DataFrame({
+        'email': ['ana@example.com', 'correo-invalido', None],
+        'category': ['A', None, 'B'],
+    })
+    source = tmp_path / 'replace.csv'
+    dataframe.to_csv(source, index=False)
+    artifact = DatasetPipeline(tmp_path / 'artifacts').ingest_dataframe(
+        dataframe,
+        'replace.csv',
+        source,
+    )
+    selected = select_configured_operations(
+        artifact.profile['cleaning_plan'],
+        ['email:validate_email', 'category:handle_missing'],
+        {
+            'email:validate_email': {
+                'invalid_action': 'replace_value',
+                'replacement_value': 'N/A',
+            },
+            'category:handle_missing': {
+                'invalid_action': 'replace_value',
+                'replacement_value': 'Sin categoría',
+            },
+        },
+    )
+
+    preview = CleaningExecutor().preview(artifact.parquet_path, selected)
+
+    assert preview.metrics['after_rows'] == 3
+    assert preview.metrics['changed_rows'] == 1
+    assert preview.metrics['quarantined_rows'] == 0
+    assert [row['email'] for row in preview.after] == [
+        'ana@example.com',
+        'N/A',
+        None,
+    ]
+    assert [row['category'] for row in preview.after] == [
+        'A',
+        'Sin categoría',
+        'B',
+    ]
+
+
+def test_executor_can_null_invalid_email_without_losing_the_row(tmp_path):
+    dataframe = pd.DataFrame({'email': ['ana@example.com', 'correo-invalido']})
+    source = tmp_path / 'null-email.csv'
+    dataframe.to_csv(source, index=False)
+    artifact = DatasetPipeline(tmp_path / 'artifacts').ingest_dataframe(
+        dataframe,
+        'null-email.csv',
+        source,
+    )
+    selected = select_configured_operations(
+        artifact.profile['cleaning_plan'],
+        ['email:validate_email'],
+        {'email:validate_email': {'invalid_action': 'set_null'}},
+    )
+
+    preview = CleaningExecutor().preview(artifact.parquet_path, selected)
+
+    assert preview.metrics['after_rows'] == 2
+    assert preview.metrics['changed_rows'] == 1
+    assert preview.metrics['quarantined_rows'] == 0
+    assert preview.after[1]['email'] is None
+
+
 def test_executor_applies_user_configured_regional_and_text_rules(tmp_path):
     dataframe = pd.DataFrame(
         {

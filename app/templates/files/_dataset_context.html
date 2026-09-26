@@ -55,7 +55,33 @@
                 </div>
             </details>
             {% endif %}
+            {% if ai_configured and context_record and context_form %}
+            <form method="POST" action="{{ url_for('files.dataset_context_analyze', file_id=context_record.id) }}" style="margin-top:12px">
+                {{ context_form.hidden_tag() }}
+                <input type="hidden" name="force" value="1">
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-arrow-clockwise"></i> Actualizar contexto
+                </button>
+            </form>
+            {% endif %}
         </div>
+    </div>
+</div>
+{% elif ai_configured and context_record and context_form %}
+<div class="card" style="margin-bottom:20px;border-color:#DDD6FE">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div>
+            <strong>Este archivo todavía no tiene contexto semántico</strong>
+            <div style="color:var(--gray-600);font-size:13px;margin-top:3px">
+                Puedes generarlo sin volver a cargar el archivo.
+            </div>
+        </div>
+        <form method="POST" action="{{ url_for('files.dataset_context_analyze', file_id=context_record.id) }}">
+            {{ context_form.hidden_tag() }}
+            <button type="submit" class="btn btn-purple btn-sm">
+                <i class="bi bi-stars"></i> Detectar contexto
+            </button>
+        </form>
     </div>
 </div>
 {% endif %}

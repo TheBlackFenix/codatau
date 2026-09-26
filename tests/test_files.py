@@ -130,7 +130,7 @@ def test_csv_flow_from_upload_to_download(app, client, auth):
     assert profile.json['row_count'] == 3
     assert profile.json['column_count'] == 2
     assert len(profile.json['source_sha256']) == 64
-    assert profile.json['profile_version'] == '1.3'
+    assert profile.json['profile_version'] == '1.4'
     assert profile.json['cleaning_plan']['status'] == 'proposed'
 
     with app.app_context():
@@ -264,9 +264,23 @@ def test_uploaded_semantic_context_is_visible_and_reused(app, client, auth):
     assert 'Contexto detectado: Contactos y transacciones'.encode() in cleaning.data
     assert 'Contexto detectado: Contactos y transacciones'.encode() in insights.data
     assert provider.calls == 1
+
+    with patch(
+        'app.services.dataset_context_service.AIProviderFactory.create',
+        return_value=provider,
+    ):
+        refreshed = client.post(
+            '/files/context/1/analyze',
+            data={'force': '1'},
+            follow_redirects=True,
+        )
+    assert refreshed.status_code == 200
+    assert 'contexto semántico del archivo quedó actualizado'.encode() in refreshed.data
+    assert provider.calls == 2
     with app.app_context():
-        run = AIAnalysisRun.query.one()
-        assert run.purpose == 'dataset_context'
+        runs = AIAnalysisRun.query.all()
+        assert len(runs) == 2
+        assert {run.purpose for run in runs} == {'dataset_context'}
 
 
 def test_upload_survives_semantic_context_provider_failure(app, client, auth):
@@ -640,10 +654,10 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     assert plan_page.status_code == 200
     assert b'email:validate_email' in plan_page.data
     assert b'dataset:remove_exact_duplicates' in plan_page.data
-    assert 'Separar correos inválidos en cuarentena'.encode() in plan_page.data
-    assert 'Sí, separar filas'.encode() in plan_page.data
-    assert b'No, conservar filas' in plan_page.data
-    assert 'Las filas con correos inválidos se separarán del resultado'.encode() in plan_page.data
+    assert 'Resolver correos inválidos'.encode() in plan_page.data
+    assert 'Sí, configurar solución'.encode() in plan_page.data
+    assert b'No, conservar como' in plan_page.data
+    assert 'Conservar la fila y reemplazar la celda'.encode() in plan_page.data
 
     dashboard = client.get('/dashboard')
     insights = client.get('/files/insights')
@@ -771,6 +785,64 @@ def test_user_can_configure_preview_and_apply_review_rules(app, client, auth):
     assert b'10.5,2025-12-31,bogota,+573001234567' in download.data
 
 
+def test_user_can_replace_invalid_cells_and_keep_complete_rows(app, client, auth):
+    _login(auth)
+    source = (
+        b'email,nombre\n'
+        b'invalid-email,Ana\n'
+        b'leo@example.org,\n'
+    )
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(source), 'contactos.csv')},
+        content_type='multipart/form-data',
+    )
+
+    plan = client.get('/files/cleaning/1')
+    assert b'parameter:email:validate_email:invalid_action' in plan.data
+    assert b'parameter:email:validate_email:replacement_value' in plan.data
+    assert b'parameter:nombre:handle_missing:invalid_action' in plan.data
+
+    configured = {
+        'decision:email:validate_email': 'apply',
+        'parameter:email:validate_email:invalid_action': 'replace_value',
+        'parameter:email:validate_email:replacement_value': 'N/A',
+        'decision:nombre:handle_missing': 'apply',
+        'parameter:nombre:handle_missing:invalid_action': 'replace_value',
+        'parameter:nombre:handle_missing:replacement_value': 'No tiene',
+    }
+    preview = client.post('/files/cleaning/1/preview', data=configured)
+    assert preview.status_code == 200
+    assert b'N/A' in preview.data
+    assert b'No tiene' in preview.data
+    assert b'0</div><div class="stat-label">Filas separadas' in preview.data
+    assert 'Sí, reemplazar celdas'.encode() in preview.data
+
+    applied = client.post(
+        '/files/cleaning/1/apply',
+        data=configured,
+        follow_redirects=True,
+    )
+    assert applied.status_code == 200
+    assert 'Versión 1 creada: 2 filas válidas'.encode() in applied.data
+    download = client.get('/reports/download/1')
+    assert b'N/A,Ana' in download.data
+    assert b'leo@example.org,No tiene' in download.data
+    with app.app_context():
+        decisions = {
+            decision.operation_id: decision
+            for decision in CleaningDecision.query.all()
+        }
+        assert decisions['email:validate_email'].parameters == {
+            'invalid_action': 'replace_value',
+            'physical_type': 'VARCHAR',
+            'replacement_value': 'N/A',
+        }
+        assert decisions['nombre:handle_missing'].parameters[
+            'replacement_value'
+        ] == 'No tiene'
+
+
 def test_ai_flagged_date_can_be_configured_manually(app, client, auth):
     _login(auth)
     source = (
@@ -825,8 +897,8 @@ def test_user_can_keep_data_and_resolve_suggestion_without_new_version(
 
     plan = client.get('/files/cleaning/1')
     assert b'name="decision:email:validate_email"' in plan.data
-    assert b'S\xc3\xad, aplicar' in plan.data
-    assert b'No, conservar' in plan.data
+    assert 'Sí, configurar solución'.encode() in plan.data
+    assert b'No, conservar como' in plan.data
 
     selection = {'decision:email:validate_email': 'keep'}
     preview = client.post('/files/cleaning/1/preview', data=selection)
