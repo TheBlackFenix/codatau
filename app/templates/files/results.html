@@ -63,13 +63,35 @@
 
     {% if insights %}
     <div class="card">
-        <div class="card-title"><i class="bi bi-stars"></i> Insights IA</div>
+        <div class="card-title"><i class="bi bi-stars"></i> Hallazgos actuales</div>
         {% for ins in insights %}
+        {% if ins.status not in ['kept', 'managed'] %}
         <div class="insight-chip insight-{{ ins.insight_type }}">
             <i class="bi bi-{% if ins.insight_type == 'success' %}check-circle{% elif ins.insight_type == 'warning' %}exclamation-triangle{% elif ins.insight_type == 'danger' %}x-circle{% else %}info-circle{% endif %}"></i>
-            {{ ins.message }}
+            <span style="flex:1">{{ ins.message }}</span>
+            {% if ins.actionable %}
+            <span class="badge badge-yellow">{{ ins.status_label }}</span>
+            <a href="{{ url_for('files.cleaning', file_id=record.id) }}" class="btn btn-secondary btn-sm">Resolver</a>
+            {% endif %}
         </div>
+        {% endif %}
         {% endfor %}
+
+        {% set managed = insights|selectattr('status', 'in', ['kept', 'managed'])|list %}
+        {% if managed %}
+        <details style="margin-top:12px">
+            <summary style="cursor:pointer;color:var(--gray-600);font-size:13px;font-weight:600">
+                {{ managed|length }} hallazgo(s) ya gestionado(s)
+            </summary>
+            {% for ins in managed %}
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--gray-100);font-size:12px;color:var(--gray-600)">
+                <i class="bi bi-check-circle" style="color:#15803D"></i>
+                <span style="flex:1">{{ ins.message }}</span>
+                <span class="badge badge-green">{{ ins.status_label }}</span>
+            </div>
+            {% endfor %}
+        </details>
+        {% endif %}
     </div>
     {% endif %}
 

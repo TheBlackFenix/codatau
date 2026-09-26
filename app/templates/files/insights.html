@@ -166,11 +166,30 @@
         <div class="card" style="position:sticky;top:80px">
             <div class="card-title"><i class="bi bi-stars"></i> Insights actuales</div>
             {% for ins in analysis.insights %}
+            {% if ins.status not in ['kept', 'managed'] %}
             <div class="ai-suggestion" style="margin-bottom:8px">
                 <div class="ai-dot {% if ins.insight_type == 'success' %}green{% elif ins.insight_type == 'warning' %}orange{% elif ins.insight_type == 'danger' %}orange{% else %}purple{% endif %}"></div>
-                <span style="font-size:12px">{{ ins.message }}</span>
+                <span style="font-size:12px;flex:1">{{ ins.message }}</span>
             </div>
+            {% if ins.actionable %}
+            <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:-3px 0 10px">
+                <span class="badge badge-yellow">{{ ins.status_label }}</span>
+                <a href="{{ url_for('files.cleaning', file_id=active_file.id) }}" class="btn btn-secondary btn-sm">Resolver</a>
+            </div>
+            {% endif %}
+            {% endif %}
             {% endfor %}
+            {% set managed = analysis.insights|selectattr('status', 'in', ['kept', 'managed'])|list %}
+            {% if managed %}
+            <details style="margin-top:12px">
+                <summary style="cursor:pointer;font-size:12px;color:var(--gray-600);font-weight:600">{{ managed|length }} gestionado(s)</summary>
+                {% for ins in managed %}
+                <div style="font-size:11px;color:var(--gray-600);padding:7px 0;border-top:1px solid var(--gray-100)">
+                    <i class="bi bi-check-circle" style="color:#15803D"></i> {{ ins.status_label }} · {{ ins.message }}
+                </div>
+                {% endfor %}
+            </details>
+            {% endif %}
         </div>
         {% endif %}
     </div>

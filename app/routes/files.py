@@ -33,6 +33,7 @@ from app.services.ai_providers import AIProviderError, AIProviderFactory
 from app.services.dataset_context_service import DatasetContextService
 from app.services.dataset_pipeline import DatasetPipeline
 from app.services.semantic_constraint_service import SemanticConstraintService
+from app.services.quality_insight_service import QualityInsightService
 from app.services.cleaning_executor import (
     CleaningExecutor,
     CleaningPlanError,
@@ -442,9 +443,13 @@ def results(file_id):
     try:
         dataframe = _load_dataframe(upload_record)
         summary = DataService.get_summary(dataframe)
-        insights = AIService.generate_display_insights(dataframe, summary)
         _, _, _, profile_data = _cleaning_context(upload_record)
         dataset_context = _latest_dataset_context(upload_record, profile_data)
+        insights = QualityInsightService.decorate(
+            AIService.generate_display_insights(dataframe, summary),
+            profile_data,
+            CleaningDecisionService.active_for_file(upload_record.id),
+        )
     except Exception as error:
         reference = uuid.uuid4().hex[:8].upper()
         current_app.logger.exception(
@@ -1049,6 +1054,11 @@ def insights_ia():
             summary = DataService.get_summary(df)
             _, _, _, profile_data = _cleaning_context(active_file)
             dataset_context = _latest_dataset_context(active_file, profile_data)
+            quality_insights = QualityInsightService.decorate(
+                AIService.generate_display_insights(df, summary),
+                profile_data,
+                CleaningDecisionService.active_for_file(active_file.id),
+            )
 
             # Análisis descriptivo automático
             col_names = summary['column_names']
@@ -1062,7 +1072,7 @@ def insights_ia():
                 'identifier_cols': summary['identifier_cols'],
                 'optional_numeric_cols': summary['optional_numeric_cols'],
                 'text_cols': text_cols,
-                'insights': AIService.generate_display_insights(df, summary)
+                'insights': quality_insights,
             }
             metric_layout = DashboardService.layout_for(active_file, summary)
             metric_cards = DashboardService.cards_for(metric_layout, summary)

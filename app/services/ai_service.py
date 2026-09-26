@@ -7,6 +7,8 @@ class AIService:
             {
                 'insight_type': insight['type'],
                 'message': insight['message'],
+                'code': insight.get('code', 'informational'),
+                'column': insight.get('column'),
             }
             for insight in AIService.generate_insights(df, summary)
         ]
@@ -23,6 +25,7 @@ class AIService:
         if null_total == 0 and duplicates == 0:
             insights.append({
                 'type': 'success',
+                'code': 'clean_dataset',
                 'message': 'Los datos están limpios: no se encontraron valores nulos ni duplicados.'
             })
 
@@ -31,12 +34,14 @@ class AIService:
             pct = round((null_total / total_cells) * 100, 1) if total_cells else 0
             insights.append({
                 'type': 'warning',
+                'code': 'null_values',
                 'message': f'Se encontraron {null_total} valores nulos ({pct}% del total de celdas).'
             })
 
         if duplicates > 0:
             insights.append({
                 'type': 'danger',
+                'code': 'duplicate_rows',
                 'message': f'Hay {duplicates} filas duplicadas que pueden afectar el análisis.'
             })
 
@@ -56,24 +61,30 @@ class AIService:
                 if max_val > mean * 5:
                     insights.append({
                         'type': 'warning',
+                        'code': 'extreme_values',
+                        'column': col,
                         'message': f'La columna "{col}" tiene valores extremos: máximo {max_val} vs promedio {mean}.'
                     })
 
             if min_val is not None and min_val < 0:
                 insights.append({
                     'type': 'info',
+                    'code': 'negative_values',
+                    'column': col,
                     'message': f'La columna "{col}" tiene valores negativos (mínimo: {min_val}).'
                 })
 
         if rows < 10:
             insights.append({
                 'type': 'info',
+                'code': 'small_dataset',
                 'message': f'El archivo tiene muy pocas filas ({rows}). Los análisis pueden no ser representativos.'
             })
 
         if not insights:
             insights.append({
                 'type': 'info',
+                'code': 'analysis_complete',
                 'message': 'Análisis completado. No se detectaron anomalías significativas.'
             })
 

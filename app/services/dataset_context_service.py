@@ -10,7 +10,7 @@ from app.services.ai_providers import AIProviderError, AIProviderFactory
 
 
 CONTEXT_PURPOSE = 'dataset_context'
-CONTEXT_VERSION = '1.0'
+CONTEXT_VERSION = '1.1'
 
 EMAIL_RE = re.compile(r'[^\s@]+@[^\s@]+\.[^\s@]+', re.IGNORECASE)
 DIGIT_RUN_RE = re.compile(r'\d{5,}')
@@ -315,10 +315,18 @@ class DatasetContextService:
     def fingerprint(profile, request_context, configuration):
         payload = {
             'version': CONTEXT_VERSION,
-            'source_sha256': profile.get('source_sha256'),
             'provider': configuration.provider,
             'model': configuration.model,
-            'request_context': request_context,
+            # El contexto describe el significado del archivo y puede reutilizarse
+            # entre versiones que solo cambian valores. Un cambio de columnas o
+            # tipos sí exige volver a analizarlo.
+            'schema': [
+                {
+                    'name': header.get('name'),
+                    'physical_type': header.get('physical_type'),
+                }
+                for header in request_context.get('headers') or []
+            ],
         }
         encoded = json.dumps(
             payload,

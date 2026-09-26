@@ -905,6 +905,16 @@ def test_semantic_context_proposes_actionable_positive_range_rule(
     assert b'0</div><div class="stat-label">Filas separadas' in preview.data
     assert 'Sí, dejar celdas nulas'.encode() in preview.data
 
+    saved = client.post(
+        '/files/cleaning/1/apply',
+        data={'decision:alto:validate_range:positive': 'keep'},
+        follow_redirects=True,
+    )
+    assert saved.status_code == 200
+    results = client.get('/files/results/1')
+    assert 'Conservado por tu decisión'.encode() in results.data
+    assert b'1 hallazgo(s) ya gestionado(s)' in results.data
+
 
 def test_ai_flagged_date_can_be_configured_manually(app, client, auth):
     _login(auth)

@@ -5,6 +5,7 @@ from app.models.ai_analysis_run import AIAnalysisRun
 from app.models.file_upload import FileUpload
 from app.models.user import User
 from app.services.ai_providers import AIProviderResult
+from app.services.ai_providers import AIProviderFactory
 from app.services.dataset_context_service import DatasetContextService
 
 
@@ -214,3 +215,43 @@ def test_context_rejects_invented_columns_duplicates_and_rules(mutation):
 
     with pytest.raises(ValueError):
         DatasetContextService.validate_result(result, _profile())
+
+
+def test_context_fingerprint_survives_value_changes_but_not_schema_changes():
+    configuration = AIProviderFactory.configuration_from_app(_config())
+    original = _profile()
+    changed_values = _profile()
+    changed_values['sample'][0]['largo'] = 999
+    changed_values['columns'][3]['numeric']['max'] = 999
+    changed_values['source_sha256'] = 'c' * 64
+    changed_type = _profile()
+    changed_type['columns'][3]['type'] = 'VARCHAR'
+
+    original_context = DatasetContextService.build_request_context(
+        original,
+        _config(),
+    )
+    changed_values_context = DatasetContextService.build_request_context(
+        changed_values,
+        _config(),
+    )
+    changed_type_context = DatasetContextService.build_request_context(
+        changed_type,
+        _config(),
+    )
+
+    original_fingerprint = DatasetContextService.fingerprint(
+        original,
+        original_context,
+        configuration,
+    )
+    assert original_fingerprint == DatasetContextService.fingerprint(
+        changed_values,
+        changed_values_context,
+        configuration,
+    )
+    assert original_fingerprint != DatasetContextService.fingerprint(
+        changed_type,
+        changed_type_context,
+        configuration,
+    )

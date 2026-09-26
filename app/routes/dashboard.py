@@ -9,6 +9,10 @@ from app.models.ai_insight import AIInsight
 from app.services.data_service import DataService
 from app.services.dataset_pipeline import DatasetPipeline
 from app.services.ai_service import AIService
+from app.services.dataset_context_service import DatasetContextService
+from app.services.cleaning_decision_service import CleaningDecisionService
+from app.services.quality_insight_service import QualityInsightService
+from app.services.semantic_constraint_service import SemanticConstraintService
 from app.services.dashboard_service import (
     DashboardConfigurationError,
     DashboardService,
@@ -57,7 +61,30 @@ def index():
                 filepath,
             )
             summary = DataService.get_summary(df)
-            insights = AIService.generate_display_insights(df, summary)
+            profile = pipeline.ensure_current_profile(
+                active_file.active_stored_filename,
+                filepath,
+            )
+            context_outcome = DatasetContextService.latest(
+                active_file,
+                profile,
+                current_user.id,
+                current_app.config,
+            )
+            if context_outcome:
+                source_parquet, _ = pipeline.paths_for(
+                    active_file.active_stored_filename
+                )
+                profile = SemanticConstraintService.enrich_plan(
+                    profile,
+                    context_outcome.context,
+                    source_parquet,
+                )
+            insights = QualityInsightService.decorate(
+                AIService.generate_display_insights(df, summary),
+                profile,
+                CleaningDecisionService.active_for_file(active_file.id),
+            )
             metric_layout = DashboardService.layout_for(active_file, summary)
             metric_cards = DashboardService.cards_for(metric_layout, summary)
             chart_data = DashboardService.build_charts(df, summary, metric_layout)

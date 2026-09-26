@@ -91,12 +91,20 @@
             <i class="bi bi-stars"></i> Sugerencias de IA
         </div>
         {% if insights %}
-            {% for ins in insights[:5] %}
+            {% set active_insights = insights|rejectattr('status', 'in', ['kept', 'managed'])|list %}
+            {% for ins in active_insights[:5] %}
             <div class="ai-suggestion">
                 <div class="ai-dot {% if ins.insight_type == 'success' %}green{% elif ins.insight_type == 'warning' %}orange{% elif ins.insight_type == 'danger' %}orange{% else %}purple{% endif %}"></div>
                 <span>{{ ins.message }}</span>
             </div>
             {% endfor %}
+            {% set managed_count = insights|length - active_insights|length %}
+            {% if managed_count %}
+            <div class="ai-suggestion">
+                <div class="ai-dot green"></div>
+                <span>{{ managed_count }} hallazgo(s) ya gestionado(s) según tus decisiones.</span>
+            </div>
+            {% endif %}
         {% else %}
         <div class="ai-suggestion">
             <div class="ai-dot purple"></div>
