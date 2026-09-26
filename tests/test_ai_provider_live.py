@@ -6,6 +6,7 @@ import pytest
 from app import create_app
 from app.services.ai_cleaning_service import AICleaningService
 from app.services.ai_providers import AIProviderError, AIProviderFactory
+from app.services.dataset_context_service import DatasetContextService
 
 
 @pytest.mark.skipif(
@@ -71,3 +72,92 @@ def test_configured_provider_returns_a_valid_cleaning_recommendation():
         )
     assert len(suggestions) == 1
     assert suggestions[0]['operation_id'] == candidate['operation_id']
+
+
+@pytest.mark.skipif(
+    os.environ.get('RUN_LIVE_AI_TEST') != '1',
+    reason='La prueba en vivo consume la API y debe habilitarse explícitamente.',
+)
+def test_configured_provider_returns_a_valid_dataset_context():
+    application = create_app()
+    assert AIProviderFactory.is_configured(application.config)
+    profile = {
+        'source_sha256': 'live-context',
+        'row_count': 3,
+        'column_count': 4,
+        'columns': [
+            {
+                'name': 'numero_guia',
+                'type': 'BIGINT',
+                'null_ratio': 0,
+                'approx_unique': 3,
+                'semantic': {'type': 'identifier', 'confidence': 0.98},
+            },
+            {
+                'name': 'correo',
+                'type': 'VARCHAR',
+                'null_ratio': 0,
+                'approx_unique': 3,
+                'semantic': {'type': 'email', 'confidence': 0.8},
+            },
+            {
+                'name': 'alto',
+                'type': 'DOUBLE',
+                'null_ratio': 0,
+                'approx_unique': 3,
+                'numeric': {'min': -2.0, 'max': 30.0, 'mean': 15.0},
+                'semantic': {'type': 'number', 'confidence': 0.98},
+            },
+            {
+                'name': 'ciudad_destino',
+                'type': 'VARCHAR',
+                'null_ratio': 0,
+                'approx_unique': 2,
+                'semantic': {'type': 'text', 'confidence': 0.85},
+            },
+        ],
+        'sample': [
+            {
+                'numero_guia': 700001,
+                'correo': 'ana@example.com',
+                'alto': -2.0,
+                'ciudad_destino': 'Bogotá',
+            },
+            {
+                'numero_guia': 700002,
+                'correo': 'correo-invalido',
+                'alto': 20.0,
+                'ciudad_destino': 'Medellín',
+            },
+        ],
+    }
+    request_context = DatasetContextService.build_request_context(
+        profile,
+        application.config,
+    )
+    provider = AIProviderFactory.create(application.config)
+    try:
+        result = provider.generate_json(
+            DatasetContextService.INSTRUCTIONS,
+            {
+                'context_version': 'live-smoke-test',
+                'dataset': request_context,
+            },
+            DatasetContextService.OUTPUT_SCHEMA,
+        )
+    except AIProviderError as error:
+        pytest.fail(
+            f'{error.code}: {error.user_message} Detalle: {error.detail}',
+            pytrace=False,
+        )
+
+    try:
+        context = DatasetContextService.validate_result(result.data, profile)
+    except ValueError as error:
+        pytest.fail(
+            f'Respuesta rechazada: {error}. JSON: '
+            f'{json.dumps(result.data, ensure_ascii=False)}',
+            pytrace=False,
+        )
+    assert context['domain']
+    assert 0 <= context['confidence'] <= 1

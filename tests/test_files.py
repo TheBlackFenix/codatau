@@ -10,7 +10,7 @@ from app.models.dataset_version import DatasetVersion
 from app.models.cleaning_decision import CleaningDecision
 from app.models.dashboard_configuration import DashboardConfiguration
 from app.models.ai_analysis_run import AIAnalysisRun
-from app.services.ai_providers import AIProviderResult
+from app.services.ai_providers import AIProviderError, AIProviderResult
 
 
 def _login(auth):
@@ -58,6 +58,39 @@ class _RouteAIProvider:
             },
             input_tokens=50,
             output_tokens=15,
+        )
+
+
+class _RouteDatasetContextProvider:
+    def __init__(self):
+        self.calls = 0
+
+    def generate_json(self, _instructions, _payload, _schema):
+        self.calls += 1
+        return AIProviderResult(
+            data={
+                'domain': 'Contactos y transacciones',
+                'description': 'Registros de contacto con un valor monetario.',
+                'confidence': 0.91,
+                'column_roles': [
+                    {
+                        'column': 'email',
+                        'role': 'contact',
+                        'description': 'Correo de contacto.',
+                        'aggregate': False,
+                        'suggested_constraints': ['valid_email'],
+                    },
+                    {
+                        'column': 'amount',
+                        'role': 'measure',
+                        'description': 'Valor monetario de la transacción.',
+                        'aggregate': True,
+                        'suggested_constraints': ['non_negative'],
+                    },
+                ],
+            },
+            input_tokens=120,
+            output_tokens=35,
         )
 
 
@@ -173,6 +206,94 @@ def test_ai_cleaning_analysis_disabled_has_safe_message(app, client, auth):
     assert 'integración con IA todavía no está configurada'.encode() in response.data
     with app.app_context():
         assert AIAnalysisRun.query.count() == 0
+
+
+def test_upload_requests_semantic_context_without_risking_the_file(
+    app, client, auth
+):
+    _login(auth)
+    app.config.update(
+        AI_PROVIDER='openai_compatible',
+        AI_MODEL='test-model',
+        AI_BASE_URL='http://provider.test/v1',
+    )
+
+    with patch(
+        'app.routes.files.DatasetContextService.analyze'
+    ) as analyze_context:
+        response = client.post(
+            '/files/upload',
+            data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+            content_type='multipart/form-data',
+        )
+
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith('/files/results/1')
+    analyze_context.assert_called_once()
+    with app.app_context():
+        assert FileUpload.query.count() == 1
+
+
+def test_uploaded_semantic_context_is_visible_and_reused(app, client, auth):
+    _login(auth)
+    app.config.update(
+        AI_PROVIDER='openai_compatible',
+        AI_MODEL='test-model',
+        AI_BASE_URL='http://provider.test/v1',
+    )
+    provider = _RouteDatasetContextProvider()
+
+    with patch(
+        'app.services.dataset_context_service.AIProviderFactory.create',
+        return_value=provider,
+    ):
+        response = client.post(
+            '/files/upload',
+            data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert 'Contexto detectado: Contactos y transacciones'.encode() in response.data
+    assert b'91% confianza' in response.data
+    assert provider.calls == 1
+
+    cleaning = client.get('/files/cleaning/1')
+    insights = client.get('/files/insights')
+    assert 'Contexto detectado: Contactos y transacciones'.encode() in cleaning.data
+    assert 'Contexto detectado: Contactos y transacciones'.encode() in insights.data
+    assert provider.calls == 1
+    with app.app_context():
+        run = AIAnalysisRun.query.one()
+        assert run.purpose == 'dataset_context'
+
+
+def test_upload_survives_semantic_context_provider_failure(app, client, auth):
+    _login(auth)
+    app.config.update(
+        AI_PROVIDER='openai_compatible',
+        AI_MODEL='test-model',
+        AI_BASE_URL='http://provider.test/v1',
+    )
+    error = AIProviderError('provider_unavailable', 'Proveedor no disponible.')
+
+    with patch(
+        'app.routes.files.DatasetContextService.analyze',
+        side_effect=error,
+    ):
+        response = client.post(
+            '/files/upload',
+            data={'file': (BytesIO(_cleaning_csv_bytes()), 'contacts.csv')},
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+
+    assert response.status_code == 200
+    assert 'Archivo procesado correctamente'.encode() in response.data
+    assert 'no pudimos generar su contexto con IA'.encode() in response.data
+    with app.app_context():
+        assert FileUpload.query.count() == 1
 
 
 def test_upload_page_supports_real_drag_and_drop(client, auth):

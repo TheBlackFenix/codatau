@@ -125,6 +125,44 @@ def test_context_is_minimal_redacted_and_limited():
     assert all('source_sha256' not in item for item in context['candidates'])
 
 
+def test_cleaning_context_reuses_only_relevant_dataset_semantics():
+    dataset_context = {
+        'domain': 'Envíos y mensajería',
+        'description': 'Registros operativos de paquetes.',
+        'confidence': 0.94,
+        'column_roles': [
+            {
+                'column': 'email',
+                'role': 'contact',
+                'description': 'Correo del destinatario.',
+                'aggregate': False,
+                'suggested_constraints': ['valid_email'],
+            },
+            {
+                'column': 'unrelated',
+                'role': 'category',
+                'description': 'No pertenece a una operación candidata.',
+                'aggregate': False,
+                'suggested_constraints': [],
+            },
+        ],
+    }
+
+    context = AICleaningService.build_context(
+        _profile(),
+        _config(),
+        dataset_context,
+    )
+
+    assert context['dataset_context']['domain'] == 'Envíos y mensajería'
+    assert context['dataset_context']['candidate_column_roles'] == [{
+        'column': 'email',
+        'role': 'contact',
+        'description': 'Correo del destinatario.',
+        'suggested_constraints': ['valid_email'],
+    }]
+
+
 def test_analysis_is_validated_audited_and_cached(app):
     provider = FakeProvider({
         'suggestions': [

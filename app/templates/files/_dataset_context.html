@@ -1,0 +1,61 @@
+{% if dataset_context %}
+{% set role_labels = {
+    'identifier': 'Identificador',
+    'measure': 'Medida',
+    'dimension': 'Dimensión',
+    'category': 'Categoría',
+    'date': 'Fecha',
+    'contact': 'Contacto',
+    'location': 'Ubicación',
+    'description': 'Descripción',
+    'status': 'Estado',
+    'boolean': 'Sí/No',
+    'unknown': 'Sin clasificar'
+} %}
+{% set constraint_labels = {
+    'positive': 'Mayor que cero',
+    'non_negative': 'No negativo',
+    'not_empty': 'No vacío',
+    'valid_email': 'Correo válido',
+    'valid_phone': 'Teléfono válido',
+    'unique': 'Único'
+} %}
+<div class="card" style="margin-bottom:20px;border-color:#DDD6FE;background:linear-gradient(135deg,#FAF5FF 0%,#FFF7ED 100%)">
+    <div style="display:flex;align-items:flex-start;gap:14px">
+        <div class="stat-icon purple" style="flex-shrink:0"><i class="bi bi-cpu"></i></div>
+        <div style="min-width:0;flex:1">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
+                <strong style="font-size:16px">Contexto detectado: {{ dataset_context.domain }}</strong>
+                <span class="badge badge-purple">{{ (dataset_context.confidence * 100)|round|int }}% confianza</span>
+            </div>
+            <div style="color:var(--gray-600);font-size:13px">{{ dataset_context.description }}</div>
+
+            {% if dataset_context.column_roles %}
+            <details style="margin-top:12px">
+                <summary style="cursor:pointer;color:var(--purple);font-size:13px;font-weight:600">
+                    Ver {{ dataset_context.column_roles|length }} columna(s) interpretada(s)
+                </summary>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;margin-top:10px">
+                    {% for item in dataset_context.column_roles %}
+                    <div style="background:white;border:1px solid var(--gray-200);border-radius:8px;padding:10px 12px">
+                        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+                            <strong style="font-size:13px;overflow-wrap:anywhere">{{ item.column }}</strong>
+                            <span class="badge badge-gray">{{ role_labels.get(item.role, item.role) }}</span>
+                        </div>
+                        <div style="font-size:12px;color:var(--gray-600);margin-top:5px">{{ item.description }}</div>
+                        {% if item.suggested_constraints %}
+                        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">
+                            {% for constraint in item.suggested_constraints %}
+                            <span class="badge badge-yellow">{{ constraint_labels.get(constraint, constraint) }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -34,6 +34,8 @@ class Config:
     AI_MAX_OUTPUT_TOKENS = _env_int('AI_MAX_OUTPUT_TOKENS', 1200)
     AI_MAX_CANDIDATE_COLUMNS = _env_int('AI_MAX_CANDIDATE_COLUMNS', 8)
     AI_SAMPLE_VALUES = _env_int('AI_SAMPLE_VALUES', 4)
+    AI_CONTEXT_SAMPLE_ROWS = _env_int('AI_CONTEXT_SAMPLE_ROWS', 5)
+    AI_CONTEXT_MAX_COLUMNS = _env_int('AI_CONTEXT_MAX_COLUMNS', 80)
 
 class DevelopmentConfig(Config):
     DEBUG = True

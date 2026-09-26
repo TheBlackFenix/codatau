@@ -30,6 +30,7 @@ from app.services.validation_service import ValidationService
 from app.services.ai_service import AIService
 from app.services.ai_cleaning_service import AICleaningService
 from app.services.ai_providers import AIProviderError, AIProviderFactory
+from app.services.dataset_context_service import DatasetContextService
 from app.services.dataset_pipeline import DatasetPipeline
 from app.services.cleaning_executor import (
     CleaningExecutor,
@@ -134,6 +135,16 @@ def _cleaning_context(record):
     except OSError:
         abort(404)
     return pipeline, stored_filename, source_parquet, profile_data
+
+
+def _latest_dataset_context(record, profile_data):
+    outcome = DatasetContextService.latest(
+        record,
+        profile_data,
+        current_user.id,
+        current_app.config,
+    )
+    return outcome.context if outcome else None
 
 
 def _discard_failed_upload(storage, pipeline, stored_filename):
@@ -315,6 +326,44 @@ def upload():
             db.session.commit()
             session['active_file_id'] = upload_record.id
 
+            # El contexto semántico mejora los análisis posteriores, pero nunca
+            # debe convertir una falla del proveedor en una carga fallida.
+            if AIProviderFactory.is_configured(current_app.config):
+                try:
+                    DatasetContextService.analyze(
+                        upload_record,
+                        artifact.profile,
+                        current_user.id,
+                        current_app.config,
+                    )
+                    db.session.commit()
+                except AIProviderError as error:
+                    # El servicio deja trazabilidad del intento fallido cuando
+                    # alcanzó a crear una ejecución.
+                    db.session.commit()
+                    current_app.logger.warning(
+                        'No se pudo generar el contexto semántico de %s (%s): %s',
+                        upload_record.id,
+                        error.code,
+                        error,
+                    )
+                    flash(
+                        'El archivo quedó procesado, pero no pudimos generar su '
+                        'contexto con IA. Podrás intentarlo nuevamente.',
+                        'warning',
+                    )
+                except Exception:
+                    db.session.rollback()
+                    current_app.logger.exception(
+                        'Falló inesperadamente el contexto semántico del archivo %s',
+                        upload_record.id,
+                    )
+                    flash(
+                        'El archivo quedó procesado, pero su contexto semántico '
+                        'está pendiente.',
+                        'warning',
+                    )
+
             # Flash de warnings de validación
             for w in warnings:
                 flash(w, 'warning')
@@ -369,6 +418,8 @@ def results(file_id):
         dataframe = _load_dataframe(upload_record)
         summary = DataService.get_summary(dataframe)
         insights = AIService.generate_display_insights(dataframe, summary)
+        _, _, _, profile_data = _cleaning_context(upload_record)
+        dataset_context = _latest_dataset_context(upload_record, profile_data)
     except Exception as error:
         reference = uuid.uuid4().hex[:8].upper()
         current_app.logger.exception(
@@ -388,6 +439,7 @@ def results(file_id):
     return render_template('files/results.html',
         record=upload_record,
         insights=insights,
+        dataset_context=dataset_context,
         summary=summary,
         metric_layout=metric_layout,
         metric_cards=DashboardService.cards_for(metric_layout, summary),
@@ -503,11 +555,13 @@ def cleaning(file_id):
         for operation in operations
     )
     ai_configured = AIProviderFactory.is_configured(current_app.config)
+    dataset_context = _latest_dataset_context(record, profile_data)
     ai_outcome = AICleaningService.latest(
         record,
         profile_data,
         current_user.id,
         current_app.config,
+        dataset_context=dataset_context,
     )
     ai_suggestions = {
         suggestion['operation_id']: suggestion
@@ -540,6 +594,7 @@ def cleaning(file_id):
         ai_model=current_app.config.get('AI_MODEL'),
         ai_outcome=ai_outcome,
         ai_suggestions=ai_suggestions,
+        dataset_context=dataset_context,
         form=CleaningActionForm(),
     )
 
@@ -553,11 +608,13 @@ def cleaning_ai_analysis(file_id):
     record = _record_for_user(file_id)
     try:
         _, _, _, profile_data = _cleaning_context(record)
+        dataset_context = _latest_dataset_context(record, profile_data)
         outcome = AICleaningService.analyze(
             record,
             profile_data,
             current_user.id,
             current_app.config,
+            dataset_context=dataset_context,
         )
         db.session.commit()
     except AIProviderError as error:
@@ -913,6 +970,8 @@ def insights_ia():
         try:
             df = _load_dataframe(active_file)
             summary = DataService.get_summary(df)
+            _, _, _, profile_data = _cleaning_context(active_file)
+            dataset_context = _latest_dataset_context(active_file, profile_data)
 
             # Análisis descriptivo automático
             col_names = summary['column_names']
@@ -944,6 +1003,7 @@ def insights_ia():
         active_file=active_file,
         all_files=all_files,
         analysis=analysis,
+        dataset_context=dataset_context if analysis else None,
         metric_layout=metric_layout if analysis else [],
         metric_cards=metric_cards if analysis else [],
     )
