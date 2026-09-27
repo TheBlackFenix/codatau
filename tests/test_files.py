@@ -1,6 +1,8 @@
+import json
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
+from zipfile import ZipFile
 
 import pandas as pd
 
@@ -735,6 +737,25 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     assert quarantine_download.status_code == 200
     assert b'invalid-email' in quarantine_download.data
     assert b'__quarantine_reason' in quarantine_download.data
+
+    quality_package = client.get(f'/files/cleaning/1/export/{version_id}')
+    assert quality_package.status_code == 200
+    assert quality_package.mimetype == 'application/zip'
+    with ZipFile(BytesIO(quality_package.data)) as archive:
+        assert set(archive.namelist()) == {
+            'LEEME.txt',
+            'cuarentena.csv',
+            'datos_limpios.csv',
+            'decisiones.csv',
+            'reporte_calidad.json',
+        }
+        assert b'invalid-email' not in archive.read('datos_limpios.csv')
+        assert b'invalid-email' in archive.read('cuarentena.csv')
+        report = json.loads(archive.read('reporte_calidad.json'))
+        assert report['dataset_version']['number'] == 1
+        assert report['metrics']['quarantined_rows'] == 1
+        assert len(report['decisions']) == 2
+        assert report['decisions'][0]['decided_by'] == 'tester'
 
     cleaned_download = client.get('/reports/download/1')
     assert cleaned_download.data.count(b'leo@example.org') == 1

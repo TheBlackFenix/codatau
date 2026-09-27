@@ -41,6 +41,7 @@ from app.services.cleaning_executor import (
 )
 from app.services.cleaning_decision_service import CleaningDecisionService
 from app.services.custom_cleaning_rule_service import CustomCleaningRuleService
+from app.services.cleaning_export_service import CleaningExportService
 from app.services.dashboard_service import DashboardService
 from app.services.storage_service import LocalStorageService
 
@@ -1044,6 +1045,60 @@ def cleaning_quarantine(file_id, version_id):
         mimetype='text/csv',
         as_attachment=True,
         download_name=f'cuarentena_v{version.version_number}_{base_name}.csv',
+    )
+
+
+@files_bp.route('/cleaning/<int:file_id>/export/<int:version_id>')
+@login_required
+def cleaning_export(file_id, version_id):
+    record = _record_for_user(file_id)
+    version = DatasetVersion.query.filter_by(
+        id=version_id,
+        file_id=record.id,
+    ).first_or_404()
+    pipeline = _pipeline()
+    try:
+        cleaned = pipeline.load_dataframe(version.stored_filename)
+        quarantine = pipeline.load_quarantine_dataframe(version.stored_filename)
+        decisions = (
+            CleaningDecision.query
+            .filter_by(
+                file_id=record.id,
+                applied_version_number=version.version_number,
+            )
+            .order_by(CleaningDecision.id.asc())
+            .all()
+        )
+        package = CleaningExportService.build(
+            record,
+            version,
+            cleaned,
+            quarantine,
+            decisions,
+        )
+    except Exception as error:
+        reference = uuid.uuid4().hex[:8].upper()
+        current_app.logger.exception(
+            '[%s] No se pudo exportar la versión %s del archivo %s: %s',
+            reference,
+            version.id,
+            record.id,
+            error,
+        )
+        flash(
+            f'No pudimos generar el paquete de calidad. Referencia: {reference}.',
+            'danger',
+        )
+        return redirect(url_for('files.cleaning', file_id=record.id))
+
+    base_name = secure_filename(Path(record.original_name).stem) or 'archivo'
+    return send_file(
+        package,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=(
+            f'calidad_v{version.version_number}_{base_name}.zip'
+        ),
     )
 
 

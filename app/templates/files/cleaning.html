@@ -90,6 +90,9 @@
                         <i class="bi bi-download"></i> Descargar cuarentena
                     </a>
                     {% endif %}
+                    <a class="btn btn-secondary btn-sm" href="{{ url_for('files.cleaning_export', file_id=record.id, version_id=version.id) }}">
+                        <i class="bi bi-file-earmark-zip"></i> Exportar paquete de calidad
+                    </a>
                 </div>
                 <div class="version-operation-list">
                     {% for operation in version.operations %}
