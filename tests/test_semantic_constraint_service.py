@@ -13,6 +13,8 @@ def _artifact(tmp_path):
         'alto': [-10.0, 20.0, 30.0],
         'peso': [0.0, 4.0, 5.0],
         'estado': ['nuevo', 'nuevo', 'entregado'],
+        'referencia': ['A-1', None, 'A-3'],
+        'correo': ['ana@example.com', 'correo-invalido', 'leo@example.org'],
     })
     source = tmp_path / 'envios.csv'
     dataframe.to_csv(source, index=False)
@@ -50,6 +52,20 @@ def _context():
                 'aggregate': False,
                 'suggested_constraints': ['positive'],
             },
+            {
+                'column': 'referencia',
+                'role': 'identifier',
+                'description': 'Referencia del envío.',
+                'aggregate': False,
+                'suggested_constraints': ['not_empty'],
+            },
+            {
+                'column': 'correo',
+                'role': 'contact',
+                'description': 'Correo de contacto.',
+                'aggregate': False,
+                'suggested_constraints': ['valid_email'],
+            },
         ],
     }
 
@@ -69,8 +85,14 @@ def test_context_constraints_become_review_rules_only_when_violated(tmp_path):
 
     assert operations['alto:validate_range:positive']['affected_rows'] == 1
     assert operations['alto:validate_range:positive']['decision'] == 'user_review'
+    assert operations['alto:validate_range:positive']['examples'] == ['-10.0']
     assert 'peso:validate_range:non_negative' not in operations
     assert 'estado:validate_range:positive' not in operations
+    assert 'En el contexto “Envíos y mensajería”' in operations[
+        'referencia:handle_missing'
+    ]['context_reason']
+    assert operations['referencia:handle_missing']['examples'] == ['<vacío>']
+    assert operations['correo:validate_email']['examples'] == ['correo-invalido']
 
 
 def test_semantic_range_rule_can_null_the_cell_and_keep_the_row(tmp_path):

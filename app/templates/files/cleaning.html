@@ -214,6 +214,15 @@
                     <span class="cleaning-operation-reason">
                         {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
                     </span>
+                    {% if operation.context_reason %}
+                    <span class="cleaning-operation-context"><i class="bi bi-stars"></i> {{ operation.context_reason }}</span>
+                    {% endif %}
+                    {% if operation.examples %}
+                    <span class="cleaning-operation-examples">
+                        Ejemplos afectados:
+                        {% for example in operation.examples %}<code>{{ example }}</code>{% endfor %}
+                    </span>
+                    {% endif %}
                     {% if operation.operation in invalid_action_operations %}
                     <span class="cleaning-operation-impact">
                         <i class="bi bi-sliders"></i>
@@ -390,6 +399,8 @@
 .cleaning-operation-main{display:flex;gap:12px}
 .cleaning-operation-title{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .cleaning-operation-reason{display:block;color:var(--gray-500);font-size:13px;margin-top:5px}
+.cleaning-operation-context{display:block;color:var(--purple);font-size:12px;margin-top:6px}
+.cleaning-operation-examples{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px;color:var(--gray-500);font-size:11px}.cleaning-operation-examples code{padding:2px 6px;border-radius:5px;background:var(--gray-100);color:var(--gray-700)}
 .ai-analysis-card{display:flex;justify-content:space-between;align-items:center;gap:24px;background:linear-gradient(135deg,#FAF5FF,#FFFFFF)}.ai-analysis-copy p{margin:0 0 5px;color:var(--gray-600);font-size:13px;max-width:780px}.ai-analysis-copy small{color:var(--gray-500)}.ai-analysis-card form{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:0 0 auto}.ai-analysis-card button:disabled{opacity:.55;cursor:not-allowed}.ai-analysis-empty{font-size:11px;color:var(--gray-500)}
 .ai-recommendation{margin-top:12px;padding:11px 12px;border:1px solid #DDD6FE;border-radius:9px;background:#FAF5FF}.ai-recommendation-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--purple)}.ai-confidence{margin-left:auto;color:var(--gray-500);font-weight:500}.ai-recommendation p{margin:7px 0 0;color:var(--gray-700);font-size:13px}.ai-parameters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;color:var(--gray-500);font-size:11px}.ai-parameters code{padding:2px 5px;border-radius:4px;background:white;color:var(--gray-700)}
 .cleaning-decision-question{margin-top:13px;padding-top:12px;border-top:1px solid var(--gray-100)}
