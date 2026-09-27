@@ -698,6 +698,8 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     )
     assert preview.status_code == 200
     assert b'Vista previa de limpieza' in preview.data
+    assert 'Antes · muestra original'.encode() in preview.data
+    assert 'Después · resultado propuesto'.encode() in preview.data
     assert b'invalid-email' in preview.data
     assert 'fila se separaría'.encode() in preview.data
     assert 'Correo inválido'.encode() in preview.data
@@ -711,6 +713,10 @@ def test_cleaning_preview_apply_and_revert_version(app, client, auth):
     )
     assert applied.status_code == 200
     assert 'Versi\u00f3n 1 creada'.encode() in applied.data
+    assert 'Versión 1'.encode() in applied.data
+    assert b'0 transformadas' in applied.data
+    assert b'decidido por tester' in applied.data
+    assert 'Versión activa'.encode() in applied.data
 
     with app.app_context():
         record = FileUpload.query.one()

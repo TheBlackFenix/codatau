@@ -33,9 +33,15 @@
     {% endfor %}
 </div>
 
-<div class="card" style="margin-bottom:20px">
-    <div class="card-title"><i class="bi bi-arrow-left-right"></i> Resultado propuesto</div>
-    {{ preview_table(preview.after, 'No quedarían filas válidas.') }}
+<div class="preview-comparison" style="margin-bottom:20px">
+    <div class="card">
+        <div class="card-title"><i class="bi bi-file-earmark"></i> Antes · muestra original</div>
+        {{ preview_table(preview.before, 'No hay filas para mostrar.') }}
+    </div>
+    <div class="card">
+        <div class="card-title"><i class="bi bi-check2-circle"></i> Después · resultado propuesto</div>
+        {{ preview_table(preview.after, 'No quedarían filas válidas.') }}
+    </div>
 </div>
 
 {% if preview.quarantine %}
@@ -68,6 +74,7 @@
     {% for decision in decisions %}
     <div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
         <strong>{{ operation_labels.get(decision.operation, decision.operation) }}</strong>{% if decision.column %} · {{ decision.column }}{% endif %}
+        <span style="color:var(--gray-500);font-size:12px"> · {{ decision.affected_rows }} fila(s) detectada(s)</span>
         {% if decision.choice == 'apply' %}
         <span class="badge badge-green" style="margin-left:8px">
             {% if decision.operation in invalid_action_operations and decision.parameters.get('invalid_action') == 'replace_value' %}
@@ -81,6 +88,7 @@
             {% if decision.operation in invalid_action_operations %}No, conservar como está{% elif decision.operation in quarantine_effects %}No, conservar filas{% else %}No, conservar{% endif %}
         </span>
         {% endif %}
+        {% if decision.reason %}<div style="color:var(--gray-500);font-size:11px;margin-top:4px">{{ decision.reason }}</div>{% endif %}
     </div>
     {% endfor %}
 </div>
@@ -124,4 +132,9 @@
         {% if operations %}Aplicar y guardar decisiones{% else %}Guardar decisiones{% endif %}
     </button>
 </form>
+
+<style>
+.preview-comparison{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.preview-comparison .card{min-width:0;margin:0}.preview-comparison .table-wrap{max-height:430px;overflow:auto}
+@media(max-width:1000px){.preview-comparison{grid-template-columns:1fr}}
+</style>
 {% endblock %}

@@ -48,26 +48,61 @@
 
 <div class="card" style="margin-bottom:20px">
     <div class="card-title"><i class="bi bi-clock-history"></i> Historial de versiones</div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
-        <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=0) }}">
-            {{ form.hidden_tag() }}
-            <button class="btn btn-sm {{ 'btn-purple' if not record.active_version else 'btn-secondary' }}">
-                Original procesado
-            </button>
-        </form>
+    <div class="version-timeline">
+        <div class="version-entry {{ 'is-active' if not record.active_version }}">
+            <div>
+                <strong>Original procesado</strong>
+                <span>{{ record.row_count if not record.active_version else 'Base' }} filas · sin decisiones de limpieza</span>
+            </div>
+            <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=0) }}">
+                {{ form.hidden_tag() }}
+                <button class="btn btn-sm {{ 'btn-purple' if not record.active_version else 'btn-secondary' }}">
+                    {% if not record.active_version %}<i class="bi bi-check-circle"></i> Activa{% else %}<i class="bi bi-arrow-counterclockwise"></i> Restaurar{% endif %}
+                </button>
+            </form>
+        </div>
         {% for version in versions %}
-        <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=version.id) }}">
-            {{ form.hidden_tag() }}
-            <button class="btn btn-sm {{ 'btn-purple' if version.is_active else 'btn-secondary' }}">
-                Versión {{ version.version_number }} · {{ version.metrics.get('after_rows', '—') }} filas
-            </button>
-        </form>
-        {% if version.quarantine_filename %}
-        <a class="btn btn-danger-outline btn-sm"
-           href="{{ url_for('files.cleaning_quarantine', file_id=record.id, version_id=version.id) }}">
-            <i class="bi bi-download"></i> Cuarentena v{{ version.version_number }}
-        </a>
-        {% endif %}
+        <details class="version-entry {{ 'is-active' if version.is_active }}">
+            <summary>
+                <span>
+                    <strong>Versión {{ version.version_number }}</strong>
+                    <small>
+                        {{ version.metrics.get('after_rows', '—') }} filas ·
+                        {{ version.metrics.get('changed_rows', 0) }} transformadas ·
+                        {{ version.metrics.get('quarantined_rows', 0) }} en cuarentena
+                    </small>
+                </span>
+                <span class="version-entry-meta">
+                    {{ version.created_at.strftime('%d/%m/%Y %H:%M') }}
+                    {% if version.is_active %}<span class="badge badge-green">Activa</span>{% endif %}
+                </span>
+            </summary>
+            <div class="version-entry-detail">
+                <div class="version-actions">
+                    <form method="POST" action="{{ url_for('files.cleaning_activate', file_id=record.id, version_id=version.id) }}">
+                        {{ form.hidden_tag() }}
+                        <button class="btn btn-sm {{ 'btn-purple' if version.is_active else 'btn-secondary' }}">
+                            {% if version.is_active %}<i class="bi bi-check-circle"></i> Versión activa{% else %}<i class="bi bi-arrow-counterclockwise"></i> Restaurar versión{% endif %}
+                        </button>
+                    </form>
+                    {% if version.quarantine_filename %}
+                    <a class="btn btn-danger-outline btn-sm" href="{{ url_for('files.cleaning_quarantine', file_id=record.id, version_id=version.id) }}">
+                        <i class="bi bi-download"></i> Descargar cuarentena
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="version-operation-list">
+                    {% for operation in version.operations %}
+                    <div>
+                        <i class="bi bi-check2"></i>
+                        <strong>{{ operation_labels.get(operation.operation, operation.operation) }}</strong>
+                        {% if operation.column %} · {{ operation.column }}{% endif %}
+                        {% if operation.reason %}<small>{{ operation.reason }}</small>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </details>
         {% endfor %}
     </div>
 </div>
@@ -92,8 +127,16 @@
                     {% endif %}
                 </div>
                 <span class="cleaning-operation-reason">
-                    {{ decision.affected_rows }} fila(s) evaluada(s)
+                    {{ decision.affected_rows }} fila(s) afectada(s) ·
+                    decidido por {{ decision.decider.username }} el {{ decision.updated_at.strftime('%d/%m/%Y %H:%M') }}
                 </span>
+                {% if decision.parameters %}
+                <span class="decision-parameters">
+                    {% for name, value in decision.parameters.items() %}
+                        {% if name not in ['physical_type', 'source'] %}<code>{{ name }}={{ value }}</code>{% endif %}
+                    {% endfor %}
+                </span>
+                {% endif %}
             </div>
             {% if decision.operation_id in current_operation_ids %}
             <form method="POST" action="{{ url_for('files.cleaning_decision_reopen', file_id=record.id, decision_id=decision.id) }}">
@@ -416,6 +459,8 @@
 .cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
 .cleaning-submit span{display:block;color:var(--gray-500);font-size:12px;margin-top:3px}
 .resolved-decisions{padding:0}.resolved-decisions>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.resolved-decisions>summary::-webkit-details-marker{display:none}.resolved-decisions>summary span:first-child{display:flex;align-items:center;gap:8px}.resolved-decisions>summary i{color:#15803D}.resolved-decision-list{padding:0 20px 16px}.resolved-decision{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--gray-100)}.resolved-no-longer-detected{color:#15803D;font-size:11px;white-space:nowrap}
+.decision-parameters{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.decision-parameters code{padding:2px 5px;background:var(--gray-100);border-radius:4px;color:var(--gray-600);font-size:10px}
+.version-timeline{display:flex;flex-direction:column;gap:9px}.version-entry{border:1px solid var(--gray-200);border-radius:9px;padding:12px;background:white}.version-entry.is-active{border-color:#C4B5FD;background:#FAF5FF}.version-entry:not(details){display:flex;align-items:center;justify-content:space-between;gap:12px}.version-entry>div:first-child span,.version-entry summary small{display:block;color:var(--gray-500);font-size:11px;margin-top:3px}.version-entry summary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;list-style:none}.version-entry summary::-webkit-details-marker{display:none}.version-entry-meta{display:flex;align-items:center;gap:8px;color:var(--gray-500);font-size:11px}.version-entry-detail{padding-top:12px;margin-top:10px;border-top:1px solid var(--gray-100)}.version-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.version-operation-list{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--gray-700)}.version-operation-list i{color:#15803D}.version-operation-list small{display:block;color:var(--gray-500);margin:2px 0 0 20px}
 .custom-rule-builder{padding:0}.custom-rule-builder>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.custom-rule-builder>summary::-webkit-details-marker{display:none}.custom-rule-builder>summary span:first-child{display:flex;gap:8px;align-items:center}.custom-rule-content{padding:0 20px 20px}.custom-rule-content p{margin:0 0 14px;color:var(--gray-600);font-size:13px}.custom-rule-enable{display:flex;gap:8px;align-items:center;margin-bottom:14px;font-size:13px;font-weight:700;color:var(--purple)}.custom-rule-grid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:12px}.custom-rule-grid label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.custom-rule-grid .form-control{margin:0;background:white}
 @media(max-width:800px){.ai-analysis-card{align-items:stretch;flex-direction:column}.ai-analysis-card form{align-items:stretch}.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.custom-rule-grid{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
 </style>
