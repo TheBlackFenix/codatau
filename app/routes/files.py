@@ -162,6 +162,11 @@ def _cleaning_context(record):
             context_outcome.context,
             source_parquet,
         )
+    profile_data = CustomCleaningRuleService.enrich_plan(
+        profile_data,
+        CleaningDecision.query.filter_by(file_id=record.id).all(),
+        source_parquet,
+    )
     return pipeline, stored_filename, source_parquet, profile_data
 
 

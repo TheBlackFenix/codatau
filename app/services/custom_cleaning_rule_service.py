@@ -1,6 +1,7 @@
 import hashlib
 import json
 import math
+from copy import deepcopy
 
 import duckdb
 
@@ -17,6 +18,46 @@ class CustomCleaningRuleService:
 
     RULES = {'missing', 'email', 'range'}
     ACTIONS = {'quarantine_rows', 'replace_value', 'set_null'}
+
+    @classmethod
+    def enrich_plan(cls, profile, decisions, source_parquet):
+        """Restore saved manual rules so they remain visible and reusable."""
+        enriched = deepcopy(profile)
+        existing_ids = {
+            operation.get('id')
+            for operation in enriched['cleaning_plan']['operations']
+        }
+        restored = 0
+        for decision in decisions:
+            if not str(decision.operation_id).startswith('manual:'):
+                continue
+            if decision.operation_id in existing_ids or not decision.column_name:
+                continue
+            operation = {
+                'id': decision.operation_id,
+                'column': decision.column_name,
+                'operation': decision.operation,
+                'decision': 'user_review',
+                'affected_rows': 0,
+                'confidence': 1,
+                'parameters': deepcopy(decision.parameters or {}),
+                'reason': decision.reason or 'Regla manual guardada por el usuario.',
+                'saved_rule': True,
+            }
+            try:
+                operation['affected_rows'] = cls._affected_rows(
+                    source_parquet,
+                    operation,
+                )
+            except (duckdb.Error, KeyError, TypeError, ValueError):
+                # Keep the saved definition visible even if the current version
+                # no longer supports it; execution will still validate it safely.
+                operation['affected_rows'] = 0
+            enriched['cleaning_plan']['operations'].append(operation)
+            existing_ids.add(decision.operation_id)
+            restored += 1
+        enriched['cleaning_plan']['summary']['user_review'] += restored
+        return enriched
 
     @classmethod
     def from_form(cls, profile, form_data, source_parquet):

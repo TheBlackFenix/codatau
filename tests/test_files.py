@@ -907,6 +907,8 @@ def test_user_can_create_preview_and_apply_a_custom_column_rule(
 
     plan = client.get('/files/cleaning/1')
     assert 'Crear una regla por columna'.encode() in plan.data
+    assert 'Revisar y guardar regla'.encode() in plan.data
+    assert b'data-custom-rule-enabled' not in plan.data
     configured = {
         'custom_rule:enabled': '1',
         'custom_rule:column': 'alto',
@@ -937,8 +939,23 @@ def test_user_can_create_preview_and_apply_a_custom_column_rule(
         decision = CleaningDecision.query.filter(
             CleaningDecision.operation_id.like('manual:%')
         ).one()
+        decision_id = decision.id
+        operation_id = decision.operation_id
         assert decision.parameters['minimum'] == 0
         assert decision.parameters['maximum'] == 200
+
+    saved_plan = client.get('/files/cleaning/1')
+    assert b'Regla manual guardada' not in saved_plan.data
+    assert b'decidido por tester' in saved_plan.data
+    assert f'/files/cleaning/1/decisions/{decision_id}/reopen'.encode() in saved_plan.data
+
+    reopened = client.post(
+        f'/files/cleaning/1/decisions/{decision_id}/reopen',
+        follow_redirects=True,
+    )
+    assert reopened.status_code == 200
+    assert operation_id.encode() in reopened.data
+    assert b'Regla manual guardada' in reopened.data
 
 
 def test_semantic_context_proposes_actionable_positive_range_rule(
@@ -1013,7 +1030,7 @@ def test_ai_flagged_date_can_be_configured_manually(app, client, auth):
     assert b'name="decision:fecha:parse_date" value="apply"' in plan.data
     assert b'name="parameter:fecha:parse_date:date_format"' in plan.data
     configuration = plan.data.split(b'data-operation-configuration', 1)[1].split(b'>', 1)[0]
-    assert b'hidden' not in configuration
+    assert b'hidden' in configuration
 
     applied = client.post(
         '/files/cleaning/1/apply',

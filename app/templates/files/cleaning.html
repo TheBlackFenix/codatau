@@ -169,10 +169,6 @@
                 Úsala cuando quieras validar algo que no fue sugerido automáticamente.
                 La regla también pasará por la vista previa antes de modificar datos.
             </p>
-            <label class="custom-rule-enable">
-                <input type="checkbox" name="custom_rule:enabled" value="1" data-custom-rule-enabled>
-                Incluir esta regla en la próxima vista previa
-            </label>
             <div class="custom-rule-grid">
                 <label>
                     <span>Columna</span>
@@ -211,6 +207,12 @@
                     <span>Valor de reemplazo</span>
                     <input class="form-control" type="text" maxlength="200" name="custom_rule:replacement_value" placeholder="Ejemplo: N/A o No tiene">
                 </label>
+            </div>
+            <div class="custom-rule-save">
+                <span><i class="bi bi-info-circle"></i> Primero revisarás el impacto; la regla quedará guardada cuando confirmes la vista previa.</span>
+                <button type="submit" class="btn btn-purple" name="custom_rule:enabled" value="1">
+                    <i class="bi bi-eye"></i> Revisar y guardar regla
+                </button>
             </div>
         </div>
     </details>
@@ -256,6 +258,7 @@
                         {% else %}
                             <span class="badge badge-purple">Necesita IA</span>
                         {% endif %}
+                        {% if operation.saved_rule %}<span class="badge badge-purple">Regla manual guardada</span>{% endif %}
                     </span>
                     <span class="cleaning-operation-reason">
                         {{ operation.reason }} · {{ operation.affected_rows }} fila(s)
@@ -342,7 +345,7 @@
                 </div>
 
                 {% if executable %}
-                <div class="cleaning-configuration" data-operation-configuration {% if automatic %}hidden{% endif %}>
+                <div class="cleaning-configuration" data-operation-configuration hidden>
                     {% if not automatic %}
                     <div class="cleaning-configuration-heading">
                         <i class="bi bi-sliders"></i>
@@ -362,7 +365,7 @@
                                 {% endif %}
                             </select>
                         </label>
-                        <label data-replacement-field>
+                        <label data-replacement-field {% if operation.parameters.get('invalid_action') != 'replace_value' %}hidden{% endif %}>
                             <span>Valor de reemplazo</span>
                             <input class="form-control" type="text" maxlength="200"
                                    name="parameter:{{ operation.id }}:replacement_value"
@@ -464,7 +467,7 @@
 .resolved-decisions{padding:0}.resolved-decisions>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.resolved-decisions>summary::-webkit-details-marker{display:none}.resolved-decisions>summary span:first-child{display:flex;align-items:center;gap:8px}.resolved-decisions>summary i{color:#15803D}.resolved-decision-list{padding:0 20px 16px}.resolved-decision{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--gray-100)}.resolved-no-longer-detected{color:#15803D;font-size:11px;white-space:nowrap}
 .decision-parameters{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.decision-parameters code{padding:2px 5px;background:var(--gray-100);border-radius:4px;color:var(--gray-600);font-size:10px}
 .version-timeline{display:flex;flex-direction:column;gap:9px}.version-entry{border:1px solid var(--gray-200);border-radius:9px;padding:12px;background:white}.version-entry.is-active{border-color:#C4B5FD;background:#FAF5FF}.version-entry:not(details){display:flex;align-items:center;justify-content:space-between;gap:12px}.version-entry>div:first-child span,.version-entry summary small{display:block;color:var(--gray-500);font-size:11px;margin-top:3px}.version-entry summary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;list-style:none}.version-entry summary::-webkit-details-marker{display:none}.version-entry-meta{display:flex;align-items:center;gap:8px;color:var(--gray-500);font-size:11px}.version-entry-detail{padding-top:12px;margin-top:10px;border-top:1px solid var(--gray-100)}.version-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.version-operation-list{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--gray-700)}.version-operation-list i{color:#15803D}.version-operation-list small{display:block;color:var(--gray-500);margin:2px 0 0 20px}
-.custom-rule-builder{padding:0}.custom-rule-builder>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.custom-rule-builder>summary::-webkit-details-marker{display:none}.custom-rule-builder>summary span:first-child{display:flex;gap:8px;align-items:center}.custom-rule-content{padding:0 20px 20px}.custom-rule-content p{margin:0 0 14px;color:var(--gray-600);font-size:13px}.custom-rule-enable{display:flex;gap:8px;align-items:center;margin-bottom:14px;font-size:13px;font-weight:700;color:var(--purple)}.custom-rule-grid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:12px}.custom-rule-grid label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.custom-rule-grid .form-control{margin:0;background:white}
+.custom-rule-builder{padding:0}.custom-rule-builder>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.custom-rule-builder>summary::-webkit-details-marker{display:none}.custom-rule-builder>summary span:first-child{display:flex;gap:8px;align-items:center}.custom-rule-content{padding:0 20px 20px}.custom-rule-content p{margin:0 0 14px;color:var(--gray-600);font-size:13px}.custom-rule-grid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:12px}.custom-rule-grid label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.custom-rule-grid .form-control{margin:0;background:white}.custom-rule-save{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100)}.custom-rule-save span{color:var(--gray-500);font-size:11px}.custom-rule-save .btn{white-space:nowrap}
 @media(max-width:800px){.ai-analysis-card{align-items:stretch;flex-direction:column}.ai-analysis-card form{align-items:stretch}.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.custom-rule-grid{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
 </style>
 {% endblock %}
@@ -474,10 +477,20 @@
 document.querySelectorAll('[data-decision-card]').forEach(card => {
     const configuration = card.querySelector('[data-operation-configuration]');
     if (!configuration) return;
+    const apply = card.querySelector('[data-operation-decision][value="apply"]');
+    const decisions = card.querySelectorAll('[data-operation-decision]');
+    const syncConfiguration = () => {
+        configuration.hidden = !apply || !apply.checked;
+    };
+    decisions.forEach(decision => {
+        decision.addEventListener('change', syncConfiguration);
+    });
     configuration.querySelectorAll('select, input').forEach(input => {
         input.addEventListener('change', () => {
-            const apply = card.querySelector('[data-operation-decision][value="apply"]');
-            if (apply) apply.checked = true;
+            if (apply) {
+                apply.checked = true;
+                syncConfiguration();
+            }
         });
     });
     const invalidAction = configuration.querySelector('[data-invalid-action]');
@@ -489,10 +502,10 @@ document.querySelectorAll('[data-decision-card]').forEach(card => {
         invalidAction.addEventListener('change', syncReplacement);
         syncReplacement();
     }
+    syncConfiguration();
 });
 const customRule = document.querySelector('[data-custom-rule]');
 if (customRule) {
-    const enabled = customRule.querySelector('[data-custom-rule-enabled]');
     const type = customRule.querySelector('[data-custom-rule-type]');
     const action = customRule.querySelector('[data-custom-rule-action]');
     const minimum = customRule.querySelector('[data-custom-minimum]');
@@ -506,11 +519,8 @@ if (customRule) {
         nullOption.disabled = type.value === 'missing';
         if (nullOption.disabled && action.value === 'set_null') action.value = 'quarantine_rows';
     };
-    type.addEventListener('change', () => { enabled.checked = true; sync(); });
-    action.addEventListener('change', () => { enabled.checked = true; sync(); });
-    customRule.querySelectorAll('input, select').forEach(input => {
-        if (input !== enabled) input.addEventListener('change', () => { enabled.checked = true; });
-    });
+    type.addEventListener('change', sync);
+    action.addEventListener('change', sync);
     sync();
 }
 </script>
