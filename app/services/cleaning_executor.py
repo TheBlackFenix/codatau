@@ -164,7 +164,10 @@ class CleaningExecutor:
                 )
             parameters['invalid_action'] = action
             if action == 'replace_value':
-                replacement = overrides.get('replacement_value')
+                replacement = (
+                    overrides.get('replacement_value')
+                    or parameters.get('replacement_value')
+                )
                 if not isinstance(replacement, str) or not replacement.strip():
                     raise CleaningPlanError(
                         'Escribe el valor que reemplazará las celdas problemáticas.'
@@ -345,17 +348,19 @@ class CleaningExecutor:
             return transformed, None, f'{current} IS DISTINCT FROM {transformed}'
         if name == 'handle_missing':
             action = parameters.get('invalid_action')
+            missing = f"{current} IS NULL OR {text} = ''"
             if action == 'quarantine_rows':
-                return current, f'{current} IS NULL', None
+                return current, missing, None
             if action == 'replace_value':
                 replacement = parameters.get('replacement_value')
                 if not isinstance(replacement, str) or not replacement:
                     raise CleaningPlanError('El valor de reemplazo no es válido.')
                 transformed = (
-                    f'coalesce({current}, '
-                    f'cast_to_type({_sql_literal(replacement)}, {current}))'
+                    f'CASE WHEN {missing} THEN '
+                    f'cast_to_type({_sql_literal(replacement)}, {current}) '
+                    f'ELSE {current} END'
                 )
-                return transformed, None, f'{current} IS NULL'
+                return transformed, None, missing
             raise CleaningPlanError('La estrategia para valores nulos no es válida.')
         if name == 'cast_type':
             target = parameters.get('target_type')
@@ -401,10 +406,24 @@ class CleaningExecutor:
         if name == 'validate_range':
             constraint = parameters.get('constraint')
             threshold = parameters.get('threshold')
-            if constraint not in {'positive', 'non_negative'} or threshold != 0:
+            minimum = parameters.get('minimum')
+            maximum = parameters.get('maximum')
+            if constraint in {'positive', 'non_negative'} and threshold == 0:
+                comparison = '<= 0' if constraint == 'positive' else '< 0'
+                invalid = f'{current} IS NOT NULL AND {current} {comparison}'
+            elif constraint == 'between' and (minimum is not None or maximum is not None):
+                predicates = []
+                if minimum is not None:
+                    predicates.append(f'{current} < {float(minimum)}')
+                if maximum is not None:
+                    predicates.append(f'{current} > {float(maximum)}')
+                invalid = (
+                    f'{current} IS NOT NULL AND ('
+                    + ' OR '.join(predicates)
+                    + ')'
+                )
+            else:
                 raise CleaningPlanError('La restricción numérica no es válida.')
-            comparison = '<= 0' if constraint == 'positive' else '< 0'
-            invalid = f'{current} IS NOT NULL AND {current} {comparison}'
             action = parameters.get('invalid_action', 'quarantine_rows')
             if action == 'quarantine_rows':
                 return current, invalid, None

@@ -87,6 +87,15 @@
 
 <form method="POST" action="{{ url_for('files.cleaning_apply', file_id=record.id) }}">
     {{ form.hidden_tag() }}
+    {% if manual_rule %}
+    <input type="hidden" name="custom_rule:enabled" value="1">
+    <input type="hidden" name="custom_rule:column" value="{{ manual_rule.column }}">
+    <input type="hidden" name="custom_rule:type" value="{% if manual_rule.operation == 'handle_missing' %}missing{% elif manual_rule.operation == 'validate_email' %}email{% else %}range{% endif %}">
+    <input type="hidden" name="custom_rule:invalid_action" value="{{ manual_rule.parameters.invalid_action }}">
+    {% if manual_rule.parameters.get('replacement_value') %}<input type="hidden" name="custom_rule:replacement_value" value="{{ manual_rule.parameters.replacement_value }}">{% endif %}
+    {% if manual_rule.parameters.get('minimum') is not none %}<input type="hidden" name="custom_rule:minimum" value="{{ manual_rule.parameters.minimum }}">{% endif %}
+    {% if manual_rule.parameters.get('maximum') is not none %}<input type="hidden" name="custom_rule:maximum" value="{{ manual_rule.parameters.maximum }}">{% endif %}
+    {% endif %}
     {% for decision in decisions %}
     <input type="hidden" name="decision:{{ decision.operation_id }}" value="{{ decision.choice }}">
     {% if decision.choice == 'apply' and decision.operation in invalid_action_operations %}

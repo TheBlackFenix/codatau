@@ -40,6 +40,7 @@ from app.services.cleaning_executor import (
     select_configured_operations,
 )
 from app.services.cleaning_decision_service import CleaningDecisionService
+from app.services.custom_cleaning_rule_service import CustomCleaningRuleService
 from app.services.dashboard_service import DashboardService
 from app.services.storage_service import LocalStorageService
 
@@ -201,8 +202,17 @@ def _cleaning_parameter_overrides(form_data, operations, selected_ids):
     return overrides
 
 
-def _submitted_cleaning_decisions(profile_data, resolved_ids=None):
-    operations = profile_data['cleaning_plan']['operations']
+def _submitted_cleaning_decisions(profile_data, source_parquet, resolved_ids=None):
+    operations = list(profile_data['cleaning_plan']['operations'])
+    manual_rule = CustomCleaningRuleService.from_form(
+        profile_data,
+        request.form,
+        source_parquet,
+    )
+    if manual_rule and manual_rule['id'] not in {
+        operation['id'] for operation in operations
+    }:
+        operations.append(manual_rule)
     choices = {}
     has_explicit_choices = False
     for operation in operations:
@@ -221,6 +231,8 @@ def _submitted_cleaning_decisions(profile_data, resolved_ids=None):
             operation_id: 'apply'
             for operation_id in request.form.getlist('operation_ids')
         }
+    if manual_rule:
+        choices[manual_rule['id']] = 'apply'
 
     if not choices:
         raise CleaningPlanError(
@@ -252,7 +264,10 @@ def _submitted_cleaning_decisions(profile_data, resolved_ids=None):
     )
     selected_operations = (
         select_configured_operations(
-            profile_data['cleaning_plan'],
+            {
+                **profile_data['cleaning_plan'],
+                'operations': operations,
+            },
             selected_ids,
             overrides,
         )
@@ -275,7 +290,7 @@ def _submitted_cleaning_decisions(profile_data, resolved_ids=None):
             'affected_rows': operation.get('affected_rows') or 0,
             'reason': operation.get('reason'),
         })
-    return selected_operations, decisions
+    return selected_operations, decisions, manual_rule
 
 
 @files_bp.route('/upload', methods=['GET', 'POST'])
@@ -778,8 +793,9 @@ def cleaning_preview(file_id):
             decision.operation_id
             for decision in CleaningDecisionService.active_for_file(record.id)
         }
-        operations, decisions = _submitted_cleaning_decisions(
+        operations, decisions, manual_rule = _submitted_cleaning_decisions(
             profile_data,
+            source_parquet,
             resolved_ids,
         )
         preview = CleaningExecutor().preview(source_parquet, operations)
@@ -811,6 +827,7 @@ def cleaning_preview(file_id):
         quarantine_effects=QUARANTINE_EFFECTS,
         invalid_action_operations=INVALID_ACTION_OPERATIONS,
         quarantine_reason_labels=_quarantine_reason_labels(decisions),
+        manual_rule=manual_rule,
         form=CleaningActionForm(),
     )
 
@@ -830,8 +847,9 @@ def cleaning_apply(file_id):
             decision.operation_id
             for decision in CleaningDecisionService.active_for_file(record.id)
         }
-        operations, decisions = _submitted_cleaning_decisions(
+        operations, decisions, _ = _submitted_cleaning_decisions(
             profile_data,
+            source_parquet,
             resolved_ids,
         )
     except CleaningPlanError as error:

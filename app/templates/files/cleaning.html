@@ -113,6 +113,61 @@
 
 <form method="POST" action="{{ url_for('files.cleaning_preview', file_id=record.id) }}">
     {{ form.hidden_tag() }}
+    <details class="card custom-rule-builder" style="margin-bottom:20px" data-custom-rule>
+        <summary>
+            <span><i class="bi bi-sliders2"></i> Crear una regla por columna</span>
+            <span class="badge badge-purple">Manual</span>
+        </summary>
+        <div class="custom-rule-content">
+            <p>
+                Úsala cuando quieras validar algo que no fue sugerido automáticamente.
+                La regla también pasará por la vista previa antes de modificar datos.
+            </p>
+            <label class="custom-rule-enable">
+                <input type="checkbox" name="custom_rule:enabled" value="1" data-custom-rule-enabled>
+                Incluir esta regla en la próxima vista previa
+            </label>
+            <div class="custom-rule-grid">
+                <label>
+                    <span>Columna</span>
+                    <select class="form-control" name="custom_rule:column">
+                        <option value="">Selecciona una columna</option>
+                        {% for column in profile.columns %}
+                        <option value="{{ column.name }}">{{ column.name }} · {{ column.type }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>Validación</span>
+                    <select class="form-control" name="custom_rule:type" data-custom-rule-type>
+                        <option value="missing">Vacíos o nulos</option>
+                        <option value="email">Formato de correo</option>
+                        <option value="range">Límite numérico</option>
+                    </select>
+                </label>
+                <label data-custom-minimum hidden>
+                    <span>Mínimo permitido</span>
+                    <input class="form-control" type="number" step="any" name="custom_rule:minimum" placeholder="Opcional">
+                </label>
+                <label data-custom-maximum hidden>
+                    <span>Máximo permitido</span>
+                    <input class="form-control" type="number" step="any" name="custom_rule:maximum" placeholder="Opcional">
+                </label>
+                <label>
+                    <span>Si no cumple</span>
+                    <select class="form-control" name="custom_rule:invalid_action" data-custom-rule-action>
+                        <option value="quarantine_rows">Separar la fila en cuarentena</option>
+                        <option value="replace_value">Conservar fila y reemplazar celda</option>
+                        <option value="set_null">Conservar fila y dejar celda nula</option>
+                    </select>
+                </label>
+                <label data-custom-replacement hidden>
+                    <span>Valor de reemplazo</span>
+                    <input class="form-control" type="text" maxlength="200" name="custom_rule:replacement_value" placeholder="Ejemplo: N/A o No tiene">
+                </label>
+            </div>
+        </div>
+    </details>
     <div class="card">
         <div class="card-title">
             <i class="bi bi-list-check"></i> Decisiones pendientes
@@ -350,7 +405,8 @@
 .cleaning-submit{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--gray-100)}
 .cleaning-submit span{display:block;color:var(--gray-500);font-size:12px;margin-top:3px}
 .resolved-decisions{padding:0}.resolved-decisions>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.resolved-decisions>summary::-webkit-details-marker{display:none}.resolved-decisions>summary span:first-child{display:flex;align-items:center;gap:8px}.resolved-decisions>summary i{color:#15803D}.resolved-decision-list{padding:0 20px 16px}.resolved-decision{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--gray-100)}.resolved-no-longer-detected{color:#15803D;font-size:11px;white-space:nowrap}
-@media(max-width:800px){.ai-analysis-card{align-items:stretch;flex-direction:column}.ai-analysis-card form{align-items:stretch}.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
+.custom-rule-builder{padding:0}.custom-rule-builder>summary{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;cursor:pointer;font-weight:700;list-style:none}.custom-rule-builder>summary::-webkit-details-marker{display:none}.custom-rule-builder>summary span:first-child{display:flex;gap:8px;align-items:center}.custom-rule-content{padding:0 20px 20px}.custom-rule-content p{margin:0 0 14px;color:var(--gray-600);font-size:13px}.custom-rule-enable{display:flex;gap:8px;align-items:center;margin-bottom:14px;font-size:13px;font-weight:700;color:var(--purple)}.custom-rule-grid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:12px}.custom-rule-grid label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.custom-rule-grid .form-control{margin:0;background:white}
+@media(max-width:800px){.ai-analysis-card{align-items:stretch;flex-direction:column}.ai-analysis-card form{align-items:stretch}.cleaning-summary{grid-template-columns:1fr}.cleaning-configuration label{grid-template-columns:1fr}.custom-rule-grid{grid-template-columns:1fr}.cleaning-submit{align-items:stretch;flex-direction:column}.cleaning-submit .btn{justify-content:center}}
 </style>
 {% endblock %}
 
@@ -375,5 +431,28 @@ document.querySelectorAll('[data-decision-card]').forEach(card => {
         syncReplacement();
     }
 });
+const customRule = document.querySelector('[data-custom-rule]');
+if (customRule) {
+    const enabled = customRule.querySelector('[data-custom-rule-enabled]');
+    const type = customRule.querySelector('[data-custom-rule-type]');
+    const action = customRule.querySelector('[data-custom-rule-action]');
+    const minimum = customRule.querySelector('[data-custom-minimum]');
+    const maximum = customRule.querySelector('[data-custom-maximum]');
+    const replacement = customRule.querySelector('[data-custom-replacement]');
+    const sync = () => {
+        minimum.hidden = type.value !== 'range';
+        maximum.hidden = type.value !== 'range';
+        replacement.hidden = action.value !== 'replace_value';
+        const nullOption = action.querySelector('option[value="set_null"]');
+        nullOption.disabled = type.value === 'missing';
+        if (nullOption.disabled && action.value === 'set_null') action.value = 'quarantine_rows';
+    };
+    type.addEventListener('change', () => { enabled.checked = true; sync(); });
+    action.addEventListener('change', () => { enabled.checked = true; sync(); });
+    customRule.querySelectorAll('input, select').forEach(input => {
+        if (input !== enabled) input.addEventListener('change', () => { enabled.checked = true; });
+    });
+    sync();
+}
 </script>
 {% endblock %}

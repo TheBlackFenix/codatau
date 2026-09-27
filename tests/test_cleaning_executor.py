@@ -186,6 +186,37 @@ def test_executor_can_null_invalid_email_without_losing_the_row(tmp_path):
     assert preview.after[1]['email'] is None
 
 
+def test_executor_applies_custom_minimum_and_maximum_without_losing_rows(tmp_path):
+    dataframe = pd.DataFrame({'height': [-2, 15, 250]})
+    source = tmp_path / 'ranges.csv'
+    dataframe.to_csv(source, index=False)
+    artifact = DatasetPipeline(tmp_path / 'artifacts').ingest_dataframe(
+        dataframe,
+        'ranges.csv',
+        source,
+    )
+    operation = {
+        'id': 'manual:range',
+        'column': 'height',
+        'operation': 'validate_range',
+        'decision': 'user_review',
+        'parameters': {
+            'constraint': 'between',
+            'minimum': 0,
+            'maximum': 200,
+            'invalid_action': 'replace_value',
+            'replacement_value': '0',
+        },
+    }
+
+    preview = CleaningExecutor().preview(artifact.parquet_path, [operation])
+
+    assert preview.metrics['after_rows'] == 3
+    assert preview.metrics['changed_rows'] == 2
+    assert preview.metrics['quarantined_rows'] == 0
+    assert [row['height'] for row in preview.after] == [0, 15, 0]
+
+
 def test_executor_applies_user_configured_regional_and_text_rules(tmp_path):
     dataframe = pd.DataFrame(
         {

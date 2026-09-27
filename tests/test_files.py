@@ -865,6 +865,55 @@ def test_user_can_replace_invalid_cells_and_keep_complete_rows(app, client, auth
         ] == 'No tiene'
 
 
+def test_user_can_create_preview_and_apply_a_custom_column_rule(
+    app,
+    client,
+    auth,
+):
+    _login(auth)
+    source = b'envio,alto\nA,-10\nB,20\nC,250\n'
+    client.post(
+        '/files/upload',
+        data={'file': (BytesIO(source), 'alturas.csv')},
+        content_type='multipart/form-data',
+    )
+
+    plan = client.get('/files/cleaning/1')
+    assert 'Crear una regla por columna'.encode() in plan.data
+    configured = {
+        'custom_rule:enabled': '1',
+        'custom_rule:column': 'alto',
+        'custom_rule:type': 'range',
+        'custom_rule:minimum': '0',
+        'custom_rule:maximum': '200',
+        'custom_rule:invalid_action': 'replace_value',
+        'custom_rule:replacement_value': '0',
+    }
+    preview = client.post('/files/cleaning/1/preview', data=configured)
+    assert preview.status_code == 200
+    assert b'name="custom_rule:minimum" value="0.0"' in preview.data
+    assert b'3</div><div class="stat-label">Filas resultantes' in preview.data
+    assert b'2</div><div class="stat-label">Filas transformadas' in preview.data
+
+    applied = client.post(
+        '/files/cleaning/1/apply',
+        data=configured,
+        follow_redirects=True,
+    )
+    assert applied.status_code == 200
+    assert 'Versión 1 creada'.encode() in applied.data
+    download = client.get('/reports/download/1')
+    assert b'A,0' in download.data
+    assert b'B,20' in download.data
+    assert b'C,0' in download.data
+    with app.app_context():
+        decision = CleaningDecision.query.filter(
+            CleaningDecision.operation_id.like('manual:%')
+        ).one()
+        assert decision.parameters['minimum'] == 0
+        assert decision.parameters['maximum'] == 200
+
+
 def test_semantic_context_proposes_actionable_positive_range_rule(
     app,
     client,
