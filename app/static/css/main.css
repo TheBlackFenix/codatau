@@ -1519,6 +1519,7 @@ body {
     box-shadow: var(--shadow-sm);
 }
 
+[hidden] { display: none !important; }
 .selected-file[hidden] { display: none; }
 .visually-hidden {
     position: absolute !important;

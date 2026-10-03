@@ -7,10 +7,11 @@ from app.extensions import db
 from app.models.ai_analysis_run import AIAnalysisRun
 from app.services.ai_providers import AIProviderError, AIProviderFactory
 from app.services.cleaning_executor import CleaningExecutor
+from app.services.ai_prompts import SPANISH_OUTPUT
 
 
 ANALYSIS_PURPOSE = 'cleaning_analysis'
-ANALYSIS_VERSION = '1.0'
+ANALYSIS_VERSION = '1.1-es'
 EMAIL_RE = re.compile(r'[^\s@]+@[^\s@]+\.[^\s@]+', re.IGNORECASE)
 DIGIT_RUN_RE = re.compile(r'\d{5,}')
 
@@ -77,7 +78,7 @@ class AICleaningService:
         },
     }
 
-    INSTRUCTIONS = (
+    INSTRUCTIONS = SPANISH_OUTPUT + (
         'Eres un analista de calidad de datos. Responde exclusivamente con el JSON '
         'que cumple el esquema. Evalúa únicamente los operation_id suministrados. '
         'Devuelve exactamente una sugerencia por cada operation_id. En parameters '
