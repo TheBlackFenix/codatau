@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, current_app, jsonify, render_template, request, session
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import login_required, current_user
 
 from app.extensions import db
@@ -13,6 +13,9 @@ from app.services.dataset_context_service import DatasetContextService
 from app.services.cleaning_decision_service import CleaningDecisionService
 from app.services.quality_insight_service import QualityInsightService
 from app.services.semantic_constraint_service import SemanticConstraintService
+from app.services.ai_dashboard_service import AIDashboardService
+from app.services.ai_providers import AIProviderError, AIProviderFactory
+from app.forms.file_forms import CleaningActionForm
 from app.services.dashboard_service import (
     DashboardConfigurationError,
     DashboardService,
@@ -36,6 +39,7 @@ def index():
     summary = None
     chart_data = {}
     insights = []
+    recommendation = None
 
     if active_file_id:
         active_file = FileUpload.query.filter_by(
@@ -87,7 +91,11 @@ def index():
             )
             metric_layout = DashboardService.layout_for(active_file, summary)
             metric_cards = DashboardService.cards_for(metric_layout, summary)
-            chart_data = DashboardService.build_charts(df, summary, metric_layout)
+            chart_data = DashboardService.build_charts(df, summary, metric_layout, context_outcome.context if context_outcome else {})
+            recommendation = AIDashboardService.latest(
+                active_file, summary, context_outcome.context if context_outcome else {},
+                current_app.config,
+            )
 
         except Exception:
             current_app.logger.exception(
@@ -116,7 +124,62 @@ def index():
         total_files=total_files,
         total_rows=total_rows,
         total_insights=total_insights,
+        recommendation=recommendation,
+        action_form=CleaningActionForm(),
+        ai_configured=AIProviderFactory.is_configured(current_app.config),
+        aggregation_labels=DashboardService.AGGREGATION_LABELS,
     )
+
+
+def _recommendation_inputs(record):
+    pipeline = DatasetPipeline(current_app.config['ANALYTICS_FOLDER'], current_app.config['PROFILE_SAMPLE_SIZE'])
+    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
+    summary = DataService.get_summary(pipeline.load_dataframe_or_source(record.active_stored_filename, filepath))
+    profile = pipeline.ensure_current_profile(record.active_stored_filename, filepath)
+    context = DatasetContextService.latest(record, profile, current_user.id, current_app.config)
+    return summary, profile, context
+
+
+@dashboard_bp.route('/dashboard/files/<int:file_id>/recommendations', methods=['POST'])
+@login_required
+def recommend_metrics(file_id):
+    record = FileUpload.query.filter_by(id=file_id, user_id=current_user.id).first_or_404()
+    if not CleaningActionForm().validate_on_submit():
+        return 'Formulario inválido.', 400
+    try:
+        summary, profile, context = _recommendation_inputs(record)
+        if context is None:
+            context = DatasetContextService.analyze(record, profile, current_user.id, current_app.config)
+        AIDashboardService.recommend(record, summary, context.context, current_app.config)
+        db.session.commit()
+        flash('Propuesta lista. Revísala y acepta las métricas para crear tu dashboard.', 'success')
+    except AIProviderError as error:
+        db.session.commit()  # Preserve the safe audit of the failed provider call.
+        flash(error.user_message + ' Puedes configurar tus métricas manualmente.', 'warning')
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('No se pudo proponer el dashboard del archivo %s', record.id)
+        flash('No pudimos preparar las métricas. Los datos siguen intactos.', 'warning')
+    session['active_file_id'] = record.id
+    return redirect(url_for('dashboard.index'))
+
+
+@dashboard_bp.route('/dashboard/files/<int:file_id>/recommendations/apply', methods=['POST'])
+@login_required
+def apply_recommended_metrics(file_id):
+    record = FileUpload.query.filter_by(id=file_id, user_id=current_user.id).first_or_404()
+    if not CleaningActionForm().validate_on_submit():
+        return 'Formulario inválido.', 400
+    summary, _, context = _recommendation_inputs(record)
+    run = AIDashboardService.latest(record, summary, context.context if context else {}, current_app.config)
+    if run is None or str(run.id) != request.form.get('run_id'):
+        flash('La propuesta ya no corresponde a la versión activa. Genera una nueva.', 'warning')
+    else:
+        DashboardService.save_layout(record, current_user.id, run.result['metrics'], summary)
+        db.session.commit()
+        flash('Dashboard creado. Puedes quitar, agregar y ordenar sus métricas.', 'success')
+    session['active_file_id'] = record.id
+    return redirect(url_for('dashboard.index'))
 
 
 @dashboard_bp.route('/dashboard/files/<int:file_id>/metrics', methods=['POST'])

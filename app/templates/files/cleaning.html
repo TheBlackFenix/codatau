@@ -15,6 +15,15 @@
     </a>
 </div>
 
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title">Cuando termines de revisar la limpieza</div>
+    <p>Guarda primero las decisiones desde su vista previa. Este paso analiza la versión activa y propone métricas; no aplica decisiones pendientes ni modifica datos.</p>
+    <form method="POST" action="{{ url_for('dashboard.recommend_metrics', file_id=record.id) }}">
+        {{ form.hidden_tag() }}
+        <button class="btn btn-purple" {% if not ai_configured %}disabled{% endif %}>Finalizar revisión ETL y proponer métricas</button>
+    </form>
+</div>
+
 <div class="insight-chip insight-info" style="margin-bottom:20px">
     <i class="bi bi-shield-check"></i>
     <span>

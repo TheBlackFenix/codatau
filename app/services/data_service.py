@@ -286,6 +286,23 @@ class DataService:
         else:
             summary['numeric_summary'] = {}
 
+        summary['metric_catalog'] = dict(summary['numeric_summary'])
+        for column in df.columns:
+            if column in summary['metric_catalog']:
+                continue
+            present = int(df[column].notna().sum())
+            unique = int(df[column].nunique(dropna=True))
+            summary['metric_catalog'][column] = {
+                'non_null_count': present,
+                'missing_count': len(df) - present,
+                'unique_count': unique,
+                'completeness': round(present / len(df) * 100, 1) if len(df) else 0,
+                'unique_percentage': round(unique / len(df) * 100, 1) if len(df) else 0,
+                'role': 'category',
+            }
+        for stats in summary['metric_catalog'].values():
+            stats['row_count'] = len(df)
+
         # Preview: primeras 10 filas como lista de dicts
         summary['preview'] = df.head(10).fillna('').to_dict(orient='records')
 

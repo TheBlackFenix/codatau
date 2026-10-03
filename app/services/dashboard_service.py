@@ -22,6 +22,7 @@ class DashboardService:
         'completeness': 'Porcentaje con dato',
         'unique_count': 'Valores únicos',
         'unique_percentage': 'Valores únicos / total de filas',
+        'row_count': 'Total de registros',
     }
     MAX_METRICS = 24
     DATE_HINT = re.compile(r'(^|[_\W])(fecha|date|timestamp|hora|time)($|[_\W])', re.I)
@@ -42,7 +43,7 @@ class DashboardService:
                 f'Puedes mostrar hasta {cls.MAX_METRICS} métricas por archivo.'
             )
 
-        catalog = summary['numeric_summary']
+        catalog = summary.get('metric_catalog', summary['numeric_summary'])
         validated = []
         seen = set()
         for item in layout:
@@ -56,6 +57,8 @@ class DashboardService:
                 )
             if aggregation not in cls.AGGREGATION_LABELS:
                 raise DashboardConfigurationError('El cálculo seleccionado no es válido.')
+            if aggregation not in catalog[column]:
+                raise DashboardConfigurationError('Ese cálculo no es compatible con el tipo de campo.')
             key = (column, aggregation)
             if key in seen:
                 continue
@@ -74,18 +77,19 @@ class DashboardService:
 
         # A cleaned version can remove or change columns. Ignore stale cards while
         # preserving the user's explicit choice (including an empty dashboard).
-        catalog = summary['numeric_summary']
+        catalog = summary.get('metric_catalog', summary['numeric_summary'])
         return [
             item
             for item in (configuration.metrics or [])
             if isinstance(item, dict)
             and item.get('column') in catalog
             and item.get('aggregation') in cls.AGGREGATION_LABELS
+            and item.get('aggregation') in catalog[item['column']]
         ]
 
     @classmethod
     def cards_for(cls, layout, summary):
-        catalog = summary['numeric_summary']
+        catalog = summary.get('metric_catalog', summary['numeric_summary'])
         cards = []
         for item in layout:
             column = item['column']
@@ -118,7 +122,7 @@ class DashboardService:
         return validated
 
     @classmethod
-    def build_charts(cls, dataframe, summary, layout):
+    def build_charts(cls, dataframe, summary, layout, context=None):
         charts = {}
         preferred = cls._preferred_measure(dataframe, layout)
         date_column, dates = cls._date_series(dataframe)
@@ -131,7 +135,10 @@ class DashboardService:
         category = cls._category_chart(
             dataframe,
             preferred,
-            excluded={date_column} if date_column else set(),
+            excluded=({date_column} if date_column else set()) | {
+                role['column'] for role in (context or {}).get('column_roles', [])
+                if role.get('role') in {'identifier', 'contact', 'date', 'description'}
+            },
         )
         if category:
             charts['category'] = category

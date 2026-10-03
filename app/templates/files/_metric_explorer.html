@@ -40,7 +40,7 @@
         <summary><i class="bi bi-plus-circle"></i> Agregar métrica</summary>
         <div class="metric-builder-controls">
             <label>
-                <span>Campo numérico</span>
+                    <span>Campo</span>
                 <select class="form-control" data-metric-column>
                     {% if summary.recommended_metrics %}
                     <optgroup label="Métricas sugeridas">
@@ -57,6 +57,11 @@
                         {% for column in summary.identifier_cols %}<option value="{{ column }}" data-role="identifier">{{ column }}</option>{% endfor %}
                     </optgroup>
                     {% endif %}
+                    <optgroup label="Otros campos — conteos y porcentajes">
+                        {% for column in summary.column_names if column not in summary.numeric_cols %}
+                        <option value="{{ column }}" data-role="category">{{ column }}</option>
+                        {% endfor %}
+                    </optgroup>
                 </select>
             </label>
             <label>
@@ -70,6 +75,7 @@
                     <option value="completeness">Porcentaje con dato</option>
                     <option value="unique_count">Valores únicos</option>
                     <option value="unique_percentage">Valores únicos / total de filas</option>
+                    <option value="row_count">Total de registros</option>
                 </select>
             </label>
             <button type="button" class="btn btn-secondary" data-add-metric><i class="bi bi-plus-lg"></i> Agregar</button>
@@ -84,7 +90,7 @@
     <div class="metric-save-status" data-metric-status aria-live="polite"></div>
 </div>
 
-<script type="application/json" id="{{ metric_id }}-data">{{ summary.numeric_summary|tojson }}</script>
+<script type="application/json" id="{{ metric_id }}-data">{{ summary.metric_catalog|tojson }}</script>
 <script>
 (() => {
     const root = document.getElementById({{ metric_id|tojson }});
@@ -98,7 +104,7 @@
     const labels = {
         sum: 'Suma total', mean: 'Promedio', min: 'Mínimo', max: 'Máximo',
         non_null_count: 'Registros con dato', completeness: 'Porcentaje con dato',
-        unique_count: 'Valores únicos', unique_percentage: 'Valores únicos / total de filas'
+        unique_count: 'Valores únicos', unique_percentage: 'Valores únicos / total de filas', row_count: 'Total de registros'
     };
     const numberFormat = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 });
     let dragged = null;
@@ -176,9 +182,13 @@
         return card;
     };
 
-    columnSelect.addEventListener('change', () => {
-        aggregationSelect.value = columnSelect.selectedOptions[0]?.dataset.role === 'identifier' ? 'unique_count' : 'sum';
-    });
+    const syncAggregations = () => {
+        const stats = catalog[columnSelect.value] || {};
+        [...aggregationSelect.options].forEach(option => { option.disabled = !Object.hasOwn(stats, option.value); });
+        aggregationSelect.value = Object.hasOwn(stats, 'sum') && columnSelect.selectedOptions[0]?.dataset.role !== 'identifier' ? 'sum' : 'unique_count';
+    };
+    columnSelect.addEventListener('change', syncAggregations);
+    syncAggregations();
     root.querySelector('[data-add-metric]').addEventListener('click', () => {
         const column = columnSelect.value;
         const aggregation = aggregationSelect.value;

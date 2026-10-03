@@ -97,7 +97,7 @@
 
 </div>
 
-{% if summary.numeric_summary %}
+{% if summary.metric_catalog %}
     {% set metric_explorer_id = 'results-metrics' %}
     {% set metric_file = record %}
     {% include 'files/_metric_explorer.html' %}

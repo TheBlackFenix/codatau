@@ -152,7 +152,7 @@
             {% endif %}
         </div>
 
-        {% if analysis.summary.numeric_summary %}
+        {% if analysis.summary.metric_catalog %}
             {% set summary = analysis.summary %}
             {% set metric_explorer_id = 'insights-metrics' %}
             {% set metric_file = active_file %}

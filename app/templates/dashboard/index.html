@@ -20,6 +20,30 @@
 
 {% if active_file and summary %}
 
+<div class="card" style="margin-bottom:20px">
+    <div class="card-title"><i class="bi bi-stars"></i> Dashboard propuesto por IA</div>
+    {% if recommendation %}
+    <p>{{ recommendation.result.explanation }}</p>
+    <ul>
+        {% for metric in recommendation.result.metrics %}
+        <li>{{ metric.column }} · {{ aggregation_labels[metric.aggregation] }} — {{ metric.reason }}</li>
+        {% endfor %}
+    </ul>
+    <form method="POST" action="{{ url_for('dashboard.apply_recommended_metrics', file_id=active_file.id) }}">
+        {{ action_form.hidden_tag() }}
+        <input type="hidden" name="run_id" value="{{ recommendation.id }}">
+        <button class="btn btn-purple">Crear dashboard con estas métricas</button>
+        <small>Reemplaza las tarjetas configuradas solo si aceptas.</small>
+    </form>
+    {% else %}
+    <p>Cuando termines de revisar la limpieza, la IA puede proponer hasta cinco métricas relevantes. No modifica datos ni tu configuración.</p>
+    {% endif %}
+    <form method="POST" action="{{ url_for('dashboard.recommend_metrics', file_id=active_file.id) }}" style="margin-top:12px">
+        {{ action_form.hidden_tag() }}
+        <button class="btn btn-secondary" {% if not ai_configured %}disabled{% endif %}>Proponer métricas de la versión activa</button>
+    </form>
+</div>
+
 <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
     <a href="{{ url_for('files.cleaning', file_id=active_file.id) }}" class="btn btn-primary">
         <i class="bi bi-magic"></i> Limpiar datos
@@ -117,7 +141,7 @@
 <!-- Stats table + Nulls chart -->
 <div style="display:grid;grid-template-columns:1fr {% if chart_data.nulls %}1fr{% endif %};gap:16px;margin-bottom:24px">
 
-    {% if summary.numeric_summary %}
+    {% if summary.metric_catalog %}
         {% set metric_explorer_id = 'dashboard-metrics' %}
         {% set metric_file = active_file %}
         {% include 'files/_metric_explorer.html' %}
