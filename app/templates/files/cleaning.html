@@ -239,7 +239,17 @@
 
         {% if operations %}
         <div class="cleaning-operation-list">
-            {% for operation in operations %}
+            {% for column, column_operations in operation_groups.items() %}
+            <details class="cleaning-column" data-cleaning-column>
+                <summary>
+                    <strong><i class="bi bi-layout-three-columns"></i> {{ column }}</strong>
+                    <span class="badge badge-gray">{{ column_operations|length }} escenario(s)</span>
+                </summary>
+                <div class="cleaning-column-toolbar">
+                    <span>Decide por escenario; las filas pueden aparecer en más de uno.</span>
+                    <button type="button" class="btn btn-secondary btn-sm" data-keep-column>Conservar todos en este campo</button>
+                </div>
+            {% for operation in column_operations %}
             {% set executable = operation.id in executable_ids %}
             {% set automatic = operation.id in automatic_ids %}
             {% set ai_suggestion = ai_suggestions.get(operation.id) %}
@@ -415,6 +425,8 @@
                 {% endif %}
             </div>
             {% endfor %}
+            </details>
+            {% endfor %}
         </div>
 
         <div class="cleaning-submit">
@@ -444,6 +456,7 @@
 .cleaning-summary-item.is-review{background:#FFF7ED}.cleaning-summary-item.is-review strong{color:#C2410C}
 .cleaning-summary-item.is-ai{background:var(--purple-soft)}.cleaning-summary-item.is-ai strong{color:var(--purple)}
 .cleaning-operation-list{display:flex;flex-direction:column;gap:10px}
+.cleaning-column{border:1px solid var(--gray-200);border-radius:10px;padding:12px}.cleaning-column>summary{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer}.cleaning-column-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0;font-size:12px;color:var(--gray-500)}.cleaning-column .cleaning-operation{margin-top:8px}
 .cleaning-operation{padding:14px;border:1px solid var(--gray-200);border-radius:10px;background:white}
 .cleaning-operation-main{display:flex;gap:12px}
 .cleaning-operation-title{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -474,6 +487,14 @@
 
 {% block scripts %}
 <script>
+document.querySelectorAll('[data-keep-column]').forEach(button => {
+    button.addEventListener('click', () => {
+        button.closest('[data-cleaning-column]').querySelectorAll('[data-operation-decision][value="keep"]').forEach(input => {
+            input.checked = true;
+            input.dispatchEvent(new Event('change', {bubbles:true}));
+        });
+    });
+});
 document.querySelectorAll('[data-decision-card]').forEach(card => {
     const configuration = card.querySelector('[data-operation-configuration]');
     if (!configuration) return;

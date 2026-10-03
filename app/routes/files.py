@@ -599,6 +599,10 @@ def cleaning(file_id):
         for operation in profile_data['cleaning_plan']['operations']
         if operation['id'] not in resolved_ids
     ]
+    operation_groups = {}
+    for operation in operations:
+        column = operation.get('column') or 'Archivo completo'
+        operation_groups.setdefault(column, []).append(operation)
     executable_ids = {
         operation['id']
         for operation in operations
@@ -630,6 +634,7 @@ def cleaning(file_id):
         record=record,
         profile=profile_data,
         operations=operations,
+        operation_groups=operation_groups,
         executable_ids=executable_ids,
         automatic_ids={
             operation['id']
