@@ -254,3 +254,10 @@ def test_result_must_cover_every_requested_operation():
         assert 'todos los operation_id' in str(error)
     else:
         raise AssertionError('An incomplete provider response was accepted')
+
+
+def test_resolved_email_treatment_excludes_duplicate_ai_review():
+    profile = _profile()
+    pending = AICleaningService.pending_profile(profile, {'email:validate_email'})
+    assert [item['id'] for item in pending['cleaning_plan']['operations']] == ['amount:cast_type']
+    assert len(profile['cleaning_plan']['operations']) == 2

@@ -320,6 +320,14 @@
                     {% endif %}
                 </div>
                 {% endif %}
+                {% if ai_suggestion and executable %}
+                <button type="button" class="btn btn-purple btn-sm" style="margin-top:10px"
+                        data-use-ai="{{ ai_suggestion.parameters|tojson|forceescape }}"
+                        data-ai-choice="{{ ai_suggestion.recommendation }}">
+                    <i class="bi bi-stars"></i>
+                    {% if ai_suggestion.recommendation == 'keep' %}Usar recomendación: conservar{% elif ai_suggestion.recommendation == 'apply' %}Usar parámetros sugeridos{% else %}Elegir tratamiento{% endif %}
+                </button>
+                {% endif %}
 
                 <div class="cleaning-decision-question">
                     <strong>
@@ -524,6 +532,22 @@ document.querySelectorAll('[data-decision-card]').forEach(card => {
         syncReplacement();
     }
     syncConfiguration();
+    const useAI = card.querySelector('[data-use-ai]');
+    if (useAI) useAI.addEventListener('click', () => {
+        const choice = useAI.dataset.aiChoice === 'keep' ? 'keep' : 'apply';
+        const radio = card.querySelector(`[data-operation-decision][value="${choice}"]`);
+        if (!radio) return;
+        const parameters = JSON.parse(useAI.dataset.useAi);
+        configuration.querySelectorAll('select, input').forEach(input => {
+            const name = input.name.split(':').pop();
+            if (Object.hasOwn(parameters, name)) input.value = parameters[name];
+        });
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', {bubbles:true}));
+        const action = configuration.querySelector('[data-invalid-action]');
+        if (action) action.dispatchEvent(new Event('change'));
+        configuration.querySelector('select, input')?.focus();
+    });
 });
 const customRule = document.querySelector('[data-custom-rule]');
 if (customRule) {

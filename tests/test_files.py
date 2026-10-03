@@ -202,6 +202,8 @@ def test_ai_cleaning_analysis_is_advisory_visible_and_cached(app, client, auth):
 
     assert first.status_code == 200
     assert 'Recomendación IA'.encode() in first.data
+    assert b'name="decision:email:review_invalid_values"' not in first.data
+    assert b'data-use-ai' in first.data
     assert 'Revisión humana'.encode() in first.data
     assert b'93% confianza' in first.data
     assert 'ningún dato se modifica automáticamente'.encode() in first.data

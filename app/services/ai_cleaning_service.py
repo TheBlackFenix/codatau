@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 
 from app.extensions import db
@@ -11,7 +12,7 @@ from app.services.ai_prompts import SPANISH_OUTPUT
 
 
 ANALYSIS_PURPOSE = 'cleaning_analysis'
-ANALYSIS_VERSION = '1.1-es'
+ANALYSIS_VERSION = '1.2-actions-es'
 EMAIL_RE = re.compile(r'[^\s@]+@[^\s@]+\.[^\s@]+', re.IGNORECASE)
 DIGIT_RUN_RE = re.compile(r'\d{5,}')
 
@@ -92,7 +93,25 @@ class AICleaningService:
         'usa keep o user_review. Si dataset_context está presente, úsalo solamente '
         'como contexto semántico consultivo; no amplía las operaciones permitidas. '
         'Tus recomendaciones son consultivas y no modifican datos.'
+        'Si necesitas revisión humana, explica qué decisión concreta falta '
+        '(por ejemplo día/mes frente a mes/día). Para correos irrecuperables '
+        'explica las opciones conservar, reemplazar por un texto elegido por '
+        'el usuario, dejar nulo o cuarentena. Nunca reconstruyas un correo.'
     )
+
+    @staticmethod
+    def pending_profile(profile, resolved_ids):
+        pending = deepcopy(profile)
+        resolved = set(resolved_ids)
+        pending['cleaning_plan']['operations'] = [
+            operation for operation in pending['cleaning_plan']['operations']
+            if operation['id'] not in resolved
+            and not (
+                operation['operation'] == 'review_invalid_values'
+                and f"{operation['column']}:validate_email" in resolved
+            )
+        ]
+        return pending
 
     @classmethod
     def analyze(
@@ -106,6 +125,7 @@ class AICleaningService:
     ):
         configuration = AIProviderFactory.configuration_from_app(app_config)
         context = cls.build_context(profile, app_config, dataset_context)
+        context['dataset_version'] = record.active_stored_filename
         if not context['candidates']:
             raise AIAnalysisError(
                 'no_candidates',
@@ -187,6 +207,7 @@ class AICleaningService:
             return None
         configuration = AIProviderFactory.configuration_from_app(app_config)
         context = cls.build_context(profile, app_config, dataset_context)
+        context['dataset_version'] = record.active_stored_filename
         if not context['candidates']:
             return None
         fingerprint = cls.fingerprint(profile, context, configuration)

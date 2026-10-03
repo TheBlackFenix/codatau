@@ -594,10 +594,16 @@ def cleaning(file_id):
         operation['id']
         for operation in profile_data['cleaning_plan']['operations']
     }
+    pending_profile = AICleaningService.pending_profile(profile_data, resolved_ids)
+    pending_operations = pending_profile['cleaning_plan']['operations']
+    target_ids = {operation['id'] for operation in pending_operations}
     operations = [
         operation
-        for operation in profile_data['cleaning_plan']['operations']
-        if operation['id'] not in resolved_ids
+        for operation in pending_operations
+        if not (
+            operation['operation'] == 'review_invalid_values'
+            and f"{operation['column']}:validate_email" in target_ids
+        )
     ]
     operation_groups = {}
     for operation in operations:
@@ -610,13 +616,13 @@ def cleaning(file_id):
     }
     ai_candidate_count = sum(
         operation['decision'] == 'ai_analysis'
-        for operation in operations
+        for operation in pending_operations
     )
     ai_configured = AIProviderFactory.is_configured(current_app.config)
     dataset_context = _latest_dataset_context(record, profile_data)
     ai_outcome = AICleaningService.latest(
         record,
-        profile_data,
+        pending_profile,
         current_user.id,
         current_app.config,
         dataset_context=dataset_context,
@@ -626,6 +632,11 @@ def cleaning(file_id):
         for suggestion in (ai_outcome.suggestions if ai_outcome else [])
         if suggestion['operation_id'] not in resolved_ids
     }
+    for operation in operations:
+        if operation['operation'] == 'validate_email':
+            advisory_id = f"{operation['column']}:review_invalid_values"
+            if advisory_id in ai_suggestions:
+                ai_suggestions[operation['id']] = ai_suggestions[advisory_id]
     versions = DatasetVersion.query.filter_by(file_id=record.id).order_by(
         DatasetVersion.version_number.desc()
     ).all()
@@ -671,9 +682,13 @@ def cleaning_ai_analysis(file_id):
     try:
         _, _, _, profile_data = _cleaning_context(record)
         dataset_context = _latest_dataset_context(record, profile_data)
+        pending_profile = AICleaningService.pending_profile(
+            profile_data,
+            {decision.operation_id for decision in CleaningDecisionService.active_for_file(record.id)},
+        )
         outcome = AICleaningService.analyze(
             record,
-            profile_data,
+            pending_profile,
             current_user.id,
             current_app.config,
             dataset_context=dataset_context,
