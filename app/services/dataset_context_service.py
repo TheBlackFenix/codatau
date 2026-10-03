@@ -318,6 +318,7 @@ class DatasetContextService:
             'version': CONTEXT_VERSION,
             'provider': configuration.provider,
             'model': configuration.model,
+            'endpoint': configuration.base_url.rstrip('/'),
             # El contexto describe el significado del archivo y puede reutilizarse
             # entre versiones que solo cambian valores. Un cambio de columnas o
             # tipos sí exige volver a analizarlo.

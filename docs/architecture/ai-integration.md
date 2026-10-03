@@ -2,8 +2,9 @@
 
 ## Alcance actual
 
-La IA interviene únicamente cuando el perfil semántico marca una operación como
-`ai_analysis`. El usuario inicia la consulta desde Limpieza y recibe una
+La IA identifica contexto durante la carga y participa bajo demanda en limpieza,
+propuestas de dashboard y preguntas sobre datos. En limpieza analiza operaciones
+marcadas como `ai_analysis`. El usuario inicia la consulta y recibe una
 recomendación (`apply`, `keep` o `user_review`), una confianza, una explicación y
 parámetros permitidos. Consultar la IA no crea una versión, no ejecuta SQL y no
 modifica el archivo.
@@ -107,3 +108,63 @@ La arquitectura se puede reutilizar para:
 Cada función debe tener su propio propósito, esquema de respuesta, presupuesto y
 huella de caché. Ninguna debe permitir que el modelo ejecute transformaciones o
 consultas arbitrarias.
+
+## Flujo MVP implementado
+
+1. **Carga y contexto:** encabezados y hasta cinco muestras enmascaradas permiten
+   inferir dominio, roles y restricciones. Los prompts piden textos en español,
+   conservando nombres de columnas y enums técnicos. El cambio de versión de
+   prompt invalida contextos antiguos; no se promete traducción perfecta del modelo.
+2. **Limpieza por campo:** escenarios desplegables por columna, una sola decisión
+   sobre correo inválido, configuración visible únicamente al aplicar y valor de
+   reemplazo visible únicamente al reemplazar. Las decisiones resueltas no vuelven
+   a consultarse. La IA permite conservar, recomendar parámetros validados o pedir
+   una elección humana concreta; una revisión humana puede omitir parámetros
+   inciertos. Solo `apply` requiere todos los parámetros deterministas.
+3. **Dashboard:** `AIDashboardService` propone hasta cinco métricas compatibles;
+   `StructuredAIService` comparte auditoría/caché por versión. La aceptación explícita
+   persiste las tarjetas sin sobrescribir silenciosamente cambios manuales.
+4. **Chat:** `DatasetChatService` recibe pregunta (máximo 1000 caracteres), contexto,
+   catálogo de campos, rangos de fechas y hasta tres turnos previos. No recibe filas
+   completas ni resultados del conjunto. La pregunta también se transmite al proveedor:
+   la interfaz advierte no introducir información sensible.
+
+### Contrato seguro del chat
+
+El modelo devuelve un plan, nunca SQL. Se admiten:
+
+- total, promedio, mínimo, máximo, conteo y valores únicos;
+- grupos por campo o tiempo (hora, día, mes o año), hasta veinte resultados;
+- hasta cinco filtros simples unidos con AND;
+- comparación de dos períodos no superpuestos, inicio incluido y fin excluido;
+- aclaraciones cuando falta información o la pregunta está fuera del alcance.
+
+El servidor valida columnas, tipos, roles y estructura, cita identificadores y
+parametriza filtros. DuckDB calcula sobre el dataframe completo de la versión
+activa, leído del Parquet del pipeline; no sobre las muestras enviadas al modelo.
+La conexión de consulta deshabilita acceso externo, limita memoria y usa dos hilos.
+La respuesta se construye localmente con números verificables, sin segunda llamada
+al modelo. Incluye filas coincidentes, valores usados, filtros, fechas y exclusiones.
+Los valores infinitos no intervienen en cálculos numéricos. Una base cero no produce
+un porcentaje ficticio; la ausencia de datos no se presenta como ventas cero.
+
+El servidor también solicita aclaración ante varios años sin año explícito o varias
+medidas monetarias para una pregunta genérica de ventas. La comprensión lingüística
+sigue dependiendo del modelo; las validaciones no garantizan interpretar cualquier
+pregunta correctamente. El usuario puede inspeccionar el plan y reformularla.
+Las fechas de texto con ambigüedad día/mes requieren configurar el formato durante
+la limpieza; las agrupaciones temporales se normalizan como máximo a nivel de hora.
+
+El historial se guarda en `AIAnalysisRun` con propósito `dataset_chat`, aislado por
+propietario, archivo y versión. Una consulta de una pantalla con versión antigua
+se rechaza con 409. La caché incluye modelo, prompt, contexto e historial breve;
+repetir una pregunta sin nuevos turnos no consume otra llamada. Todas las rutas
+requieren sesión, propiedad del archivo y CSRF para escritura.
+
+### Alcance pendiente después del MVP
+
+No hay SQL libre, joins entre archivos, predicciones, edición desde chat, streaming
+ni gráficos generados arbitrariamente. Para despliegue público faltan colas y
+trabajos asíncronos, límites de solicitudes/cuota por usuario, política de retención
+de preguntas y métricas de costo. La suite normal usa proveedores simulados; la
+suite opt-in prueba contexto, limpieza, métricas y comparación con datos sintéticos.

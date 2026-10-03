@@ -25,7 +25,7 @@
             <button type="button" class="metric-remove" title="Quitar métrica" aria-label="Quitar métrica"><i class="bi bi-x"></i></button>
             <div class="metric-card-label">{{ card.column }}</div>
             <div class="metric-card-value">
-                {% if card.value is none %}—{% elif card.aggregation in ('completeness', 'unique_percentage') %}{{ '%.1f'|format(card.value) }}%{% else %}{{ '{:,.2f}'.format(card.value) }}{% endif %}
+                {% if card.value is none %}—{% elif card.aggregation in ('completeness', 'unique_percentage') %}{{ '%.1f'|format(card.value) }}%{% elif card.aggregation in ('row_count', 'unique_count', 'non_null_count') %}{{ '{:,}'.format(card.value|int) }}{% else %}{{ '{:,.2f}'.format(card.value) }}{% endif %}
             </div>
             <div class="metric-card-primary">{{ card.label }}</div>
             <div class="metric-card-meta">{{ card.completeness }}% de registros con dato</div>

@@ -2,11 +2,15 @@ import json
 import os
 
 import pytest
+import pandas as pd
 
 from app import create_app
 from app.services.ai_cleaning_service import AICleaningService
 from app.services.ai_providers import AIProviderError, AIProviderFactory
 from app.services.dataset_context_service import DatasetContextService
+from app.services.ai_dashboard_service import AIDashboardService
+from app.services.dataset_chat_service import DatasetChatService
+from app.services.data_service import DataService
 
 
 @pytest.mark.skipif(
@@ -161,3 +165,34 @@ def test_configured_provider_returns_a_valid_dataset_context():
         )
     assert context['domain']
     assert 0 <= context['confidence'] <= 1
+
+
+@pytest.mark.skipif(os.environ.get('RUN_LIVE_AI_TEST') != '1', reason='Prueba opt-in que consume API.')
+def test_provider_can_propose_dashboard_metrics():
+    application = create_app()
+    dataframe = pd.DataFrame({'valor_ventas': [100, 200, 250], 'ciudad': ['A', 'B', 'B']})
+    summary = DataService.get_summary(dataframe)
+    provider = AIProviderFactory.create(application.config)
+    result = provider.generate_json(AIDashboardService.INSTRUCTIONS,
+                                    AIDashboardService.payload(summary, {'domain': 'Ventas'}),
+                                    AIDashboardService.SCHEMA)
+    proposal = AIDashboardService.validate(result.data, summary, {'domain': 'Ventas'})
+    assert 1 <= len(proposal['metrics']) <= 5
+
+
+@pytest.mark.skipif(os.environ.get('RUN_LIVE_AI_TEST') != '1', reason='Prueba opt-in que consume API.')
+def test_provider_interprets_period_comparison_and_duckdb_calculates():
+    application = create_app()
+    dataframe = pd.DataFrame({'valor_ventas': [100, 200, 250],
+                              'fecha': ['2026-07-01', '2026-08-01', '2026-08-15']})
+    catalog = DatasetChatService.catalog(dataframe, {})
+    question = '¿Cuál fue la variación de la suma de valor_ventas entre julio y agosto de 2026?'
+    provider = AIProviderFactory.create(application.config)
+    result = provider.generate_json(DatasetChatService.INSTRUCTIONS,
+                                    {'question': question, 'rows': 3, 'columns': catalog, 'context': {'domain': 'Ventas'}, 'history': []},
+                                    DatasetChatService.SCHEMA)
+    plan = DatasetChatService.validate(result.data, catalog, question, [])
+    assert plan['kind'] == 'compare'
+    answer = DatasetChatService.execute(dataframe, {}, plan)
+    assert answer['evidence']['variation'] == 350
+    assert answer['evidence']['variation_percentage'] == 350

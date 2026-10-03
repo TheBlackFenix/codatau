@@ -1,0 +1,89 @@
+<section class="card dataset-chat" data-chat-url="{{ url_for('dashboard.dataset_chat', file_id=chat_file.id) }}">
+    <div class="card-title"><i class="bi bi-chat-dots"></i> Pregúntale a tus datos</div>
+    <p>Consulta totales, grupos o variaciones entre períodos de la versión activa. La IA interpreta; DuckDB calcula sobre todos los registros, no sobre una muestra.</p>
+    <small>El proveedor recibe tu pregunta, el contexto y metadatos de campos. No escribas información sensible. El chat no modifica datos.</small>
+    <div data-chat-messages class="chat-messages" aria-live="polite"></div>
+    <form data-chat-form>
+        <label for="dataset-question">Tu pregunta</label>
+        <textarea id="dataset-question" class="form-control" name="question" maxlength="1000" required placeholder="Ejemplo: ¿Cuál fue la variación del valor de ventas entre julio y agosto de 2026?"></textarea>
+        <button class="btn btn-purple" style="margin-top:10px" {% if not ai_configured %}disabled{% endif %}>Preguntar</button>
+        <span data-chat-status role="status"></span>
+    </form>
+</section>
+<script>
+(() => {
+    const root = document.querySelector('.dataset-chat');
+    const messages = root.querySelector('[data-chat-messages]');
+    const form = root.querySelector('[data-chat-form]');
+    const status = root.querySelector('[data-chat-status]');
+    const button = form.querySelector('button');
+    let version = null;
+    const calculations = {...{{ aggregation_labels|tojson }}, count: 'Cantidad'};
+    const operators = {eq:'es igual a', neq:'es diferente de', gt:'es mayor que', gte:'es mayor o igual que', lt:'es menor que', lte:'es menor o igual que'};
+    const write = (parent, tag, content) => {
+        const node = document.createElement(tag);
+        node.textContent = content;
+        parent.appendChild(node);
+        return node;
+    };
+    const render = result => {
+        const item = document.createElement('article');
+        item.className = 'chat-message';
+        write(item, 'strong', result.question);
+        write(item, 'p', result.answer);
+        if (result.evidence) {
+            const evidence = result.evidence;
+            const details = document.createElement('details');
+            write(details, 'summary', 'Ver cómo se calculó');
+            write(details, 'p', `Dataset: ${evidence.dataset_rows} filas · Cálculo: ${calculations[evidence.aggregation]} · Campo: ${evidence.metric || 'registros'} · Fecha: ${evidence.date_column || 'no aplica'}`);
+            evidence.filters.forEach(filter => write(details, 'p', `Filtro: ${filter.column} ${operators[filter.operator]} ${filter.value}`));
+            evidence.periods.forEach(period => write(details, 'p', `${period.label}: ${period.start} incluido → ${period.end} excluido`));
+            if (evidence.variation_percentage !== null) write(details, 'p', 'El porcentaje compara el segundo período con el valor absoluto del primero como base.');
+            if (evidence.date_rows_excluded) write(details, 'p', `${evidence.date_rows_excluded} fila(s) sin fecha válida no participaron en los períodos.`);
+            const wrap = document.createElement('div');
+            wrap.className = 'table-wrap';
+            const table = document.createElement('table');
+            table.className = 'data-table';
+            const header = document.createElement('tr');
+            ['Grupo / período', 'Resultado', 'Filas coincidentes', 'Valores usados'].forEach(label => write(header, 'th', label));
+            table.appendChild(header);
+            evidence.rows.forEach(row => {
+                const tr = document.createElement('tr');
+                [row.label, row.value === null ? 'Sin dato' : row.value, row.rows, row.values_used].forEach(value => write(tr, 'td', value));
+                table.appendChild(tr);
+            });
+            wrap.appendChild(table);
+            details.appendChild(wrap);
+            item.appendChild(details);
+        }
+        messages.appendChild(item);
+        messages.scrollTop = messages.scrollHeight;
+    };
+    fetch(root.dataset.chatUrl).then(response => {
+        if (!response.ok) throw new Error('No se pudo cargar el historial.');
+        return response.json();
+    }).then(result => {
+        version = result.version;
+        result.messages.forEach(render);
+    }).catch(error => { status.textContent = error.message; });
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!version) { status.textContent = 'Espera a que cargue el chat o recarga la página.'; return; }
+        button.disabled = true;
+        status.textContent = 'Interpretando y calculando…';
+        try {
+            const response = await fetch(root.dataset.chatUrl, {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': {{ csrf_token()|tojson }}},
+                body: JSON.stringify({question: form.elements.question.value, version})
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'No se pudo responder.');
+            render(result);
+            form.reset();
+            status.textContent = 'Respuesta sobre la versión activa.';
+        } catch (error) {
+            status.textContent = error.message;
+        } finally { button.disabled = false; }
+    });
+})();
+</script>

@@ -17,6 +17,7 @@ class StructuredAIService:
             'dataset_version': record.active_stored_filename,
             'provider': configuration.provider,
             'model': configuration.model,
+            'endpoint': configuration.base_url.rstrip('/'),
             'payload': payload,
         }, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
         return hashlib.sha256(encoded.encode('utf-8')).hexdigest()

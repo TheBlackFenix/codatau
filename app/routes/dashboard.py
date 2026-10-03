@@ -14,6 +14,7 @@ from app.services.cleaning_decision_service import CleaningDecisionService
 from app.services.quality_insight_service import QualityInsightService
 from app.services.semantic_constraint_service import SemanticConstraintService
 from app.services.ai_dashboard_service import AIDashboardService
+from app.services.dataset_chat_service import DatasetChatService
 from app.services.ai_providers import AIProviderError, AIProviderFactory
 from app.forms.file_forms import CleaningActionForm
 from app.services.dashboard_service import (
@@ -128,6 +129,7 @@ def index():
         action_form=CleaningActionForm(),
         ai_configured=AIProviderFactory.is_configured(current_app.config),
         aggregation_labels=DashboardService.AGGREGATION_LABELS,
+        chat_file=active_file,
     )
 
 
@@ -182,6 +184,45 @@ def apply_recommended_metrics(file_id):
     return redirect(url_for('dashboard.index'))
 
 
+@dashboard_bp.route('/dashboard/files/<int:file_id>/chat', methods=['GET', 'POST'])
+@login_required
+def dataset_chat(file_id):
+    record = FileUpload.query.filter_by(id=file_id, user_id=current_user.id).first_or_404()
+    if request.method == 'GET':
+        return jsonify({'version': record.active_stored_filename, 'messages': [
+            run.result for run in DatasetChatService.history(record)
+        ]})
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Envía una pregunta válida.'}), 400
+    if payload.get('version') != record.active_stored_filename:
+        return jsonify({'error': 'La versión activa cambió. Recarga el chat antes de preguntar.'}), 409
+    try:
+        pipeline = DatasetPipeline(current_app.config['ANALYTICS_FOLDER'], current_app.config['PROFILE_SAMPLE_SIZE'])
+        path = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
+        dataframe = pipeline.load_dataframe_or_source(record.active_stored_filename, path)
+        profile = pipeline.ensure_current_profile(record.active_stored_filename, path)
+        context = DatasetContextService.latest(record, profile, current_user.id, current_app.config)
+        run = DatasetChatService.ask(record, dataframe, context.context if context else {},
+                                     payload.get('question'), current_app.config)
+        db.session.expire(record, ['versions'])
+        if record.active_stored_filename != payload['version']:
+            db.session.commit()
+            return jsonify({'error': 'La versión cambió mientras se calculaba la respuesta. Recarga el chat.'}), 409
+        db.session.commit()
+        return jsonify(run.result)
+    except AIProviderError as error:
+        db.session.commit()
+        return jsonify({'error': error.user_message, 'code': error.code}), 502
+    except ValueError as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Falló el chat del dataset %s', record.id)
+        return jsonify({'error': 'No pudimos responder. Tus datos siguen intactos.'}), 500
+
+
 @dashboard_bp.route('/dashboard/files/<int:file_id>/metrics', methods=['POST'])
 @login_required
 def save_metrics(file_id):
@@ -189,7 +230,9 @@ def save_metrics(file_id):
         id=file_id,
         user_id=current_user.id,
     ).first_or_404()
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'La configuración de métricas no es válida.'}), 400
     try:
         filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
         pipeline = DatasetPipeline(

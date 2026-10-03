@@ -1520,6 +1520,12 @@ body {
 }
 
 [hidden] { display: none !important; }
+
+.dataset-chat { margin-bottom: 24px; }
+.chat-messages { max-height: 450px; overflow-y: auto; margin: 16px 0; }
+.chat-message { padding: 16px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; }
+.chat-message details { font-size: 0.9rem; }
+.dataset-chat textarea { min-height: 82px; resize: vertical; }
 .selected-file[hidden] { display: none; }
 .visually-hidden {
     position: absolute !important;

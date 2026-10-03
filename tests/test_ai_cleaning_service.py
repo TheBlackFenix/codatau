@@ -21,6 +21,15 @@ class FakeProvider:
         )
 
 
+def test_uncertain_recommendation_does_not_require_invented_parameters():
+    candidate = {'operation_id': 'amount:cast_type', 'operation': 'cast_type'}
+    for recommendation in ('user_review', 'keep'):
+        response = {'suggestions': [{'operation_id': candidate['operation_id'],
+                    'recommendation': recommendation, 'confidence': 0.7,
+                    'rationale': 'El usuario debe elegir el separador.', 'parameters': []}]}
+        assert AICleaningService.validate_result(response, [candidate])[0]['parameters'] == {}
+
+
 def _profile():
     return {
         'source_sha256': 'a' * 64,
