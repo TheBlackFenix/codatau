@@ -90,7 +90,7 @@ def configure_columns(file_id):
             for card in cards:
                 key = f'column_{card["index"]}'
                 if request.form.get(key) in ColumnTypeService.TYPES:
-                    card['choice'] = {'type': request.form[key], 'decimal_separator': request.form.get(key+'_separator', '.'), 'date_format': request.form.get(key+'_date', 'iso'), 'negative_policy': request.form.get(key+'_negative', 'unknown')}
+                    card['choice'] = {'type': request.form[key], 'decimal_separator': request.form.get(key+'_separator', '.'), 'date_format': request.form.get(key+'_date', 'iso'), 'date_source': request.form.get(key+'_date_source', request.form.get(key+'_date', 'iso')), 'negative_policy': request.form.get(key+'_negative', 'unknown')}
         except (StaleDataError, IntegrityError):
             db.session.rollback()
             flash('Otra ventana guardó cambios. Recarga la configuración antes de continuar.', 'warning')
@@ -150,6 +150,7 @@ def configure_duplicates(file_id):
 def configure_treatments(file_id):
     from app.models.cleaning_configuration import CleaningConfiguration
     from app.services.cleaning_treatment_service import CleaningTreatmentService as Treatments
+    from app.services.date_normalization_service import DateNormalizationService as Dates
     from sqlalchemy.orm.exc import StaleDataError
     record = _record_for_user(file_id)
     config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
@@ -157,7 +158,8 @@ def configure_treatments(file_id):
         flash('Guarda primero los tipos y la comparación de duplicados de esta versión.', 'warning')
         return redirect(url_for('files.configure_duplicates', file_id=file_id))
     _, _, _, profile = _cleaning_context(record)
-    issues = Treatments.issues(_load_dataframe(record), config.columns, _latest_dataset_context(record, profile))
+    dataframe = _load_dataframe(record)
+    issues = Treatments.issues(dataframe, config.columns, _latest_dataset_context(record, profile))
     form = CleaningActionForm()
     decisions = (config.treatments or {}).get('decisions', {})
     if request.method == 'POST':
@@ -183,6 +185,7 @@ def configure_treatments(file_id):
             return redirect(url_for('files.configure_treatments', file_id=file_id))
     return render_template('files/treatments.html', record=record, configuration=config, form=form,
                            issues=issues, decisions=decisions, actions=Treatments.ACTIONS,
+                           date_summaries=Dates.summaries(dataframe, config.columns),
                            treatment_review_needed=bool(config.treatments) and set(decisions) != {issue['id'] for issue in issues})
 
 
@@ -267,7 +270,9 @@ def _wizard_ready(record):
 
 def _wizard_token(record, config, context):
     from app.services.value_proposal_service import ValueProposalService
+    from app.services.wizard_execution_service import WizardExecutionService
     return {'file':record.id,'user':current_user.id,'source':record.active_stored_filename,
+            'rule_version':WizardExecutionService.RULE_VERSION,
             'revision':config.revision,'fingerprint':ValueProposalService.fingerprint(record,config,context,current_app.config),
             'source_hash':_pipeline()._sha256(_pipeline().paths_for(record.active_stored_filename)[0])}
 
@@ -317,6 +322,7 @@ def wizard_preview(file_id):
                 stored_filename=filename,is_active=True,
                 quarantine_filename=pipeline.quarantine_path_for(filename).name if not result.quarantine.empty else None,
                 metrics=result.metrics,operations=[{'operation':'configured_cleaning','source_version':expected['source'],
+                'rule_version':WizardExecutionService.RULE_VERSION,
                 'columns':config.columns,'duplicates':config.duplicates,'treatments':config.treatments,
                 'ai_review':config.ai_review,'changes':result.changes,'duplicate_source_rows':result.duplicate_rows,
                 'mixed_columns':result.mixed_columns}])

@@ -3,13 +3,16 @@ import math
 import numbers
 import re
 import pandas as pd
+from app.services.date_normalization_service import DateNormalizationService as Dates
 
 
 class CleaningTreatmentService:
     ACTIONS = {'keep': 'Conservar como está', 'quarantine': 'Separar la fila para revisión',
                'replace': 'Reemplazar solamente la celda', 'null': 'Dejar la celda vacía',
                'ai': 'Pedir una propuesta a la IA',
-               'absolute': 'Convertir todos estos negativos a positivo'}
+               'absolute': 'Convertir todos estos negativos a positivo',
+               'date_dmy': 'Interpretar este grupo como día/mes/año',
+               'date_mdy': 'Interpretar este grupo como mes/día/año'}
 
     @staticmethod
     def number(value, preference):
@@ -33,6 +36,7 @@ class CleaningTreatmentService:
             kind = pref['type']
             invalid = pd.Series(False, index=series.index)
             numeric = None
+            ambiguous = pd.Series(False, index=series.index)
             if kind in {'integer','decimal'}:
                 numeric = series.map(lambda value: cls.number(value, pref))
                 invalid = numeric.isna()
@@ -44,9 +48,12 @@ class CleaningTreatmentService:
             elif kind == 'boolean':
                 invalid = ~series.map(lambda value: str(value).strip().casefold() in {'true','false','sí','si','no','1','0','yes'})
             elif kind == 'date':
-                fmt = {'iso':'ISO8601','dmy':'%d/%m/%Y','mdy':'%m/%d/%Y'}[pref['date_format']]
-                invalid = pd.to_datetime(series, format=fmt, errors='coerce', utc=True).isna()
+                statuses = series.map(lambda value: Dates.inspect(value, pref)[0])
+                invalid = statuses.eq('invalid')
+                ambiguous = statuses.eq('ambiguous')
             scenarios = [('missing', 'Valores vacíos', empty), ('invalid', 'Valores que no coinciden con el tipo elegido', invalid & ~empty)]
+            if kind == 'date':
+                scenarios.append(('date_ambiguous', 'Fechas que necesitan confirmar el orden del día y mes', ambiguous))
             constraints = roles.get(name, {}).get('suggested_constraints', [])
             negative_policy = pref.get('negative_policy', 'unknown')
             if numeric is not None and negative_policy == 'deny':
@@ -59,7 +66,7 @@ class CleaningTreatmentService:
                 key = hashlib.sha256((name+'\0'+scenario).encode()).hexdigest()[:24]
                 examples = list(dict.fromkeys(str(value)[:100] for value in series.loc[mask].head(20) if pd.notna(value)))[:3]
                 issues.append({'id':key, 'column':name, 'scenario':scenario, 'label':label,
-                               'count':int(mask.sum()), 'examples':examples})
+                               'count':int(mask.sum()), 'examples':examples, 'type':kind})
                 if include_rows:
                     issues[-1]['rows'] = list(series.index[mask])
         return issues
@@ -75,6 +82,10 @@ class CleaningTreatmentService:
                 raise ValueError('No pediremos a la IA inventar valores vacíos. Elige otro tratamiento.')
             if action == 'absolute' and issue['scenario'] != 'negative':
                 raise ValueError('Solo puedes convertir el grupo a positivo si confirmaste que no permite negativos.')
+            if action in {'date_dmy', 'date_mdy'} and issue['scenario'] != 'date_ambiguous':
+                raise ValueError('Confirma el orden de fechas únicamente para un grupo de fechas ambiguas.')
+            if action == 'ai' and issue.get('type') == 'date':
+                raise ValueError('Resuelve las fechas por grupo; no pediremos a la IA adivinar fechas individuales.')
             item = {'action':action}
             if action == 'replace':
                 replacement = form.get('replacement_'+issue['id'], '').strip()

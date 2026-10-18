@@ -39,6 +39,8 @@ class ValueProposalService:
         for issue in issues:
             if decisions[issue['id']]['action'] != 'ai': continue
             pref = configuration.columns[issue['column']]
+            if pref['type'] == 'date':
+                raise ValueError('Las fechas ahora se resuelven por grupo, sin IA. Vuelve a tratamientos y guarda una decisión para este campo.')
             values = dataframe.loc[issue['rows'], issue['column']].astype(str).value_counts(sort=False)
             for value, count in values.items():
                 key = hashlib.sha256((issue['id']+'\0'+value).encode()).hexdigest()

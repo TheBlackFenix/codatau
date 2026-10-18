@@ -40,7 +40,7 @@ class ColumnTypeService:
                     break
             choice = (saved or {}).get(name, {})
             cards.append({'index': index, 'name': name, 'suggested': inferred,
-                          'choice': choice or {'type': inferred, 'decimal_separator': '.', 'date_format': 'iso'},
+                          'choice': choice or {'type': inferred, 'decimal_separator': '.', 'date_format': 'iso', 'date_source': 'auto'},
                           'examples': examples})
         return cards
 
@@ -68,5 +68,9 @@ class ColumnTypeService:
                 if date_format not in cls.DATES:
                     raise ValueError('Indica el orden del día, mes y año.')
                 choice['date_format'] = date_format
+                source = form.get(key + '_date_source', date_format)
+                if source not in {'auto', 'dmy', 'mdy', 'iso'}:
+                    raise ValueError('Indica cómo interpretar el día y mes en las fechas de origen.')
+                choice['date_source'] = source
             choices[card['name']] = choice
         return choices

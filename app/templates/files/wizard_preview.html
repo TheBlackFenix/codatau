@@ -14,7 +14,7 @@
     <p>{{ result.metrics.duplicate_incomplete_rows }} filas con claves incompletas y {{ result.metrics.duplicate_invalid_date_rows }} filas en grupos con fechas no interpretables se protegieron de la eliminación de duplicados.</p>
 </div>
 <details class="card" style="margin-top:16px" open><summary>Ejemplos de cambios (primeros 20)</summary>
-<div class="table-wrap"><table class="data-table"><thead><tr><th>Fila de origen</th><th>Campo</th><th>Antes</th><th>Después</th><th>Motivo</th></tr></thead><tbody>{% for change in result.changes[:20] %}<tr><td>{{ change.source_row }}</td><td>{{ change.column }}</td><td>{{ change.before if change.before is not none else 'Vacío' }}</td><td>{{ change.after if change.after is not none else 'Vacío' }}</td><td>{{ change.reason }}</td></tr>{% endfor %}</tbody></table></div></details>
+<div class="table-wrap"><table class="data-table"><thead><tr><th>Fila de origen</th><th>Campo</th><th>Antes</th><th>Después</th><th>Motivo</th></tr></thead><tbody>{% for change in result.changes[:20] %}<tr><td>{{ change.source_row }}</td><td>{{ change.column }}</td><td>{{ change.before if change.before is not none else 'Vacío' }}</td><td>{{ change.display_after if change.display_after is not none else 'Vacío' }}</td><td>{{ change.reason }}</td></tr>{% endfor %}</tbody></table></div></details>
 <form method="POST" style="margin-top:20px" data-confirm-cleaning>
     {{ form.hidden_tag() }}
     <input type="hidden" name="preview_token" value="{{ preview_token }}">

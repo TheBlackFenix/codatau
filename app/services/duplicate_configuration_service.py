@@ -1,4 +1,5 @@
 import pandas as pd
+from app.services.date_normalization_service import DateNormalizationService as Dates
 
 
 class DuplicateConfigurationService:
@@ -43,8 +44,7 @@ class DuplicateConfigurationService:
         keep = settings['keep']
         if keep == 'latest':
             field = settings['date_column']
-            fmt = {'iso': 'ISO8601', 'dmy': '%d/%m/%Y', 'mdy': '%m/%d/%Y'}[column_preferences[field]['date_format']]
-            dates = pd.to_datetime(working[field].map(lambda value: value if isinstance(value,pd.Timestamp) else pd.to_datetime(value,format=fmt,errors='coerce',utc=True)),utc=True)
+            dates = pd.to_datetime(working[field].map(lambda value: Dates.inspect(value,column_preferences[field])[1]),utc=True)
             bad = dates.isna()
             # Preserve every group containing an unknown date, not just the bad row.
             blocked = working[keys].apply(tuple, axis=1).isin(set(working.loc[bad, keys].apply(tuple, axis=1)))

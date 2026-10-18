@@ -189,3 +189,35 @@ Esto no sustituye todavía el análisis IA valor por valor por un motor general 
 reglas contextuales agrupadas. Ese siguiente bloque debe proponer reglas acotadas
 por patrón, con ejemplos, cobertura y excepciones, sin ejecutar código generado
 ni asumir que cualquier negativo es un error.
+
+## Fechas deterministas y decisiones por grupo
+
+`DateNormalizationService` separa interpretación (`date_source`: auto/dmy/mdy)
+de presentación y exportación (`date_format`: iso/dmy/mdy). Configuraciones sin
+`date_source` conservan su criterio anterior de interpretación. Fechas ISO válidas,
+fechas ya tipadas y fechas numéricas de cuatro dígitos de año con orden inequívoco
+se interpretan sin IA. Las formas día/mes/año y mes/día/año con dos interpretaciones
+válidas se agrupan en `date_ambiguous`; confirmar día primero o mes primero resuelve
+el grupo completo. No se extrapola el orden a partir de una muestra de otras filas.
+
+El usuario también puede conservar, separar, vaciar o reemplazar ese grupo. Fechas
+imposibles no se reconstruyen y no se envían a IA para adivinar. No se interpretan
+números como seriales de Excel o timestamps sin configuración explícita. No se
+aceptan años de dos dígitos. La primera versión soporta ISO con hora y zona; fechas
+con barras, puntos o guiones en día/mes/año o mes/día/año se admiten sin hora.
+Otros patrones se mantienen como incompatibles hasta agregar reglas acotadas.
+
+Diagnóstico, conversión y selección del duplicado más reciente comparten el mismo
+intérprete. La vista previa muestra el formato final. El paquete de calidad y la
+descarga CSV de Reportes usan las preferencias de la versión descargada, no el
+borrador actual. Los datos analíticos mantienen fechas tipadas cuando no hay valores
+retenidos incompatibles. Se preservan horas y fracciones; zonas se normalizan a UTC,
+como en el ejecutor anterior. No se promete que todas las pantallas de análisis
+adopten todavía el formato de presentación personalizado.
+
+Las reglas tienen versión en el token de confirmación y la auditoría: una vista
+previa generada con reglas anteriores no confirma un resultado calculado con reglas
+nuevas. Cambios de configuración siguen invalidando los pasos posteriores. Una
+preferencia IA antigua para fechas exige volver a tratamientos y guardar el nuevo
+criterio agrupado. Esta etapa elimina la revisión individual de fechas, no reemplaza
+todavía todos los escenarios numéricos y semánticos por reglas agrupadas.

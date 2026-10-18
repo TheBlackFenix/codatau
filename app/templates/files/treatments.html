@@ -6,10 +6,15 @@
 <p>{{ record.original_name }} · Paso 3</p>
 {% if treatment_review_needed %}<p class="flash-alert flash-warning">El análisis muestra escenarios distintos de los guardados. Revisa los tratamientos y guárdalos de nuevo.</p>{% endif %}
 <p>Revisamos los valores según los tipos y formatos que elegiste. Una fila puede tener varios problemas: no sumes los escenarios como si fueran filas distintas.</p>
+<p>Las fechas inequívocas se convertirán directamente al formato elegido, sin consultar a la IA. Solo necesitas decidir sobre fechas ambiguas, imposibles o vacías; verás los cambios antes de confirmar.</p>
 <form method="POST" data-treatments-form>
     {{ form.hidden_tag() }}
     <input type="hidden" name="revision" value="{{ configuration.revision }}">
     <input type="hidden" name="source_version" value="{{ record.active_stored_filename }}">
+    {% if date_summaries %}<details class="card" style="margin-bottom:16px"><summary>Fechas claras: conversión directa, sin decisiones individuales ni IA</summary>
+        {% for summary in date_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} fecha(s) interpretables.</p><ul>{% for example in summary.examples %}<li>{{ example.before }} → {{ example.after }}</li>{% endfor %}</ul>{% endfor %}
+        <p>Solo se aplicarán al confirmar la vista previa. Los casos problemáticos se muestran por separado.</p>
+    </details>{% endif %}
     {% for column, scenarios in issues|groupby('column') %}
     <details class="card" style="margin-bottom:16px">
         <summary><strong>{{ column }}</strong> · {{ scenarios|length }} escenario(s)</summary>
@@ -17,11 +22,12 @@
         <section data-treatment-card style="margin-top:14px;padding-top:10px;border-top:1px solid #ddd">
             <p><strong>{{ issue.label }}</strong> · {{ issue.count }} fila(s)</p>
             {% if issue.scenario == 'range' %}<p>Es una sugerencia del contexto, no una certeza. Si estos valores son válidos en tu caso, puedes conservarlos.</p>{% endif %}
+            {% if issue.scenario == 'date_ambiguous' %}<p>Una sola elección resolverá este grupo: 03/04 puede ser 3 de abril o 4 de marzo. Si el archivo mezcla ambos criterios, conserva o separa el grupo en lugar de adivinar.</p>{% endif %}
             {% if issue.scenario == 'negative' %}<p>Indicaste que este campo no permite negativos. Elige una sola acción para este grupo. Convertir a positivo conserva la magnitud: −3 pasa a 3. No elijas esta opción si el signo representa una devolución, un saldo u otra información válida.</p>{% endif %}
             {% if issue.examples %}<p>Ejemplos: {{ issue.examples|join(' · ') }}</p>{% endif %}
             <label for="action-{{ issue.id }}">¿Qué quieres hacer?</label>
             <select class="form-control" id="action-{{ issue.id }}" name="action_{{ issue.id }}" data-treatment-action>
-                {% for value,label in actions.items() if not (value == 'ai' and issue.scenario == 'missing') and not (value == 'absolute' and issue.scenario != 'negative') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario == 'missing' or issue.type == 'date')) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
             <details class="context-help"><summary aria-label="Ayuda sobre tratamientos">?</summary><span>Conservar no toca el valor. Separar apartará toda la fila para revisarla y recuperarla. Reemplazar o vaciar cambia solo esta celda. La IA propondrá una solución que deberás aprobar, sin reconstruir contactos ni inventar datos faltantes.</span></details>
             <div data-treatment-replacement {% if decision.action != 'replace' %}hidden{% endif %}>
@@ -48,6 +54,8 @@
  form.querySelectorAll('[data-treatment-card]').forEach(card=>{
  const select=card.querySelector('[data-treatment-action]');
  const sync=()=>{const replacement=card.querySelector('[data-treatment-replacement]');replacement.hidden=select.value!=='replace';replacement.querySelector('input').required=select.value==='replace';card.querySelector('[data-treatment-explanation]').textContent=explanations[select.value]||'';};
+ explanations.date_dmy='Se interpretará todo este grupo con el día primero. Las fechas claras y las imposibles no se modifican por esta decisión.';
+ explanations.date_mdy='Se interpretará todo este grupo con el mes primero. Revisa los ejemplos antes de confirmar.';
  select.addEventListener('change',sync);sync();
  });
  form.addEventListener('change',()=>{dirty=true;form.querySelector('[data-unsaved-warning]').textContent='Tienes cambios sin guardar.';});

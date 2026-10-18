@@ -36,9 +36,15 @@
             <details class="context-help"><summary aria-label="Ayuda sobre valores negativos">?</summary><span>Un saldo o una devolución pueden ser negativos; una altura normalmente no. Tu elección tiene prioridad sobre el contexto. Si no permites negativos, elegirás después qué hacer con ellos: no se corregirán automáticamente.</span></details>
         </div>
         <div data-date {% if card.choice.type != 'date' %}hidden{% endif %}>
-            <label for="date-{{ card.index }}">¿En qué orden aparecen las fechas?</label>
+            <label for="date-source-{{ card.index }}">¿Cómo interpretar el día y mes del archivo?</label>
+            <select class="form-control" id="date-source-{{ card.index }}" name="column_{{ card.index }}_date_source">
+                <option value="auto" {% if card.choice.get('date_source', card.choice.get('date_format', 'auto')) in ['auto', 'iso'] %}selected{% endif %}>Detectar las claras; preguntar por las ambiguas</option>
+                <option value="dmy" {% if card.choice.get('date_source', card.choice.get('date_format')) == 'dmy' %}selected{% endif %}>En las ambiguas, el día va primero: 03/04 es 3 de abril</option>
+                <option value="mdy" {% if card.choice.get('date_source', card.choice.get('date_format')) == 'mdy' %}selected{% endif %}>En las ambiguas, el mes va primero: 03/04 es 4 de marzo</option>
+            </select>
+            <label for="date-{{ card.index }}">¿Cómo quieres ver y descargar las fechas?</label>
             <select class="form-control" id="date-{{ card.index }}" name="column_{{ card.index }}_date">{% for value,label in date_formats.items() %}<option value="{{ value }}" {% if value == card.choice.date_format %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-            <small>Por ejemplo, 03/04 puede ser 3 de abril o 4 de marzo. Confirma el orden antes de convertir.</small>
+            <details class="context-help"><summary aria-label="Ayuda sobre formatos de fechas">?</summary><span>Las fechas claras se convierten sin IA. Si 03/04 puede significar dos días distintos, pediremos una sola decisión para el grupo. No inventamos fechas imposibles. Cambiar la presentación no cambia el día ni elimina la hora.</span></details>
         </div>
     </section>
     {% endfor %}

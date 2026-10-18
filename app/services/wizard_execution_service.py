@@ -7,6 +7,7 @@ import pandas as pd
 from app.services.cleaning_treatment_service import CleaningTreatmentService as Treatments
 from app.services.duplicate_configuration_service import DuplicateConfigurationService as Duplicates
 from app.services.value_proposal_service import ValueProposalService as Proposals
+from app.services.date_normalization_service import DateNormalizationService as Dates
 
 
 def cell(value):
@@ -28,6 +29,8 @@ class WizardResult:
 
 
 class WizardExecutionService:
+    RULE_VERSION = '2-deterministic-dates'
+
     @staticmethod
     def convert(value, preference):
         if pd.isna(value): return None
@@ -39,8 +42,7 @@ class WizardExecutionService:
             if number is None: raise ValueError('Un valor no coincide con el tipo decimal.')
             return number
         if kind=='date':
-            fmt={'iso':'ISO8601','dmy':'%d/%m/%Y','mdy':'%m/%d/%Y'}[preference['date_format']]
-            return pd.to_datetime(value,format=fmt,utc=True).tz_localize(None)
+            return Dates.convert(value, preference)
         if kind=='boolean':
             return str(value).strip().casefold() in {'true','sí','si','1','yes'}
         if isinstance(value,numbers.Real) and not isinstance(value,bool) and math.isfinite(float(value)) and float(value).is_integer():
@@ -98,6 +100,10 @@ class WizardExecutionService:
                     working.at[row,column]=policy['replacement'];causes[key]='Reemplazo elegido'
                     if Treatments.issues(pd.DataFrame({column:[policy['replacement']]}),{column:config.columns[column]}):protected.add(key)
                 elif action=='null':working.at[row,column]=None;causes[key]='Dejar vacío'
+                elif action in {'date_dmy','date_mdy'}:
+                    preference={**config.columns[column], 'date_source':action.removeprefix('date_')}
+                    working.at[row,column]=Dates.convert(original.at[row,column],preference)
+                    causes[key]='Orden de día y mes confirmado para el grupo'
                 elif action=='absolute':
                     pref=config.columns[column]
                     value=original.at[row,column]
@@ -143,6 +149,7 @@ class WizardExecutionService:
                 before,after=cell(original.at[row,column]),cell(working.at[row,column])
                 if type(before)!=type(after) or before!=after:
                     changes.append({'source_row':int(row)+1,'column':column,'before':before,'after':after,
+                                    'display_after':Dates.display(working.at[row,column],config.columns[column]) if config.columns[column]['type']=='date' else after,
                                     'reason':causes.get((row,column),'Conversión al tipo elegido')})
         # Duplicate criteria are evaluated AFTER all accepted transformations.
         comparison=working.copy()
