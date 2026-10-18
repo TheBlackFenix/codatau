@@ -53,11 +53,30 @@ en los siguientes bloques, evitando aplicar parcialmente decisiones nuevas.
 
 ## Siguientes etapas pendientes
 
-1. Duplicados por fila completa o combinación de campos; primero/último/más reciente;
-   claves incompletas sin eliminación automática y ejemplos del impacto.
-2. Tratamientos por escenario: conservar, cuarentena, reemplazo, vacío o propuesta IA.
+1. Tratamientos por escenario: conservar, cuarentena, reemplazo, vacío o propuesta IA.
    No declarar conversión completa si se conservan valores incompatibles.
-3. Propuestas de transformación de valores distintos, con impacto y motivos;
+2. Propuestas de transformación de valores distintos, con impacto y motivos;
    validación local, aceptación explícita y versiones con cambios por celda.
-4. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
+3. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
    y pruebas de recorrido completo del asistente.
+
+## Etapa 3: navegación y preferencias de duplicados implementadas
+
+Una navegación numerada muestra el paso actual y los pasos guardados; las pantallas
+posteriores están señaladas como pendientes, sin enlaces a acciones inexistentes.
+«Guardar y continuar» del primer paso lleva a duplicados. Volver conserva lo guardado,
+y salir con cambios pendientes provoca una advertencia del navegador.
+
+El segundo paso permite no eliminar duplicados, comparar todos los campos o una
+combinación explícita. La comparación es exacta: no normaliza textos ni fusiona
+clientes. Primero y último se refieren al orden del archivo. Más reciente usa una
+columna configurada como Fecha y su formato elegido; un empate conserva el último
+registro. Los campos de clave vacíos y los grupos con fechas no interpretables se
+protegen: no se proponen eliminaciones para esos registros.
+
+Los criterios se guardan en la nueva columna `duplicates` de la configuración,
+agregada por la migración `0004_duplicate_preferences`. La pantalla calcula cuántas
+filas se quitarían y muestra hasta ocho ejemplos. No modifica los datos ni crea
+versiones: la aplicación conjunta se conectará en la siguiente etapa. Cambiar tipos
+o formatos limpia estos criterios para exigir una nueva revisión. Las revisiones
+de configuración y la versión activa impiden guardar desde pestañas antiguas.

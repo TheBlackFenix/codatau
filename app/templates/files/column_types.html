@@ -1,9 +1,11 @@
 {% extends 'base.html' %}
 {% block title %}Define tus columnas — CoDataU{% endblock %}
 {% block content %}
+{% include 'files/_cleaning_steps.html' %}
 <h1>Define tus columnas</h1>
 <p>{{ record.original_name }} · Paso 1 de la configuración de limpieza</p>
 <p>Revisa el tipo sugerido para cada campo. Guardar estas decisiones no cambia tus datos.</p>
+{% if configuration and configuration.duplicates %}<p>Si cambias un tipo o su formato, tendrás que revisar de nuevo la comparación de duplicados.</p>{% endif %}
 {% if stale %}<div class="flash-alert flash-warning">Estás viendo otra versión del archivo. Recuperamos tus preferencias; revísalas y guárdalas de nuevo para esta versión.</div>{% endif %}
 <form method="POST">
     {{ form.hidden_tag() }}
@@ -34,10 +36,11 @@
     </div>
     <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
         <button class="btn btn-purple">Guardar tipos de columnas</button>
+        <button class="btn btn-purple" name="next" value="duplicates">Guardar y continuar</button>
         <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Volver a resultados</a>
         <a class="btn btn-secondary" href="{{ url_for('files.cleaning', file_id=record.id) }}">Ver limpieza actual</a>
     </div>
-    <p>La selección de duplicados y la aplicación conjunta de estas preferencias se incorporarán en los siguientes pasos. La limpieza actual todavía utiliza sus propias reglas.</p>
+    <p>Continúa para definir los duplicados. La aplicación conjunta se incorporará al terminar el asistente; la limpieza actual todavía utiliza sus propias reglas.</p>
     <p data-save-warning role="status"></p>
 </form>
 <script>

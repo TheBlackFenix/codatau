@@ -9,6 +9,7 @@ class CleaningConfiguration(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     source_version = db.Column(db.String(255), nullable=False)
     columns = db.Column(db.JSON, nullable=False, default=dict)
+    duplicates = db.Column(db.JSON, nullable=False, default=dict)
     revision = db.Column(db.Integer, nullable=False, default=1)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     __mapper_args__ = {'version_id_col': revision}

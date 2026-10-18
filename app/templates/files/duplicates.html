@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Identifica duplicados — CoDataU{% endblock %}
+{% block content %}
+{% include 'files/_cleaning_steps.html' %}
+<h1>Identifica duplicados</h1>
+<p>{{ record.original_name }} · Paso 2</p>
+<form method="POST" class="card">
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="revision" value="{{ configuration.revision }}">
+    <input type="hidden" name="source_version" value="{{ record.active_stored_filename }}">
+    <label for="duplicate-mode">¿Cuándo consideras que dos registros son iguales?</label>
+    <select id="duplicate-mode" name="mode" class="form-control">
+        <option value="none" {% if settings.mode == 'none' %}selected{% endif %}>No eliminar duplicados</option>
+        <option value="all" {% if settings.mode == 'all' %}selected{% endif %}>Cuando coinciden todos los campos</option>
+        <option value="keys" {% if settings.mode == 'keys' %}selected{% endif %}>Cuando coinciden los campos que elija</option>
+    </select>
+    <details class="context-help"><summary aria-label="Ayuda sobre duplicados">?</summary><span>Un cliente puede comprar varias veces: repetir su documento no significa que la compra esté duplicada. Elige campos que identifiquen el registro, por ejemplo factura y producto. Comparamos los valores tal como están; no unificamos nombres ni mayúsculas.</span></details>
+    <fieldset data-keys><legend>Campos que deben coincidir</legend>
+        {% for column in columns %}<label style="display:inline-block;margin:6px"><input type="checkbox" name="keys" value="{{ column }}" {% if column in settings.get('keys', []) %}checked{% endif %}> {{ column }}</label>{% endfor %}
+    </fieldset>
+    <div data-treatment>
+        <label for="duplicate-keep">¿Qué registro quieres conservar en cada grupo?</label>
+        <select id="duplicate-keep" name="keep" class="form-control"><option value="first" {% if settings.get('keep') == 'first' %}selected{% endif %}>El primero que aparece en el archivo</option><option value="last" {% if settings.get('keep') == 'last' %}selected{% endif %}>El último que aparece en el archivo</option><option value="latest" {% if settings.get('keep') == 'latest' %}selected{% endif %}>El de fecha más reciente</option></select>
+        <div data-date-choice><label for="duplicate-date">Fecha que indica cuál es más reciente</label>
+            <select id="duplicate-date" name="date_column" class="form-control"><option value="">Selecciona una fecha</option>{% for column in date_columns %}<option value="{{ column }}" {% if settings.get('date_column') == column %}selected{% endif %}>{{ column }}</option>{% endfor %}</select>
+            {% if not date_columns %}<p>Vuelve al paso anterior y define un campo como Fecha para utilizar esta opción.</p>{% endif %}
+        </div>
+    </div>
+    <p>Las filas con campos de comparación vacíos se conservarán para revisión. Si una fecha no se entiende, conservaremos todo su grupo. En fechas iguales, se conserva el último registro del archivo.</p>
+    <button class="btn btn-purple">Guardar y ver impacto</button>
+    <a class="btn btn-secondary" href="{{ url_for('files.configure_columns', file_id=record.id) }}">Anterior</a>
+    <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
+</form>
+{% if preview %}
+<section class="card" style="margin-top:18px">
+    <h2>Impacto de la comparación guardada</h2>
+    <p>Se separarían {{ preview.removed }} registros repetidos; quedarían {{ preview.remaining }} filas.</p>
+    <p>{{ preview.incomplete }} filas con campos de comparación vacíos y {{ preview.invalid_dates }} filas en grupos con fechas sin interpretar se conservarán.</p>
+    {% if preview.examples %}<details><summary>Ejemplos de filas que se quitarían del resultado</summary><div class="table-wrap"><table class="data-table"><thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead><tbody>{% for row in preview.examples %}<tr>{% for column in columns %}<td>{{ row[column] }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></details>{% endif %}
+    <strong>Esto es una vista previa: no se eliminó nada. La aplicación conjunta se habilitará en los siguientes pasos del asistente.</strong>
+</section>
+{% endif %}
+<script>
+(() => {
+ const mode=document.getElementById('duplicate-mode'), keep=document.getElementById('duplicate-keep');
+ const sync=()=>{
+ document.querySelector('[data-keys]').hidden=mode.value!=='keys';
+ document.querySelector('[data-treatment]').hidden=mode.value==='none';
+ document.querySelector('[data-date-choice]').hidden=keep.value!=='latest';
+ };
+ mode.addEventListener('change',sync); keep.addEventListener('change',sync); sync();
+ let dirty=false;
+ const form=mode.closest('form'); form.addEventListener('change',()=>{dirty=true;}); form.addEventListener('submit',()=>{dirty=false;});
+ window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+})();
+</script>
+{% endblock %}

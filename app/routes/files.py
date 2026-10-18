@@ -74,11 +74,13 @@ def configure_columns(file_id):
             if configuration is None:
                 configuration = CleaningConfiguration(file_id=record.id, user_id=current_user.id)
                 db.session.add(configuration)
+            if configuration.columns != choices or configuration.source_version != version:
+                configuration.duplicates = {}
             configuration.columns = choices
             configuration.source_version = version
             db.session.commit()
             flash('Tipos guardados. No se modificó ningún dato. Puedes regresar y cambiar tus decisiones.', 'success')
-            return redirect(url_for('files.configure_columns', file_id=file_id))
+            return redirect(url_for('files.configure_duplicates' if request.form.get('next') == 'duplicates' else 'files.configure_columns', file_id=file_id))
         except ValueError as error:
             db.session.rollback()
             flash(str(error), 'warning')
@@ -94,6 +96,49 @@ def configure_columns(file_id):
     return render_template('files/column_types.html', record=record, cards=cards, form=form,
                            configuration=configuration, source_version=version, stale=stale,
                            type_labels=ColumnTypeService.TYPES, date_formats=ColumnTypeService.DATES)
+
+@files_bp.route('/cleaning/<int:file_id>/duplicates', methods=['GET', 'POST'])
+@login_required
+def configure_duplicates(file_id):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.duplicate_configuration_service import DuplicateConfigurationService as Duplicates
+    from sqlalchemy.orm.exc import StaleDataError
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename:
+        flash('Guarda primero los tipos de columnas de la versión activa.', 'warning')
+        return redirect(url_for('files.configure_columns', file_id=file_id))
+    dataframe = _load_dataframe(record)
+    form = CleaningActionForm()
+    settings = config.duplicates or {'mode': 'none'}
+    preview = None
+    if request.method == 'POST':
+        if not form.validate_on_submit():
+            abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('source_version') != record.active_stored_filename:
+            flash('La configuración cambió en otra ventana. Recarga antes de guardar.', 'warning')
+            return redirect(url_for('files.configure_duplicates', file_id=file_id))
+        try:
+            settings = Duplicates.parse(request.form, list(dataframe.columns), config.columns)
+            Duplicates.preview(dataframe, settings, config.columns)
+            config.duplicates = settings
+            db.session.commit()
+            flash('Comparación guardada. Todavía no se eliminó ninguna fila.', 'success')
+            return redirect(url_for('files.configure_duplicates', file_id=file_id))
+        except ValueError as error:
+            db.session.rollback()
+            flash(str(error), 'warning')
+            settings = config.duplicates or {'mode': 'none'}
+        except StaleDataError:
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Revisa la configuración actual.', 'warning')
+            return redirect(url_for('files.configure_duplicates', file_id=file_id))
+    if config.duplicates:
+        preview = Duplicates.preview(dataframe, settings, config.columns)
+    return render_template('files/duplicates.html', record=record, configuration=config, form=form,
+                           settings=settings, preview=preview, columns=list(dataframe.columns),
+                           date_columns=[name for name,item in config.columns.items() if item['type'] == 'date'])
+
 
 CLEANING_PARAMETER_FIELDS = {
     'cast_type': ('decimal_separator',),
