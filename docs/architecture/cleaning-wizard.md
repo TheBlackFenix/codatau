@@ -167,3 +167,25 @@ versiones y solicitar métricas de la versión activa. Un resultado vacío tambi
 puede confirmarse, con advertencia explícita previa y filas separadas recuperables.
 La configuración conserva su versión de origen: para limpiar una versión nueva
 hay que revisarla de nuevo, impidiendo reaplicar por accidente una vista antigua.
+
+## Regla de negativos y tratamiento por grupo
+
+Para números enteros y decimales, el paso de columnas guarda `negative_policy`:
+`allow` (válidos), `deny` (cero o positivo) o `unknown` (consultar el contexto).
+Configuraciones anteriores equivalen a `unknown`. La elección explícita prevalece
+sobre restricciones inferidas: `allow` no genera alertas por signo y `deny` marca
+solo negativos, no ceros. Vacíos, formatos inválidos y fracciones en enteros se
+tratan por separado. Cambiar esta preferencia invalida los pasos posteriores.
+
+El escenario `negative` permite elegir una vez un tratamiento para toda la columna.
+Además de conservar, separar, vaciar o reemplazar, ofrece convertir el grupo a
+positivo (`absolute`). Es una decisión explícita del usuario, no una deducción del
+modelo; no se ofrece para restricciones meramente inferidas ni otros escenarios.
+El ejecutor revalida esta condición, conserva la magnitud y registra cada cambio
+con su motivo en la nueva versión, después de la vista previa y confirmación.
+No se consumen tokens para ejecutar esta operación determinista.
+
+Esto no sustituye todavía el análisis IA valor por valor por un motor general de
+reglas contextuales agrupadas. Ese siguiente bloque debe proponer reglas acotadas
+por patrón, con ejemplos, cobertura y excepciones, sin ejecutar código generado
+ni asumir que cualquier negativo es un error.

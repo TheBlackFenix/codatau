@@ -43,6 +43,41 @@ def test_quarantine_precedes_changes_and_missing_can_become_null(app):
     assert pd.isna(result.cleaned['quantity'].iloc[1])
 
 
+@pytest.mark.parametrize('kind,separator,negative,expected', [
+    ('integer', '.', '-2', 2), ('decimal', ',', '-3,5', 3.5), ('decimal', '.', -0.125, 0.125)])
+def test_one_explicit_group_decision_handles_thousand_negatives(app, kind, separator, negative, expected):
+    frame = pd.DataFrame({'height': [negative] * 1000 + ['0', 'bad', None]})
+    before = frame.copy(deep=True)
+    cols = {'height': {'type': kind, 'decimal_separator': separator, 'negative_policy': 'deny'}}
+    cfg = config_for(frame, cols, 'keep')
+    issues = Treatments.issues(frame, cols)
+    group = next(i for i in issues if i['scenario'] == 'negative')
+    cfg.treatments['decisions'][group['id']] = {'action': 'absolute'}
+    with app.app_context():
+        result = Executor.build(frame, SimpleNamespace(active_stored_filename='a.csv'), cfg, {}, app.config)
+    assert result.metrics['after_rows'] == 1003
+    assert result.metrics['quarantined_rows'] == 0
+    assert all(float(value) == expected for value in result.cleaned['height'].iloc[:1000])
+    assert result.cleaned['height'].iloc[1001] == 'bad'
+    assert len([change for change in result.changes if change['reason'] == 'Conversión a positivo confirmada para el grupo']) == 1000
+    pd.testing.assert_frame_equal(frame, before)
+
+
+def test_saved_absolute_action_cannot_override_context_or_user_allow(app):
+    frame = pd.DataFrame({'height': [-2, 3]})
+    cols = {'height': {'type': 'integer', 'negative_policy': 'unknown'}}
+    context = {'column_roles': [{'column': 'height', 'suggested_constraints': ['positive']}]}
+    cfg = config_for(frame, cols, 'keep')
+    issue = Treatments.issues(frame, cols, context)[0]
+    cfg.treatments = {'decisions': {issue['id']: {'action': 'absolute'}}}
+    with app.app_context():
+        with pytest.raises(ValueError):
+            Executor.build(frame, SimpleNamespace(active_stored_filename='a.csv'), cfg, context, app.config)
+        cfg.columns['height']['negative_policy'] = 'allow'
+        with pytest.raises(ValueError):
+            Executor.build(frame, SimpleNamespace(active_stored_filename='a.csv'), cfg, context, app.config)
+
+
 def test_latest_duplicate_after_date_conversion_with_retained_bad_date(app):
     data=pd.DataFrame({'id':['A','A','B','B'],'date':['03/04/2026','04/03/2026','bad','18/10/2026']})
     cols={'id':{'type':'identifier'},'date':{'type':'date','date_format':'dmy'}}
@@ -75,6 +110,32 @@ class Inputs(HTMLParser):
     def handle_starttag(self,tag,attrs):
         attrs=dict(attrs)
         if tag=='input' and attrs.get('type')=='hidden':self.data[attrs['name']]=attrs.get('value','')
+
+
+def test_negative_group_creates_version_with_policy_and_cell_audit(app, client, auth):
+    auth.register(); auth.login()
+    client.post('/files/upload', data={'file': (BytesIO(b'height\n-2\n-3\n0\n'), 'height.csv')})
+    root = '/files/cleaning/1/'
+    def tokens(step):
+        response = client.get(root + step)
+        assert response.status_code == 200
+        parser = Inputs(); parser.feed(response.text)
+        return parser.data
+    client.post(root + 'columns', data={**tokens('columns'), 'column_0': 'integer', 'column_0_negative': 'deny'})
+    client.post(root + 'duplicates', data={**tokens('duplicates'), 'mode': 'none'})
+    issues = Treatments.issues(pd.DataFrame({'height': [-2, -3, 0]}), {'height': {'type': 'integer', 'negative_policy': 'deny'}})
+    assert len(issues) == 1
+    assert 'Convertir todos estos negativos a positivo' in client.get(root + 'treatments').text
+    client.post(root + 'treatments', data={**tokens('treatments'), 'action_' + issues[0]['id']: 'absolute'})
+    assert client.post(root + 'wizard-preview', data=tokens('wizard-preview')).status_code == 302
+    with app.app_context():
+        version = DatasetVersion.query.one()
+        # The immutable snapshot includes both the user constraint and treatment.
+        operation = version.operations[0]
+        assert operation['columns']['height']['negative_policy'] == 'deny'
+        assert operation['treatments']['decisions'][issues[0]['id']]['action'] == 'absolute'
+        assert sum(change['reason'] == 'Conversión a positivo confirmada para el grupo' for change in operation['changes']) == 2
+        assert version.metrics['quarantined_rows'] == 0
 
 
 def test_complete_wizard_version_export_restore_and_repeat_confirmation(app,client,auth):

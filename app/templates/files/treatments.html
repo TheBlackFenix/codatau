@@ -17,10 +17,11 @@
         <section data-treatment-card style="margin-top:14px;padding-top:10px;border-top:1px solid #ddd">
             <p><strong>{{ issue.label }}</strong> · {{ issue.count }} fila(s)</p>
             {% if issue.scenario == 'range' %}<p>Es una sugerencia del contexto, no una certeza. Si estos valores son válidos en tu caso, puedes conservarlos.</p>{% endif %}
+            {% if issue.scenario == 'negative' %}<p>Indicaste que este campo no permite negativos. Elige una sola acción para este grupo. Convertir a positivo conserva la magnitud: −3 pasa a 3. No elijas esta opción si el signo representa una devolución, un saldo u otra información válida.</p>{% endif %}
             {% if issue.examples %}<p>Ejemplos: {{ issue.examples|join(' · ') }}</p>{% endif %}
             <label for="action-{{ issue.id }}">¿Qué quieres hacer?</label>
             <select class="form-control" id="action-{{ issue.id }}" name="action_{{ issue.id }}" data-treatment-action>
-                {% for value,label in actions.items() if not (value == 'ai' and issue.scenario == 'missing') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                {% for value,label in actions.items() if not (value == 'ai' and issue.scenario == 'missing') and not (value == 'absolute' and issue.scenario != 'negative') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
             <details class="context-help"><summary aria-label="Ayuda sobre tratamientos">?</summary><span>Conservar no toca el valor. Separar apartará toda la fila para revisarla y recuperarla. Reemplazar o vaciar cambia solo esta celda. La IA propondrá una solución que deberás aprobar, sin reconstruir contactos ni inventar datos faltantes.</span></details>
             <div data-treatment-replacement {% if decision.action != 'replace' %}hidden{% endif %}>
@@ -37,13 +38,13 @@
     <button class="btn btn-purple" name="next" value="ai">Guardar y continuar</button>
     <a class="btn btn-secondary" href="{{ url_for('files.configure_duplicates', file_id=record.id) }}">Anterior</a>
     <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
-    <p>Guardar solo configura el proceso. La revisión de propuestas de IA y la aplicación conjunta se habilitarán en los siguientes pasos. No se ha modificado nada.</p>
+    <p>Guardar solo configura el proceso. En los siguientes pasos revisarás las propuestas de IA y una vista previa antes de aplicar los cambios. No se ha modificado nada.</p>
     <p data-unsaved-warning role="status"></p>
 </form>
 <script>
 (() => {
  const form=document.querySelector('[data-treatments-form]');let dirty=false;
- const explanations={keep:'El valor se conservará, aunque no coincida con el tipo elegido.',quarantine:'Se apartará la fila completa, sin borrar el original.',replace:'Se cambiará únicamente la celda problemática.',null:'La fila se conservará y esta celda quedará vacía.',ai:'La IA preparará una propuesta para tu revisión en el siguiente paso; no se ejecuta al guardar.'};
+ const explanations={keep:'El valor se conservará, aunque no coincida con el tipo elegido.',quarantine:'Se apartará la fila completa, sin borrar el original.',replace:'Se cambiará únicamente la celda problemática.',null:'La fila se conservará y esta celda quedará vacía.',ai:'La IA preparará una propuesta para tu revisión en el siguiente paso; no se ejecuta al guardar.',absolute:'Una sola decisión convertirá todos los negativos válidos de este grupo a positivo. Revisa el resultado antes de confirmar la nueva versión.'};
  form.querySelectorAll('[data-treatment-card]').forEach(card=>{
  const select=card.querySelector('[data-treatment-action]');
  const sync=()=>{const replacement=card.querySelector('[data-treatment-replacement]');replacement.hidden=select.value!=='replace';replacement.querySelector('input').required=select.value==='replace';card.querySelector('[data-treatment-explanation]').textContent=explanations[select.value]||'';};

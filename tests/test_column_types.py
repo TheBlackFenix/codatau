@@ -31,7 +31,7 @@ def test_choices_persist_without_creating_versions_or_decisions(app, client, aut
     assert client.post(path, data=payload).status_code == 302
     with app.app_context():
         config = CleaningConfiguration.query.one()
-        assert config.columns['amount'] == {'type': 'decimal', 'decimal_separator': '.'}
+        assert config.columns['amount'] == {'type': 'decimal', 'decimal_separator': '.', 'negative_policy': 'unknown'}
         assert DatasetVersion.query.count() == 0
     assert 'selected>Identificador o código' in client.get(path).text
     auth.logout(); auth.login()
@@ -80,3 +80,30 @@ def test_column_configuration_requires_csrf(app, client, auth):
     path = setup_file(client, auth)
     app.config['WTF_CSRF_ENABLED'] = True
     assert client.post(path, data={}).status_code == 400
+
+
+def test_negative_policy_persists_and_invalidates_downstream_configuration(app, client, auth):
+    path = setup_file(client, auth)
+    client.post(path, data={**fields(client, path), 'column_1_negative': 'allow'})
+    with app.app_context():
+        config = CleaningConfiguration.query.one()
+        assert config.columns['amount']['negative_policy'] == 'allow'
+        config.duplicates = {'mode': 'none'}
+        config.treatments = {'decisions': {}}
+        config.ai_review = {'fingerprint': 'old'}
+        db.session.commit()
+    assert 'selected>Sí, son válidos' in client.get(path).text
+    client.post(path, data={**fields(client, path), 'column_1_negative': 'deny'})
+    with app.app_context():
+        config = CleaningConfiguration.query.one()
+        assert config.columns['amount']['negative_policy'] == 'deny'
+        assert config.duplicates == config.treatments == config.ai_review == {}
+    response = client.post(path, data={**fields(client, path), 'column_1_negative': 'guess'})
+    assert response.status_code == 200
+    with app.app_context():
+        assert CleaningConfiguration.query.one().columns['amount']['negative_policy'] == 'deny'
+
+
+def test_negative_policy_is_not_saved_for_text():
+    cards = [{'index': 0, 'name': 'code'}]
+    assert ColumnTypeService.parse({'column_0': 'text', 'column_0_negative': 'deny'}, cards) == {'code': {'type': 'text'}}

@@ -26,6 +26,15 @@
             <label for="separator-{{ card.index }}">¿Qué separa la parte decimal?</label>
             <select class="form-control" id="separator-{{ card.index }}" name="column_{{ card.index }}_separator"><option value="." {% if card.choice.decimal_separator == '.' %}selected{% endif %}>Punto: 3.5</option><option value="," {% if card.choice.decimal_separator == ',' %}selected{% endif %}>Coma: 3,5</option></select>
         </div>
+        <div data-negative {% if card.choice.type not in ['integer', 'decimal'] %}hidden{% endif %}>
+            <label for="negative-{{ card.index }}">¿Este campo puede tener valores negativos?</label>
+            <select class="form-control" id="negative-{{ card.index }}" name="column_{{ card.index }}_negative">
+                <option value="unknown" {% if card.choice.get('negative_policy', 'unknown') == 'unknown' %}selected{% endif %}>No estoy seguro: revisar según el contexto</option>
+                <option value="allow" {% if card.choice.get('negative_policy') == 'allow' %}selected{% endif %}>Sí, son válidos</option>
+                <option value="deny" {% if card.choice.get('negative_policy') == 'deny' %}selected{% endif %}>No, debe ser cero o positivo</option>
+            </select>
+            <details class="context-help"><summary aria-label="Ayuda sobre valores negativos">?</summary><span>Un saldo o una devolución pueden ser negativos; una altura normalmente no. Tu elección tiene prioridad sobre el contexto. Si no permites negativos, elegirás después qué hacer con ellos: no se corregirán automáticamente.</span></details>
+        </div>
         <div data-date {% if card.choice.type != 'date' %}hidden{% endif %}>
             <label for="date-{{ card.index }}">¿En qué orden aparecen las fechas?</label>
             <select class="form-control" id="date-{{ card.index }}" name="column_{{ card.index }}_date">{% for value,label in date_formats.items() %}<option value="{{ value }}" {% if value == card.choice.date_format %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
@@ -40,7 +49,7 @@
         <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Volver a resultados</a>
         <a class="btn btn-secondary" href="{{ url_for('files.cleaning', file_id=record.id) }}">Ver limpieza actual</a>
     </div>
-    <p>Continúa para definir los duplicados. La aplicación conjunta se incorporará al terminar el asistente; la limpieza actual todavía utiliza sus propias reglas.</p>
+    <p>Continúa para definir los duplicados. Revisarás todos los cambios antes de aplicarlos en una nueva versión, conservando el original.</p>
     <p data-save-warning role="status"></p>
 </form>
 <script>
@@ -55,6 +64,7 @@
         const sync = () => {
             card.querySelector('[data-decimal]').hidden = select.value !== 'decimal';
             card.querySelector('[data-date]').hidden = select.value !== 'date';
+            card.querySelector('[data-negative]').hidden = !['integer', 'decimal'].includes(select.value);
         };
         select.addEventListener('change', sync); sync();
     });

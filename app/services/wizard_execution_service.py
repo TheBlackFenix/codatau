@@ -56,6 +56,10 @@ class WizardExecutionService:
         policies=config.treatments['decisions']
         if set(policies)!={issue['id'] for issue in issues}:
             raise ValueError('Los escenarios cambiaron. Revisa los tratamientos otra vez.')
+        # Revalidate persisted policies, not just browser submissions.
+        Treatments.parse({key: value for issue_id, policy in policies.items()
+                          for key, value in [('action_'+issue_id, policy.get('action')),
+                                             ('replacement_'+issue_id, policy.get('replacement', ''))]}, issues)
         candidates=Proposals.candidates(original,config,context)
         review=config.ai_review or {}
         if candidates:
@@ -94,6 +98,14 @@ class WizardExecutionService:
                     working.at[row,column]=policy['replacement'];causes[key]='Reemplazo elegido'
                     if Treatments.issues(pd.DataFrame({column:[policy['replacement']]}),{column:config.columns[column]}):protected.add(key)
                 elif action=='null':working.at[row,column]=None;causes[key]='Dejar vacío'
+                elif action=='absolute':
+                    pref=config.columns[column]
+                    value=original.at[row,column]
+                    text=str(value).strip()
+                    if isinstance(value,str):text=text.replace(pref.get('decimal_separator','.'),'.')
+                    replacement=format(abs(Decimal(text)),'f')
+                    working.at[row,column]=replacement.replace('.',pref.get('decimal_separator','.'))
+                    causes[key]='Conversión a positivo confirmada para el grupo'
                 elif action=='ai':
                     replacement=approved.get((column,str(original.at[row,column])))
                     if replacement is None:protected.add(key)

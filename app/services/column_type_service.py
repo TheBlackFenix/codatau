@@ -53,6 +53,11 @@ class ColumnTypeService:
             if kind not in cls.TYPES:
                 raise ValueError('Elige un tipo válido para cada columna.')
             choice = {'type': kind}
+            if kind in {'integer', 'decimal'}:
+                policy = form.get(key + '_negative', 'unknown')
+                if policy not in {'allow', 'deny', 'unknown'}:
+                    raise ValueError('Indica si este campo permite valores negativos.')
+                choice['negative_policy'] = policy
             if kind == 'decimal':
                 separator = form.get(key + '_separator')
                 if separator not in {'.', ','}:

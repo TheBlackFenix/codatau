@@ -35,6 +35,23 @@ def test_replacement_is_only_stored_for_replace_and_missing_cannot_use_ai():
     with pytest.raises(ValueError): Treatments.parse({'action_a':'ai'},[{'id':'a','scenario':'missing'}])
 
 
+@pytest.mark.parametrize('policy,expected', [('allow', {}), ('deny', {'negative': 1}), ('unknown', {'range': 2})])
+def test_user_negative_policy_has_priority_over_inferred_positive_constraint(policy, expected):
+    frame = pd.DataFrame({'height': ['-3', '0', '2', 'bad', None]})
+    preferences = {'height': {'type': 'integer', 'negative_policy': policy}}
+    context = {'column_roles': [{'column': 'height', 'suggested_constraints': ['positive']}]}
+    issues = Treatments.issues(frame, preferences, context)
+    assert {i['scenario']: i['count'] for i in issues if i['scenario'] not in {'missing', 'invalid'}} == expected
+    assert {i['scenario']: i['count'] for i in issues if i['scenario'] in {'missing', 'invalid'}} == {'missing': 1, 'invalid': 1}
+
+
+def test_absolute_treatment_requires_user_confirmed_negative_group():
+    for scenario in ['range', 'invalid', 'missing']:
+        with pytest.raises(ValueError):
+            Treatments.parse({'action_a': 'absolute'}, [{'id': 'a', 'scenario': scenario}])
+    assert Treatments.parse({'action_a': 'absolute'}, [{'id': 'a', 'scenario': 'negative'}])['decisions']['a']['action'] == 'absolute'
+
+
 def test_step_three_persists_and_never_changes_data(app,client,auth):
     auth.register();auth.login()
     client.post('/files/upload',data={'file':(BytesIO(b'id,quantity\nA,dos\nB,2\nC,\n'),'test.csv')})
