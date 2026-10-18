@@ -1,5 +1,6 @@
 import pandas as pd
 from app.services.date_normalization_service import DateNormalizationService as Dates
+from app.services.missing_value_service import MissingValueService as Missing
 
 
 class DuplicateConfigurationService:
@@ -35,6 +36,7 @@ class DuplicateConfigurationService:
         complete = dataframe[keys].notna().all(axis=1)
         for key in keys:
             complete &= dataframe[key].map(lambda value: not isinstance(value, str) or bool(value.strip()))
+            complete &= ~dataframe[key].map(lambda value: Missing.matches(value, column_preferences.get(key, {})))
         working = dataframe.loc[complete].copy()
         if working.empty:
             result={'removed':0,'remaining':len(dataframe),'incomplete':int((~complete).sum()),'invalid_dates':0,'examples':[]}

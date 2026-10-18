@@ -1,6 +1,7 @@
 """Opt-in, bounded text transformations; no inference or generated code."""
 import re
 import unicodedata
+from app.services.missing_value_service import MissingValueService as Missing
 
 
 class TextNormalizationService:
@@ -45,9 +46,11 @@ class TextNormalizationService:
     def summaries(cls, dataframe, preferences):
         summaries = []
         for column, pref in preferences.items():
+            if pref.get('type') not in {'text', 'identifier'} or pref.get('text_rules', {}).get('version') != cls.VERSION:
+                continue
             count, empty_count, examples = 0, 0, []
             for value in dataframe[column]:
-                if not isinstance(value, str) or not value.strip():
+                if not isinstance(value, str) or not value.strip() or Missing.matches(value, pref):
                     continue
                 after = cls.normalize(value, pref)
                 if after == value:

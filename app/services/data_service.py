@@ -198,7 +198,7 @@ class DataService:
             delimiter = ','
 
         try:
-            return pd.read_csv(path, encoding=encoding, sep=delimiter)
+            return pd.read_csv(path, encoding=encoding, sep=delimiter, keep_default_na=False, na_values=[''])
         except EmptyDataError as exc:
             raise FileReadError(
                 'empty_file',
@@ -215,7 +215,7 @@ class DataService:
     @staticmethod
     def _read_excel(path, extension):
         try:
-            return pd.read_excel(str(path))
+            return pd.read_excel(str(path), keep_default_na=False, na_values=[''])
         except (BadZipFile, InvalidFileException, XLRDError, ValueError, KeyError) as exc:
             expected_format = 'Excel moderno (.xlsx)' if extension == '.xlsx' else 'Excel 97-2003 (.xls)'
             raise FileReadError(

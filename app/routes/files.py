@@ -95,6 +95,7 @@ def configure_columns(file_id):
                     card['choice'].update(numeric_rules=request.form.get(key+'_numeric_rules', ''), number_source=request.form.get(key+'_number_source', 'auto'))
                     card['choice']['text_rules'] = {field: request.form.get(key+'_text_'+field) == '1' for field in ('trim','collapse_spaces','clean_controls','nfc')}
                     card['choice']['text_rules']['case'] = request.form.get(key+'_text_case', 'keep')
+                    card['choice']['missing_values'] = {'values': request.form.get(key+'_missing_markers', '')[:2020].splitlines(), 'ignore_case': request.form.get(key+'_missing_ignore_case') == '1'}
         except (StaleDataError, IntegrityError):
             db.session.rollback()
             flash('Otra ventana guardó cambios. Recarga la configuración antes de continuar.', 'warning')

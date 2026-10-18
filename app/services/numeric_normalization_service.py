@@ -5,6 +5,7 @@ import numbers
 import re
 
 from text_to_num import text2num
+from app.services.missing_value_service import MissingValueService as Missing
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,8 @@ class NumericNormalizationService:
                 continue
             groups = {}
             for value in dataframe[column]:
+                if Missing.matches(value, pref):
+                    continue
                 result = cls.inspect(value, pref)
                 if result.status != 'valid' or not cls.allowed(result.value, pref):
                     continue

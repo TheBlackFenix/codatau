@@ -31,7 +31,7 @@ class WizardResult:
 
 
 class WizardExecutionService:
-    RULE_VERSION = '5-text-catalog'
+    RULE_VERSION = '6-text-and-missing-catalog'
 
     @staticmethod
     def convert(value, preference):

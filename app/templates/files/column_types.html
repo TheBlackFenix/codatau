@@ -37,6 +37,14 @@
             </select>
             <details class="context-help"><summary aria-label="Ayuda sobre reglas de texto">?</summary><span>Estas opciones solo preparan propuestas. Elegirás después si aplicarlas al grupo. Se conservan tildes y saltos de línea; la limpieza de controles retira controles no imprimibles, marcas de inicio de texto y espacios de ancho cero, no todos los caracteres invisibles. Cambiar códigos o mayúsculas puede crear coincidencias y duplicados: revisa la vista previa.</span></details>
         </details>
+        {% set missing_options = card.choice.get('missing_values', {}) %}
+        <details>
+            <summary>Textos que significan «sin dato» (opcional)</summary>
+            <label for="missing-markers-{{ card.index }}">Un texto completo por línea</label>
+            <textarea class="form-control" id="missing-markers-{{ card.index }}" name="column_{{ card.index }}_missing_markers" rows="3" maxlength="2020" placeholder="Por ejemplo: sin dato&#10;No informado">{{ missing_options.get('values', [])|join('\n') }}</textarea>
+            <label><input type="checkbox" name="column_{{ card.index }}_missing_ignore_case" value="1" {% if missing_options.get('ignore_case') %}checked{% endif %}> Ignorar mayúsculas y minúsculas al comparar</label>
+            <details class="context-help"><summary aria-label="Ayuda sobre marcadores de datos ausentes">?</summary><span>Solo aplica a esta columna y a textos completos; se ignoran sus espacios exteriores al comparar. No hay marcadores preseleccionados. N/A, NULL y 0 no se convierten a vacío por defecto. Un marcador «0» solo coincide con texto, no con ceros ya numéricos. Después decidirás si conservar, vaciar, reemplazar la celda o separar la fila. No se inventan datos con IA.</span></details>
+        </details>
         <div data-decimal {% if card.choice.type != 'decimal' %}hidden{% endif %}>
             <label for="separator-{{ card.index }}">Separador decimal de referencia</label>
             <select class="form-control" id="separator-{{ card.index }}" name="column_{{ card.index }}_separator"><option value="." {% if card.choice.decimal_separator == '.' %}selected{% endif %}>Punto: 3.5</option><option value="," {% if card.choice.decimal_separator == ',' %}selected{% endif %}>Coma: 3,5</option></select>

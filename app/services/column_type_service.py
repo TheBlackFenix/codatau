@@ -2,6 +2,7 @@ import re
 from decimal import Decimal
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 from app.services.text_normalization_service import TextNormalizationService as Texts
+from app.services.missing_value_service import MissingValueService as Missing
 
 
 class ColumnTypeService:
@@ -59,6 +60,9 @@ class ColumnTypeService:
             text_rules = Texts.parse(form, key, kind)
             if text_rules:
                 choice['text_rules'] = text_rules
+            missing_values = Missing.parse(form, key)
+            if missing_values:
+                choice['missing_values'] = missing_values
             if kind in {'integer', 'decimal'}:
                 policy = form.get(key + '_negative', 'unknown')
                 if policy not in {'allow', 'deny', 'unknown'}:

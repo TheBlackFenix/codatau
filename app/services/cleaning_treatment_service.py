@@ -5,6 +5,7 @@ import pandas as pd
 from app.services.date_normalization_service import DateNormalizationService as Dates
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 from app.services.text_normalization_service import TextNormalizationService as Texts
+from app.services.missing_value_service import MissingValueService as Missing
 
 
 class CleaningTreatmentService:
@@ -30,6 +31,7 @@ class CleaningTreatmentService:
             pref = preferences[name]
             series = dataframe[name]
             empty = series.isna() | series.map(lambda value: isinstance(value, str) and not value.strip())
+            marked = series.map(lambda value: Missing.matches(value, pref))
             kind = pref['type']
             invalid = pd.Series(False, index=series.index)
             numeric = None
@@ -50,7 +52,9 @@ class CleaningTreatmentService:
                 statuses = series.map(lambda value: Dates.inspect(value, pref)[0])
                 invalid = statuses.eq('invalid')
                 ambiguous = statuses.eq('ambiguous')
-            scenarios = [('missing', 'Valores vacíos', empty), ('invalid', 'Valores que no coinciden con el tipo elegido', invalid & ~empty)]
+            scenarios = [('missing', 'Valores vacíos', empty),
+                         ('missing_marker', 'Textos que definiste como datos ausentes', marked & ~empty),
+                         ('invalid', 'Valores que no coinciden con el tipo elegido', invalid & ~empty)]
             if kind in {'text', 'identifier'} and pref.get('text_rules'):
                 changed = series.map(lambda value: isinstance(value, str) and Texts.normalize(value, pref) != value)
                 scenarios.append(('text_normalizable', 'Textos con cambios propuestos por tus reglas', changed & ~empty))
@@ -82,6 +86,8 @@ class CleaningTreatmentService:
                     convertible &= ~mask
                 scenarios.append(('numeric_convertible', 'Conversiones numéricas disponibles sin IA', convertible))
             for scenario, label, mask in scenarios:
+                if scenario not in {'missing', 'missing_marker'}:
+                    mask &= ~marked
                 if not mask.any(): continue
                 key = hashlib.sha256((name+'\0'+scenario).encode()).hexdigest()[:24]
                 examples = list(dict.fromkeys(str(value)[:100] for value in series.loc[mask].head(20) if pd.notna(value)))[:3]
@@ -98,7 +104,7 @@ class CleaningTreatmentService:
             action = form.get('action_'+issue['id'])
             if action not in cls.ACTIONS:
                 raise ValueError('Elige un tratamiento válido para cada escenario.')
-            if action == 'ai' and issue['scenario'] == 'missing':
+            if action == 'ai' and issue['scenario'] in {'missing', 'missing_marker'}:
                 raise ValueError('No pediremos a la IA inventar valores vacíos. Elige otro tratamiento.')
             if action == 'absolute' and issue['scenario'] != 'negative':
                 raise ValueError('Solo puedes convertir el grupo a positivo si confirmaste que no permite negativos.')

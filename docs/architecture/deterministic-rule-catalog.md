@@ -30,7 +30,7 @@ vacío, inválido, ambiguo, signo, rango y conversión tienen tratamientos separ
 | Correo/teléfono | Validación básica actual | No reconstruir contactos; pendiente mejorar validadores compartidos | test_cleaning_treatments.py |
 | Texto: espacios, controles seleccionados, Unicode NFC y mayúsculas | Implementado, opt-in por columna de texto o identificador | Propuesta agrupada, conservar protege el valor; mantiene tildes y saltos de línea | test_text_normalization.py |
 | Categorías y diccionarios de equivalencias | Pendiente | Aprobación de equivalencias; no fusionar por parecido automáticamente | Pendiente |
-| Marcadores configurables de vacío | Pendiente | Por columna; no tratar 0 o NA como ausente globalmente | Pendiente |
+| Marcadores configurables de vacío | Implementado, opt-in por columna | Textos completos; tratamiento agrupado; no diccionario global | test_missing_markers.py |
 | Porcentajes, moneda, notación contable, unidades | Pendiente | Escala, moneda y unidad explícitas; no eliminar símbolos arbitrariamente | Pendiente |
 | Decimales escritos en palabras | Pendiente | No usar extracción parcial ni parser permisivo | Pendiente |
 | Fechas con meses escritos, seriales y timestamps | Pendiente | Idioma, sistema/origen y unidad explícitos | Pendiente |
@@ -69,8 +69,6 @@ confirmación del ejecutor. Se audita la regla concreta por celda. Cambiar forma
 límites o activación invalida los pasos posteriores. Propuestas IA usan el formato
 de destino, se contrastan con límites y no pueden cambiar una magnitud reconocible.
 
-## Referencias de diseño
-
 ### Texto `text-v1`
 
 El asistente guarda solo opciones activadas en `text_rules`: recortar espacios
@@ -94,6 +92,33 @@ la preparación estructural previa (filas/columnas totalmente nulas), y la utili
 `clean_dataframe` conserva su comportamiento de recorte por defecto para otros
 consumidores. Versiones analíticas antiguas pueden tener espacios recortados durante
 su carga original; este cambio no reconstruye caracteres que ya no existen allí.
+
+### Marcadores `markers-v1`
+
+`missing_values` guarda hasta 20 textos de 100 caracteres por columna, con comparación
+literal completa tras ignorar espacios exteriores y sensibilidad de mayúsculas por
+defecto. Ignorar mayúsculas/minúsculas usa casefold solo cuando se solicita. No hay
+expresiones regulares ni valores preseleccionados. Solo coinciden celdas de texto:
+un marcador «0» no cambia un valor que ya es numérico. Esta restricción se explica
+en la ayuda de la interfaz; no hay normalización numérica implícita del marcador.
+
+`missing_marker` es un escenario independiente de vacíos reales, formatos inválidos
+y propuestas de transformación. El usuario puede conservar el texto, vaciar la celda,
+reemplazarla o separar la fila. No se envía a IA ni se borra automáticamente. Tiene
+prioridad sobre otras reglas para la misma celda. Los resúmenes de fechas, números
+y texto excluyen esas celdas. Las claves con marcadores configurados se consideran
+incompletas al comparar duplicados, incluso si se conserva su representación.
+
+CSV y Excel se leen con `keep_default_na=False` y solo la cadena vacía como marcador
+de lectura: N/A, NA, NULL y otros textos dejan de perderse antes de la configuración.
+Celdas realmente vacías siguen siendo nulas. Los archivos físicos originales no se
+reescriben. Versiones analíticas antiguas pueden haber convertido marcadores en nulos;
+no se reconstruyen automáticamente, y para evaluarlos como texto hay que volver a
+cargar el original. Los cambios de marcadores invalidan la configuración posterior,
+las huellas incorporan la versión de reglas y la nueva versión guarda preferencias
+y cambios por celda. Reemplazos que siguen siendo marcadores no se fuerzan al tipo.
+
+## Referencias de diseño
 
 - https://learn.microsoft.com/en-ie/powerquery-m/number-fromtext
 - https://text2num.readthedocs.io/en/latest/api.html

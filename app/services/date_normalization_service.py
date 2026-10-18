@@ -3,6 +3,7 @@ from datetime import date, datetime
 import re
 
 import pandas as pd
+from app.services.missing_value_service import MissingValueService as Missing
 
 
 class DateNormalizationService:
@@ -85,6 +86,8 @@ class DateNormalizationService:
                 continue
             count, examples = 0, []
             for value in dataframe[column]:
+                if Missing.matches(value, pref):
+                    continue
                 status, parsed = cls.inspect(value, pref)
                 if status != 'valid':
                     continue
