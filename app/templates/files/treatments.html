@@ -19,6 +19,10 @@
         {% for summary in numeric_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.rule }} · {{ summary.count }} valor(es).</p><ul>{% for example in summary.examples %}<li>{{ example.before }} → {{ example.after }}</li>{% endfor %}</ul>{% endfor %}
         <p>El texto numérico simple se convierte al tipo elegido. Para los otros patrones, elige aplicar las conversiones en el grupo de la columna o conservar los valores. Nada cambia hasta confirmar la vista previa.</p>
     </details>{% endif %}
+    {% if text_summaries %}<details class="card" style="margin-bottom:16px"><summary>Propuestas de texto sin IA: ejemplos antes y después</summary>
+        {% for summary in text_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} celda(s).</p><ul>{% for example in summary.examples %}<li><code style="white-space:pre-wrap">{{ example.before }}</code> → <code style="white-space:pre-wrap">{{ example.after }}</code></li>{% endfor %}</ul>{% if summary.empty_count %}<p class="flash-alert flash-warning">{{ summary.empty_count }} celda(s) quedarán vacías al retirar esos caracteres. Puedes conservarlas o elegir otro tratamiento.</p>{% endif %}{% endfor %}
+        <p>Elige aplicar las reglas en el grupo de la columna. Guardar la configuración no modifica datos.</p>
+    </details>{% endif %}
     {% for column, scenarios in issues|groupby('column') %}
     <details class="card" style="margin-bottom:16px">
         <summary><strong>{{ column }}</strong> · {{ scenarios|length }} escenario(s)</summary>
@@ -34,7 +38,7 @@
             {% if issue.examples %}<p>Ejemplos: {{ issue.examples|join(' · ') }}</p>{% endif %}
             <label for="action-{{ issue.id }}">¿Qué quieres hacer?</label>
             <select class="form-control" id="action-{{ issue.id }}" name="action_{{ issue.id }}" data-treatment-action>
-                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario != 'invalid' or issue.type not in ['integer', 'decimal', 'boolean'])) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') and not (value == 'normalize_number' and issue.scenario != 'numeric_convertible') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario != 'invalid' or issue.type not in ['integer', 'decimal', 'boolean'])) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') and not (value == 'normalize_number' and issue.scenario != 'numeric_convertible') and not (value == 'normalize_text' and issue.scenario != 'text_normalizable') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
             <details class="context-help"><summary aria-label="Ayuda sobre tratamientos">?</summary><span>Conservar no toca el valor. Separar apartará toda la fila para revisarla y recuperarla. Reemplazar o vaciar cambia solo esta celda. La IA propondrá una solución que deberás aprobar, sin reconstruir contactos ni inventar datos faltantes.</span></details>
             <div data-treatment-replacement {% if decision.action != 'replace' %}hidden{% endif %}>
@@ -64,6 +68,7 @@
  explanations.date_dmy='Se interpretará todo este grupo con el día primero. Las fechas claras y las imposibles no se modifican por esta decisión.';
  explanations.date_mdy='Se interpretará todo este grupo con el mes primero. Revisa los ejemplos antes de confirmar.';
  explanations.normalize_number='Se aplicará la regla reconocida a cada celda de este grupo, sin IA ni redondeos a entero. Revisa el resultado antes de confirmar la versión.';
+ explanations.normalize_text='Se aplicarán las reglas de texto que elegiste a todo este grupo. No se eliminan tildes ni se llama a la IA. Revisa los ejemplos antes de confirmar.';
  select.addEventListener('change',sync);sync();
  });
  form.addEventListener('change',()=>{dirty=true;form.querySelector('[data-unsaved-warning]').textContent='Tienes cambios sin guardar.';});

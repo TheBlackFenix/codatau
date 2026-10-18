@@ -93,6 +93,8 @@ def configure_columns(file_id):
                     card['choice'] = {'type': request.form[key], 'decimal_separator': request.form.get(key+'_separator', '.'), 'date_format': request.form.get(key+'_date', 'iso'), 'date_source': request.form.get(key+'_date_source', request.form.get(key+'_date', 'iso')), 'negative_policy': request.form.get(key+'_negative', 'unknown')}
                     card['choice'].update({field: request.form.get(key+'_'+field, '')[:64] for field in ('minimum','maximum')})
                     card['choice'].update(numeric_rules=request.form.get(key+'_numeric_rules', ''), number_source=request.form.get(key+'_number_source', 'auto'))
+                    card['choice']['text_rules'] = {field: request.form.get(key+'_text_'+field) == '1' for field in ('trim','collapse_spaces','clean_controls','nfc')}
+                    card['choice']['text_rules']['case'] = request.form.get(key+'_text_case', 'keep')
         except (StaleDataError, IntegrityError):
             db.session.rollback()
             flash('Otra ventana guardó cambios. Recarga la configuración antes de continuar.', 'warning')
@@ -154,6 +156,7 @@ def configure_treatments(file_id):
     from app.services.cleaning_treatment_service import CleaningTreatmentService as Treatments
     from app.services.date_normalization_service import DateNormalizationService as Dates
     from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
+    from app.services.text_normalization_service import TextNormalizationService as Texts
     from sqlalchemy.orm.exc import StaleDataError
     record = _record_for_user(file_id)
     config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
@@ -190,6 +193,7 @@ def configure_treatments(file_id):
                            issues=issues, decisions=decisions, actions=Treatments.ACTIONS,
                            date_summaries=Dates.summaries(dataframe, config.columns),
                            numeric_summaries=Numbers.summaries(dataframe, config.columns),
+                           text_summaries=Texts.summaries(dataframe, config.columns),
                            treatment_review_needed=bool(config.treatments) and set(decisions) != {issue['id'] for issue in issues})
 
 
@@ -647,7 +651,8 @@ def upload():
 
             # Limpiar
             processing_stage = 'normalización de datos'
-            df = DataService.clean_dataframe(df)
+            # Preserve text so the wizard can propose, rather than pre-apply, trim.
+            df = DataService.clean_dataframe(df, trim_text=False)
 
             # Crear artefacto analítico portable y perfil compacto para IA.
             processing_stage = 'creación del perfil analítico'

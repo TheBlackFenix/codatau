@@ -10,6 +10,7 @@ from app.services.cleaning_treatment_service import CleaningTreatmentService as 
 from app.extensions import db
 from app.services.data_service import classify_numeric_column
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
+from app.services.text_normalization_service import TextNormalizationService as Texts
 
 
 class ValueProposalService:
@@ -57,7 +58,8 @@ class ValueProposalService:
     def fingerprint(cls, record, configuration, context, app_config):
         provider = AIProviderFactory.configuration_from_app(app_config)
         payload = {'columns':configuration.columns,'duplicates':configuration.duplicates,
-                   'treatments':configuration.treatments,'context':context or {}, 'numeric_rule_version':Numbers.VERSION}
+                   'treatments':configuration.treatments,'context':context or {}, 'numeric_rule_version':Numbers.VERSION,
+                   'text_rule_version':Texts.VERSION}
         return StructuredAIService.fingerprint(record, provider, cls.PURPOSE, cls.VERSION, payload)
 
     @staticmethod

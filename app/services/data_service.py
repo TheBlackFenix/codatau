@@ -310,7 +310,7 @@ class DataService:
         return summary
 
     @staticmethod
-    def clean_dataframe(df):
+    def clean_dataframe(df, *, trim_text=True):
         df = df.copy()
         # Eliminar filas completamente vacías
         df = df.dropna(how='all')
@@ -318,7 +318,8 @@ class DataService:
         df = df.dropna(axis=1, how='all')
         # Limpiar solo valores de texto sin alterar tipos mixtos.
         for col in DataService.text_columns(df):
-            df[col] = df[col].map(
-                lambda value: value.strip() if isinstance(value, str) else value
-            )
+            if trim_text:
+                df[col] = df[col].map(
+                    lambda value: value.strip() if isinstance(value, str) else value
+                )
         return df

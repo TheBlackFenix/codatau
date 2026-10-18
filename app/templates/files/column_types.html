@@ -22,6 +22,21 @@
             {% for value, label in type_labels.items() %}<option value="{{ value }}" {% if value == card.choice.type %}selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
         <details class="context-help"><summary aria-label="Ayuda para elegir el tipo de dato">?</summary><span>Elige Identificador para documentos o códigos: no se suman y sus ceros iniciales son importantes. Número entero sirve para cantidades como 2; Número decimal, para valores como 2.5. No inventaremos valores que no se puedan convertir.</span></details>
+        {% set text_options = card.choice.get('text_rules', {}) %}
+        <details data-text-options {% if card.choice.type not in ['text', 'identifier'] %}hidden{% endif %}>
+            <summary>Reglas de texto (opcionales)</summary>
+            <label><input type="checkbox" name="column_{{ card.index }}_text_trim" value="1" {% if text_options.get('trim') %}checked{% endif %}> Quitar espacios al principio y al final</label><br>
+            <label><input type="checkbox" name="column_{{ card.index }}_text_collapse_spaces" value="1" {% if text_options.get('collapse_spaces') %}checked{% endif %}> Reducir espacios y tabulaciones repetidos a un espacio</label><br>
+            <label><input type="checkbox" name="column_{{ card.index }}_text_clean_controls" value="1" {% if text_options.get('clean_controls') %}checked{% endif %}> Quitar caracteres de control y marcas invisibles seleccionadas</label><br>
+            <label><input type="checkbox" name="column_{{ card.index }}_text_nfc" value="1" {% if text_options.get('nfc') %}checked{% endif %}> Unificar letras equivalentes sin quitar tildes</label>
+            <label for="text-case-{{ card.index }}">Mayúsculas y minúsculas</label>
+            <select class="form-control" id="text-case-{{ card.index }}" name="column_{{ card.index }}_text_case">
+                <option value="keep" {% if text_options.get('case', 'keep') == 'keep' %}selected{% endif %}>Conservar como está</option>
+                <option value="upper" {% if text_options.get('case') == 'upper' %}selected{% endif %}>Usar MAYÚSCULAS</option>
+                <option value="lower" {% if text_options.get('case') == 'lower' %}selected{% endif %}>Usar minúsculas</option>
+            </select>
+            <details class="context-help"><summary aria-label="Ayuda sobre reglas de texto">?</summary><span>Estas opciones solo preparan propuestas. Elegirás después si aplicarlas al grupo. Se conservan tildes y saltos de línea; la limpieza de controles retira controles no imprimibles, marcas de inicio de texto y espacios de ancho cero, no todos los caracteres invisibles. Cambiar códigos o mayúsculas puede crear coincidencias y duplicados: revisa la vista previa.</span></details>
+        </details>
         <div data-decimal {% if card.choice.type != 'decimal' %}hidden{% endif %}>
             <label for="separator-{{ card.index }}">Separador decimal de referencia</label>
             <select class="form-control" id="separator-{{ card.index }}" name="column_{{ card.index }}_separator"><option value="." {% if card.choice.decimal_separator == '.' %}selected{% endif %}>Punto: 3.5</option><option value="," {% if card.choice.decimal_separator == ',' %}selected{% endif %}>Coma: 3,5</option></select>
@@ -86,6 +101,7 @@
             card.querySelector('[data-decimal]').hidden = select.value !== 'decimal';
             card.querySelector('[data-date]').hidden = select.value !== 'date';
             card.querySelector('[data-negative]').hidden = !['integer', 'decimal'].includes(select.value);
+            card.querySelector('[data-text-options]').hidden = !['text', 'identifier'].includes(select.value);
         };
         select.addEventListener('change', sync); sync();
         const rules = card.querySelector('[data-numeric-rules]');

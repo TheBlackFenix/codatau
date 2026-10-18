@@ -28,7 +28,7 @@ vacío, inválido, ambiguo, signo, rango y conversión tienen tratamientos separ
 | Vacíos: conservar, reemplazar, vaciar o separar | Implementado | Elección por escenario; no imputación automática | test_wizard_execution.py |
 | Duplicados exactos o por claves | Implementado | Criterio y registro conservado explícitos | test_duplicate_configuration.py |
 | Correo/teléfono | Validación básica actual | No reconstruir contactos; pendiente mejorar validadores compartidos | test_cleaning_treatments.py |
-| Texto: espacios, caracteres de control, Unicode | Pendiente de integrar como preferencias del asistente | Reutilizar operaciones previas; no borrar texto significativo | Pendiente |
+| Texto: espacios, controles seleccionados, Unicode NFC y mayúsculas | Implementado, opt-in por columna de texto o identificador | Propuesta agrupada, conservar protege el valor; mantiene tildes y saltos de línea | test_text_normalization.py |
 | Categorías y diccionarios de equivalencias | Pendiente | Aprobación de equivalencias; no fusionar por parecido automáticamente | Pendiente |
 | Marcadores configurables de vacío | Pendiente | Por columna; no tratar 0 o NA como ausente globalmente | Pendiente |
 | Porcentajes, moneda, notación contable, unidades | Pendiente | Escala, moneda y unidad explícitas; no eliminar símbolos arbitrariamente | Pendiente |
@@ -70,6 +70,30 @@ límites o activación invalida los pasos posteriores. Propuestas IA usan el for
 de destino, se contrastan con límites y no pueden cambiar una magnitud reconocible.
 
 ## Referencias de diseño
+
+### Texto `text-v1`
+
+El asistente guarda solo opciones activadas en `text_rules`: recortar espacios
+horizontales exteriores, reducir espacios/tabulaciones, retirar controles Cc salvo
+tabulaciones y saltos de línea, retirar U+200B y U+FEFF, normalizar NFC, y convertir
+a mayúsculas o minúsculas. No elimina tildes, no aplica capitalización de nombres,
+no elimina todos los caracteres Cf ni fusiona categorías. Ninguna opción se activa
+por defecto y solo aplica a Texto e Identificador. La casilla de espacios no borra
+saltos de línea; la reducción horizontal sí convierte tabulaciones si se selecciona.
+
+El escenario `text_normalizable` excluye vacíos y permite aplicar una vez el grupo
+con `normalize_text`, conservar, reemplazar, vaciar o separar. La IA no participa.
+Se muestran hasta tres ejemplos y se advierte si retirar caracteres dejará celdas
+vacías. La transformación solo corre tras la elección del grupo; no se reaplica
+automáticamente a reemplazos ni a celdas conservadas. Duplicados se comparan después
+de los cambios aceptados, con auditoría y preferencias en la instantánea de versión.
+La huella de propuestas y el token firmado incluyen versiones de reglas.
+
+Las nuevas cargas ya no recortan espacios de texto antes del asistente. Se conserva
+la preparación estructural previa (filas/columnas totalmente nulas), y la utilidad
+`clean_dataframe` conserva su comportamiento de recorte por defecto para otros
+consumidores. Versiones analíticas antiguas pueden tener espacios recortados durante
+su carga original; este cambio no reconstruye caracteres que ya no existen allí.
 
 - https://learn.microsoft.com/en-ie/powerquery-m/number-fromtext
 - https://text2num.readthedocs.io/en/latest/api.html

@@ -9,6 +9,7 @@ from app.services.duplicate_configuration_service import DuplicateConfigurationS
 from app.services.value_proposal_service import ValueProposalService as Proposals
 from app.services.date_normalization_service import DateNormalizationService as Dates
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
+from app.services.text_normalization_service import TextNormalizationService as Texts
 
 
 def cell(value):
@@ -30,7 +31,7 @@ class WizardResult:
 
 
 class WizardExecutionService:
-    RULE_VERSION = '4-numeric-catalog'
+    RULE_VERSION = '5-text-catalog'
 
     @staticmethod
     def convert(value, preference):
@@ -97,6 +98,9 @@ class WizardExecutionService:
                     working.at[row,column]=policy['replacement'];causes[key]='Reemplazo elegido'
                     if Treatments.issues(pd.DataFrame({column:[policy['replacement']]}),{column:config.columns[column]}):protected.add(key)
                 elif action=='null':working.at[row,column]=None;causes[key]='Dejar vacío'
+                elif action=='normalize_text':
+                    working.at[row,column]=Texts.normalize(original.at[row,column],config.columns[column])
+                    causes[key]='Reglas de texto sin IA confirmadas para el grupo'
                 elif action=='normalize_number':
                     preference=config.columns[column]
                     parsed=Numbers.inspect(original.at[row,column],preference)

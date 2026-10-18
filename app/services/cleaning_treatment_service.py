@@ -4,6 +4,7 @@ from decimal import Decimal
 import pandas as pd
 from app.services.date_normalization_service import DateNormalizationService as Dates
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
+from app.services.text_normalization_service import TextNormalizationService as Texts
 
 
 class CleaningTreatmentService:
@@ -13,7 +14,8 @@ class CleaningTreatmentService:
                'absolute': 'Convertir todos estos negativos a positivo',
                'date_dmy': 'Interpretar este grupo como día/mes/año',
                'date_mdy': 'Interpretar este grupo como mes/día/año',
-               'normalize_number': 'Aplicar las conversiones numéricas propuestas, sin IA'}
+               'normalize_number': 'Aplicar las conversiones numéricas propuestas, sin IA',
+               'normalize_text': 'Aplicar las reglas de texto propuestas, sin IA'}
 
     @staticmethod
     def number(value, preference):
@@ -49,6 +51,9 @@ class CleaningTreatmentService:
                 invalid = statuses.eq('invalid')
                 ambiguous = statuses.eq('ambiguous')
             scenarios = [('missing', 'Valores vacíos', empty), ('invalid', 'Valores que no coinciden con el tipo elegido', invalid & ~empty)]
+            if kind in {'text', 'identifier'} and pref.get('text_rules'):
+                changed = series.map(lambda value: isinstance(value, str) and Texts.normalize(value, pref) != value)
+                scenarios.append(('text_normalizable', 'Textos con cambios propuestos por tus reglas', changed & ~empty))
             if kind == 'date':
                 scenarios.append(('date_ambiguous', 'Fechas que necesitan confirmar el orden del día y mes', ambiguous))
             elif numeric is not None:
@@ -101,10 +106,12 @@ class CleaningTreatmentService:
                 raise ValueError('Confirma el orden de fechas únicamente para un grupo de fechas ambiguas.')
             if action == 'ai' and issue.get('type') == 'date':
                 raise ValueError('Resuelve las fechas por grupo; no pediremos a la IA adivinar fechas individuales.')
-            if action == 'ai' and issue['scenario'] in {'numeric_convertible', 'number_ambiguous', 'bounds', 'negative', 'range'}:
+            if action == 'ai' and issue['scenario'] in {'numeric_convertible', 'number_ambiguous', 'bounds', 'negative', 'range', 'text_normalizable'}:
                 raise ValueError('Este grupo se resuelve con reglas o una decisión de tratamiento, no con propuestas individuales de IA.')
             if action == 'normalize_number' and issue['scenario'] != 'numeric_convertible':
                 raise ValueError('Solo puedes aplicar conversiones numéricas a un grupo reconocido por el catálogo.')
+            if action == 'normalize_text' and issue['scenario'] != 'text_normalizable':
+                raise ValueError('Solo puedes aplicar reglas de texto al grupo propuesto para esas reglas.')
             item = {'action':action}
             if action == 'replace':
                 replacement = form.get('replacement_'+issue['id'], '').strip()

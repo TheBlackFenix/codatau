@@ -1,6 +1,7 @@
 import re
 from decimal import Decimal
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
+from app.services.text_normalization_service import TextNormalizationService as Texts
 
 
 class ColumnTypeService:
@@ -55,6 +56,9 @@ class ColumnTypeService:
             if kind not in cls.TYPES:
                 raise ValueError('Elige un tipo válido para cada columna.')
             choice = {'type': kind}
+            text_rules = Texts.parse(form, key, kind)
+            if text_rules:
+                choice['text_rules'] = text_rules
             if kind in {'integer', 'decimal'}:
                 policy = form.get(key + '_negative', 'unknown')
                 if policy not in {'allow', 'deny', 'unknown'}:
