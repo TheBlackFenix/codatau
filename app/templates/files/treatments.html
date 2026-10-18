@@ -34,6 +34,7 @@
     </details>
     {% else %}<p>No encontramos valores vacíos ni incompatibles con los tipos elegidos. Puedes guardar este paso.</p>{% endfor %}
     <button class="btn btn-purple">Guardar tratamientos</button>
+    <button class="btn btn-purple" name="next" value="ai">Guardar y continuar</button>
     <a class="btn btn-secondary" href="{{ url_for('files.configure_duplicates', file_id=record.id) }}">Anterior</a>
     <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
     <p>Guardar solo configura el proceso. La revisión de propuestas de IA y la aplicación conjunta se habilitarán en los siguientes pasos. No se ha modificado nada.</p>

@@ -22,7 +22,7 @@ class CleaningTreatmentService:
         return result if math.isfinite(result) else None
 
     @classmethod
-    def issues(cls, dataframe, preferences, context=None):
+    def issues(cls, dataframe, preferences, context=None, include_rows=False):
         issues = []
         roles = {item['column']: item for item in (context or {}).get('column_roles', [])}
         for name in dataframe.columns:
@@ -56,6 +56,8 @@ class CleaningTreatmentService:
                 examples = list(dict.fromkeys(str(value)[:100] for value in series.loc[mask].head(20) if pd.notna(value)))[:3]
                 issues.append({'id':key, 'column':name, 'scenario':scenario, 'label':label,
                                'count':int(mask.sum()), 'examples':examples})
+                if include_rows:
+                    issues[-1]['rows'] = list(series.index[mask])
         return issues
 
     @classmethod

@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Revisa propuestas de IA — CoDataU{% endblock %}
+{% block content %}
+{% include 'files/_cleaning_steps.html' %}
+<h1>Revisa propuestas de IA</h1>
+<p>{{ record.original_name }} · Paso 4</p>
+<p>Una propuesta por valor distinto puede afectar varias filas. Nada se aplicará hasta confirmar la limpieza completa.</p>
+<p>Si cambias el modelo, los tipos o los tratamientos, tendrás que preparar y revisar nuevas propuestas. Los análisis anteriores quedan en el historial del sistema; el archivo original no cambia.</p>
+{% if remaining %}
+<form method="POST" class="card" data-ai-analysis-form>
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="revision" value="{{ configuration.revision }}">
+    <input type="hidden" name="fingerprint" value="{{ fingerprint }}">
+    <p>Quedan {{ remaining }} valores sin analizar. Revisamos hasta 8 por consulta para controlar el consumo. Solo enviaremos los valores problemáticos aptos para conversión y contexto mínimo, no todas las filas. Los contactos y posibles identificadores se reservan para revisión manual.</p>
+    <button class="btn btn-purple" name="action" value="analyze">{% if ai_configured %}Preparar siguiente grupo de propuestas{% else %}Revisar opciones seguras{% endif %}</button>
+</form>
+{% endif %}
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="revision" value="{{ configuration.revision }}">
+    <input type="hidden" name="fingerprint" value="{{ fingerprint }}">
+    {% for item in candidates %}{% set proposal = review.proposals.get(item.id) %}{% if proposal %}
+    <article class="card" style="margin-top:16px">
+        <h2 style="font-size:17px">{{ item.column }} · {{ item.count }} fila(s)</h2>
+        <p>Original: <code>{{ item.original }}</code></p>
+        {% if proposal.status == 'replace' %}<p>Propuesta: <strong>{{ proposal.value }}</strong></p>{% else %}<p><strong>Necesita tu decisión: no hay una corrección segura.</strong></p>{% endif %}
+        <p>{{ proposal.reason }}</p>
+        {% if proposal.model %}<small>Preparada con {{ proposal.model }}</small>{% endif %}
+        <label for="decision-{{ item.id }}">Tu decisión</label>
+        <select class="form-control" name="decision_{{ item.id }}" id="decision-{{ item.id }}">
+            <option value="">Revisar después</option>
+            {% if proposal.status == 'replace' %}<option value="accept" {% if review.decisions.get(item.id) == 'accept' %}selected{% endif %}>Aceptar este cambio para todas las filas indicadas</option>{% endif %}
+            <option value="reject" {% if review.decisions.get(item.id) == 'reject' %}selected{% endif %}>Conservar el valor original</option>
+        </select>
+    </article>
+    {% endif %}{% endfor %}
+    {% if not candidates %}<p>No solicitaste transformaciones con IA. No es necesario enviar datos al proveedor en este paso.</p>{% else %}<p>Quedan {{ undecided }} valores sin una decisión guardada, incluidos los que todavía no se han analizado.</p>{% endif %}
+    <button class="btn btn-purple" name="action" value="decide">Guardar decisiones</button>
+    <a class="btn btn-secondary" href="{{ url_for('files.configure_treatments', file_id=record.id) }}">Anterior</a>
+    <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
+    <p>La vista previa conjunta y la aplicación de una nueva versión se incorporarán en el próximo paso. Tus datos siguen intactos.</p>
+</form>
+<script>
+(() => {
+ const analysis=document.querySelector('[data-ai-analysis-form]');
+ if(analysis){let busy=false;analysis.addEventListener('submit',event=>{if(busy){event.preventDefault();return;}busy=true;const button=analysis.querySelector('button');button.style.pointerEvents='none';button.setAttribute('aria-disabled','true');button.textContent='Preparando propuestas…';});}
+ const forms=document.querySelectorAll('form');const decisions=forms[forms.length-1];let dirty=false;
+ decisions.addEventListener('change',()=>{dirty=true;});decisions.addEventListener('submit',()=>{dirty=false;});
+ window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+})();
+</script>
+{% endblock %}

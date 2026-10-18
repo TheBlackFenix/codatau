@@ -53,9 +53,7 @@ en los siguientes bloques, evitando aplicar parcialmente decisiones nuevas.
 
 ## Siguientes etapas pendientes
 
-1. Propuestas de transformación de valores distintos, con impacto y motivos;
-   validación local, aceptación explícita y versiones con cambios por celda.
-2. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
+1. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
    y pruebas de recorrido completo del asistente.
 
 ## Etapa 3: navegación y preferencias de duplicados implementadas
@@ -102,3 +100,29 @@ Guardar no llama al proveedor, no transforma datos ni crea versiones. La próxim
 etapa consumirá únicamente las preferencias IA y la etapa final integrará todas
 las decisiones para la vista previa. Cambiar tipos o duplicados borra tratamientos
 para exigir revisión; versiones y revisiones de borrador rechazan pestañas antiguas.
+
+## Etapa 5: propuestas de valores implementadas
+
+El cuarto paso recoge únicamente escenarios marcados para IA. Agrupa por columna
+y valor distinto, conserva su frecuencia y pide hasta ocho propuestas por consulta.
+Más valores se consultan con otra acción explícita. Un id derivado del escenario y
+valor original mantiene la correspondencia sin aceptar columnas inventadas.
+
+Se envían solamente conversiones de números, fechas y Sí/No, junto con el formato
+elegido y dominio general. Contactos, identificadores, cadenas largas y posibles
+correos/documentos encontrados en otras columnas quedan para revisión manual.
+Vacíos y correcciones de rango sin evidencia no se inventan. La respuesta se valida
+contra el tipo objetivo; para números ya interpretables tampoco se permite cambiar
+su magnitud, por ejemplo redondear 3,5 a 3. Una propuesta ambigua no ofrece Aceptar.
+
+`StructuredAIService` guarda modelo, tokens, huella y resultado con propósito
+`cleaning_value_proposals`. Las conversiones se muestran con original, propuesta,
+motivo y filas afectadas. Aceptar o conservar se guarda en `ai_review`, agregada por
+`0006_value_proposals`; no cambia archivos ni crea versiones. Cambios de columnas,
+duplicados o tratamientos invalidan lo pendiente. Cambiar el modelo exige propuestas
+nuevas, manteniendo las ejecuciones anteriores en auditoría. Se rechazan revisiones
+antiguas y respuestas recibidas después de cambiar el borrador en otra ventana.
+
+El próximo bloque debe consumir SOLO decisiones aceptadas en la vista previa
+conjunta y la aplicación versionada. Rechazar conserva los valores originales;
+no es permiso para borrarlos ni enviarlos automáticamente a cuarentena.

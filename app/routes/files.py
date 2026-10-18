@@ -77,6 +77,7 @@ def configure_columns(file_id):
             if configuration.columns != choices or configuration.source_version != version:
                 configuration.duplicates = {}
                 configuration.treatments = {}
+                configuration.ai_review = {}
             configuration.columns = choices
             configuration.source_version = version
             db.session.commit()
@@ -124,6 +125,7 @@ def configure_duplicates(file_id):
             Duplicates.preview(dataframe, settings, config.columns)
             if config.duplicates != settings:
                 config.treatments = {}
+                config.ai_review = {}
             config.duplicates = settings
             db.session.commit()
             flash('Comparación guardada. Todavía no se eliminó ninguna fila.', 'success')
@@ -164,10 +166,13 @@ def configure_treatments(file_id):
             flash('La configuración cambió. Recarga la pantalla antes de guardar.', 'warning')
             return redirect(url_for('files.configure_treatments', file_id=file_id))
         try:
-            config.treatments = Treatments.parse(request.form, issues)
+            treatments = Treatments.parse(request.form, issues)
+            if config.treatments != treatments:
+                config.ai_review = {}
+            config.treatments = treatments
             db.session.commit()
             flash('Tratamientos guardados. No se modificó ningún dato ni se envió información a la IA.', 'success')
-            return redirect(url_for('files.configure_treatments', file_id=file_id))
+            return redirect(url_for('files.review_values' if request.form.get('next') == 'ai' else 'files.configure_treatments', file_id=file_id))
         except ValueError as error:
             db.session.rollback()
             flash(str(error), 'warning')
@@ -179,6 +184,77 @@ def configure_treatments(file_id):
     return render_template('files/treatments.html', record=record, configuration=config, form=form,
                            issues=issues, decisions=decisions, actions=Treatments.ACTIONS,
                            treatment_review_needed=bool(config.treatments) and set(decisions) != {issue['id'] for issue in issues})
+
+
+@files_bp.route('/cleaning/<int:file_id>/value-proposals', methods=['GET', 'POST'])
+@login_required
+def review_values(file_id):
+    from copy import deepcopy
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.value_proposal_service import ValueProposalService as Proposals
+    from sqlalchemy.orm.exc import StaleDataError
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename or not config.treatments:
+        flash('Guarda primero los tratamientos de esta versión.', 'warning')
+        return redirect(url_for('files.configure_treatments', file_id=file_id))
+    _, _, _, profile = _cleaning_context(record)
+    context = _latest_dataset_context(record, profile)
+    try:
+        candidates = Proposals.candidates(_load_dataframe(record), config, context)
+    except ValueError as error:
+        flash(str(error), 'warning')
+        return redirect(url_for('files.configure_treatments', file_id=file_id))
+    fingerprint = Proposals.fingerprint(record, config, context, current_app.config)
+    review = deepcopy(config.ai_review or {})
+    if review.get('fingerprint') != fingerprint:
+        review = {'fingerprint':fingerprint, 'proposals':{}, 'decisions':{}}
+    form = CleaningActionForm()
+    if request.method == 'POST':
+        if not form.validate_on_submit(): abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('fingerprint') != fingerprint:
+            flash('El archivo, el modelo o tus decisiones cambiaron. Recarga antes de continuar.', 'warning')
+            return redirect(url_for('files.review_values', file_id=file_id))
+        try:
+            if request.form.get('action') == 'analyze':
+                review = Proposals.analyze(record, config, candidates, context, current_app.config)
+                flash('Propuestas preparadas para tu revisión. No se modificaron los datos.', 'success')
+            elif request.form.get('action') == 'decide':
+                for item in candidates:
+                    proposal = review['proposals'].get(item['id'])
+                    if not proposal: continue
+                    choice = request.form.get('decision_'+item['id'])
+                    if choice not in {None, '', 'accept', 'reject'}: raise ValueError('Elige aceptar o conservar para cada propuesta.')
+                    if choice == 'accept' and proposal['status'] != 'replace': raise ValueError('Esta propuesta requiere una decisión manual; no se puede aplicar.')
+                    if choice:
+                        review['decisions'][item['id']] = choice
+                    elif choice == '':
+                        review['decisions'].pop(item['id'], None)
+                flash('Decisiones guardadas. Se aplicarán únicamente al confirmar la limpieza completa.', 'success')
+            else: abort(400)
+            # A different tab may have changed the configuration while the provider was responding.
+            db.session.refresh(config)
+            db.session.expire(record, ['versions'])
+            if str(config.revision) != request.form['revision'] or record.active_stored_filename != config.source_version:
+                db.session.commit()  # Preserve the provider audit, not stale choices.
+                flash('La configuración cambió durante el análisis. Vuelve a revisar las propuestas.', 'warning')
+                return redirect(url_for('files.review_values', file_id=file_id))
+            config.ai_review = review
+            db.session.commit()
+            return redirect(url_for('files.review_values', file_id=file_id))
+        except AIProviderError as error:
+            db.session.commit()
+            flash(error.user_message + ' Tus datos y decisiones anteriores siguen intactos.', 'warning')
+        except ValueError as error:
+            db.session.rollback(); flash(str(error), 'warning')
+        except StaleDataError:
+            db.session.rollback(); flash('Otra ventana guardó cambios. Recarga esta pantalla.', 'warning')
+            return redirect(url_for('files.review_values', file_id=file_id))
+    remaining = sum(item['id'] not in review['proposals'] for item in candidates)
+    undecided = sum(item['id'] not in review['decisions'] for item in candidates)
+    return render_template('files/value_proposals.html', record=record, configuration=config,
+                           form=form, review=review, candidates=candidates, remaining=remaining, undecided=undecided,
+                           ai_configured=AIProviderFactory.is_configured(current_app.config), fingerprint=fingerprint)
 
 
 CLEANING_PARAMETER_FIELDS = {

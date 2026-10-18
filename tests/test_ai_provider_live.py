@@ -11,6 +11,7 @@ from app.services.dataset_context_service import DatasetContextService
 from app.services.ai_dashboard_service import AIDashboardService
 from app.services.dataset_chat_service import DatasetChatService
 from app.services.data_service import DataService
+from app.services.value_proposal_service import ValueProposalService
 
 
 @pytest.mark.skipif(
@@ -196,3 +197,14 @@ def test_provider_interprets_period_comparison_and_duckdb_calculates():
     answer = DatasetChatService.execute(dataframe, {}, plan)
     assert answer['evidence']['variation'] == 350
     assert answer['evidence']['variation_percentage'] == 350
+
+
+@pytest.mark.skipif(os.environ.get('RUN_LIVE_AI_TEST') != '1', reason='Prueba opt-in que consume API.')
+def test_provider_proposes_safe_value_conversions():
+    application=create_app()
+    batch=[{'id':'a','column':'cantidad','original':'dos','target':{'type':'integer'},'count':3,'safe':True},
+           {'id':'b','column':'precio','original':'3,5','target':{'type':'decimal','decimal_separator':'.'},'count':2,'safe':True}]
+    result=AIProviderFactory.create(application.config).generate_json(
+        ValueProposalService.INSTRUCTIONS,{'context':{'domain':'Ventas'},'candidates':batch},ValueProposalService.SCHEMA)
+    proposals=ValueProposalService.validate(result.data,batch)['proposals']
+    assert {item['id']:item['value'] for item in proposals} == {'a':'2','b':'3.5'}

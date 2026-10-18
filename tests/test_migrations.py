@@ -72,4 +72,4 @@ def test_migrations_adopt_legacy_schema_without_losing_data(tmp_path):
         revision = db.session.execute(
             sa.text('SELECT version_num FROM alembic_version')
         ).scalar_one()
-        assert revision == '0005_cleaning_treatments'
+        assert revision == '0006_value_proposals'
