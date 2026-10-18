@@ -57,10 +57,12 @@
         {% endfor %}
     </details>
     {% else %}<p>No encontramos valores vacíos ni incompatibles con los tipos elegidos. Puedes guardar este paso.</p>{% endfor %}
-    <button class="btn btn-purple">Guardar tratamientos</button>
+    <div class="wizard-actions">
     <button class="btn btn-purple" name="next" value="ai">Guardar y continuar</button>
+    <button class="btn btn-secondary">Guardar tratamientos</button>
     <a class="btn btn-secondary" href="{{ url_for('files.configure_duplicates', file_id=record.id) }}">Anterior</a>
     <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
+    </div>
     <p>Guardar solo configura el proceso. En los siguientes pasos revisarás las propuestas de IA y una vista previa antes de aplicar los cambios. No se ha modificado nada.</p>
     <p data-unsaved-warning role="status"></p>
 </form>

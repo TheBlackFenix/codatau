@@ -19,9 +19,10 @@
 {% endif %}
 
 {% if active_file and summary %}
+<div class="page-header"><div><h1 class="page-title">Tu información, de un vistazo</h1><p class="page-subtitle">{{ active_file.original_name }} · Revisa tus métricas, consulta los gráficos o continúa con la limpieza.</p></div></div>
 
-<div class="card" style="margin-bottom:20px">
-    <div class="card-title"><i class="bi bi-stars"></i> Dashboard propuesto por IA</div>
+<details class="card" style="margin-bottom:20px">
+    <summary><i class="bi bi-stars"></i> Dashboard propuesto por IA · Revisar sugerencias</summary>
     {% if recommendation %}
     <p>{{ recommendation.result.explanation }}</p>
     <ul>
@@ -42,7 +43,7 @@
         {{ action_form.hidden_tag() }}
         <button class="btn btn-secondary" {% if not ai_configured %}disabled{% endif %}>Proponer métricas de la versión activa</button>
     </form>
-</div>
+</details>
 
 <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
     <a href="{{ url_for('files.cleaning', file_id=active_file.id) }}" class="btn btn-primary">

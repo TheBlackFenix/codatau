@@ -27,10 +27,12 @@
         </div>
     </div>
     <p>Las filas con campos de comparación vacíos se conservarán para revisión. Si una fecha no se entiende, conservaremos todo su grupo. En fechas iguales, se conserva el último registro del archivo.</p>
-    <button class="btn btn-purple">Guardar y ver impacto</button>
+    <div class="wizard-actions">
     <button class="btn btn-purple" name="next" value="treatments">Guardar y continuar</button>
+    <button class="btn btn-secondary">Guardar y ver impacto</button>
     <a class="btn btn-secondary" href="{{ url_for('files.configure_columns', file_id=record.id) }}">Anterior</a>
     <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
+    </div>
 </form>
 {% if preview %}
 <section class="card" style="margin-top:18px">
@@ -38,7 +40,7 @@
     <p>Se separarían {{ preview.removed }} registros repetidos; quedarían {{ preview.remaining }} filas.</p>
     <p>{{ preview.incomplete }} filas con campos de comparación vacíos y {{ preview.invalid_dates }} filas en grupos con fechas sin interpretar se conservarán.</p>
     {% if preview.examples %}<details><summary>Ejemplos de filas que se quitarían del resultado</summary><div class="table-wrap"><table class="data-table"><thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead><tbody>{% for row in preview.examples %}<tr>{% for column in columns %}<td>{{ row[column] }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div></details>{% endif %}
-    <strong>Esto es una vista previa: no se eliminó nada. La aplicación conjunta se habilitará en los siguientes pasos del asistente.</strong>
+    <strong>No se eliminó nada. El resultado definitivo se calcula al revisar la limpieza completa, después de las transformaciones que apruebes.</strong>
 </section>
 {% endif %}
 <script>

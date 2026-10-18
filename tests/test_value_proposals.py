@@ -76,6 +76,8 @@ def test_review_is_persistent_audited_and_invalidated(app,client,auth):
     response=client.post(review,data={**tokens(review),'action':'decide','decision_'+key:'accept'})
     assert response.status_code==302
     with app.app_context():assert CleaningConfiguration.query.one().ai_review['decisions'][key]=='accept'
+    continued=client.post(review,data={**tokens(review),'action':'decide_continue','decision_'+key:'accept'})
+    assert continued.status_code==302 and continued.location.endswith('/wizard-preview')
     auth.logout();auth.login()
     assert 'selected>Aceptar este cambio' in client.get(review).text
     client.post(review,data={**tokens(review),'action':'decide','decision_'+key:''})

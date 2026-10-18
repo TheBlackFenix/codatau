@@ -11,7 +11,7 @@
     {{ form.hidden_tag() }}
     <input type="hidden" name="source_version" value="{{ source_version }}">
     <input type="hidden" name="revision" value="{{ configuration.revision if configuration else 0 }}">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+    <div class="column-grid">
     {% for card in cards %}
     <section class="card" data-column-card>
         <h2 style="font-size:17px;overflow-wrap:anywhere">{{ card.name }}</h2>
@@ -94,11 +94,10 @@
     </section>
     {% endfor %}
     </div>
-    <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
-        <button class="btn btn-purple">Guardar tipos de columnas</button>
+    <div class="wizard-actions">
         <button class="btn btn-purple" name="next" value="duplicates">Guardar y continuar</button>
+        <button class="btn btn-secondary">Guardar tipos de columnas</button>
         <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Volver a resultados</a>
-        <a class="btn btn-secondary" href="{{ url_for('files.cleaning', file_id=record.id) }}">Ver limpieza actual</a>
     </div>
     <p>Continúa para definir los duplicados. Revisarás todos los cambios antes de aplicarlos en una nueva versión, conservando el original.</p>
     <p data-save-warning role="status"></p>

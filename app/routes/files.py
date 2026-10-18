@@ -312,7 +312,7 @@ def review_values(file_id):
             if request.form.get('action') == 'analyze':
                 review = Proposals.analyze(record, config, candidates, context, current_app.config)
                 flash('Propuestas preparadas para tu revisión. No se modificaron los datos.', 'success')
-            elif request.form.get('action') == 'decide':
+            elif request.form.get('action') in {'decide', 'decide_continue'}:
                 for item in candidates:
                     proposal = review['proposals'].get(item['id'])
                     if not proposal: continue
@@ -334,6 +334,8 @@ def review_values(file_id):
                 return redirect(url_for('files.review_values', file_id=file_id))
             config.ai_review = review
             db.session.commit()
+            if request.form.get('action') == 'decide_continue':
+                return redirect(url_for('files.wizard_preview', file_id=file_id))
             return redirect(url_for('files.review_values', file_id=file_id))
         except AIProviderError as error:
             db.session.commit()

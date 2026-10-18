@@ -1,10 +1,12 @@
 <nav aria-label="Pasos de limpieza" class="card cleaning-stepper" style="margin-bottom:18px">
-    <ol style="display:flex;gap:20px;flex-wrap:wrap;padding-left:20px">
-        <li {% if request.endpoint == 'files.configure_columns' %}aria-current="step"{% endif %}><a href="{{ url_for('files.configure_columns', file_id=record.id) }}">Define tus columnas</a>{% if configuration and configuration.columns and configuration.source_version == record.active_stored_filename %}<small> · Guardado</small>{% endif %}</li>
-        <li {% if request.endpoint == 'files.configure_duplicates' %}aria-current="step"{% endif %}><a href="{{ url_for('files.configure_duplicates', file_id=record.id) }}">Identifica duplicados</a>{% if configuration and configuration.duplicates and configuration.source_version == record.active_stored_filename %}<small> · Guardado</small>{% endif %}</li>
-        <li {% if request.endpoint == 'files.configure_treatments' %}aria-current="step"{% endif %}><a href="{{ url_for('files.configure_treatments', file_id=record.id) }}">Decide cómo limpiar</a>{% if treatment_review_needed %}<small> · Revisa cambios</small>{% elif configuration and configuration.treatments and configuration.source_version == record.active_stored_filename %}<small> · Guardado</small>{% endif %}</li>
-        <li {% if request.endpoint == 'files.review_values' %}aria-current="step"{% endif %}><a href="{{ url_for('files.review_values', file_id=record.id) }}">Revisa propuestas de IA</a></li>
-        <li {% if request.endpoint == 'files.wizard_preview' %}aria-current="step"{% endif %}><a href="{{ url_for('files.wizard_preview',file_id=record.id) }}">Revisa y aplica</a></li>
+    {% set current_version = configuration and configuration.source_version == record.active_stored_filename %}
+    {% macro step_link(endpoint, label, enabled) %}{% if enabled %}<a href="{{ url_for(endpoint,file_id=record.id) }}">{{ label }}</a>{% else %}<span aria-disabled="true">{{ label }}</span>{% endif %}{% endmacro %}
+    <ol>
+        <li {% if request.endpoint in ['files.configure_columns','files.configure_categories'] %}aria-current="step"{% endif %}><a href="{{ url_for('files.configure_columns', file_id=record.id) }}">Define tus columnas</a>{% if configuration and configuration.columns and configuration.source_version == record.active_stored_filename %}<small>Guardado</small>{% endif %}</li>
+        <li {% if request.endpoint == 'files.configure_duplicates' %}aria-current="step"{% endif %}>{{ step_link('files.configure_duplicates','Identifica duplicados',current_version and configuration.columns) }}{% if current_version and configuration.duplicates %}<small>Guardado</small>{% endif %}</li>
+        <li {% if request.endpoint == 'files.configure_treatments' %}aria-current="step"{% endif %}>{{ step_link('files.configure_treatments','Decide cómo limpiar',current_version and configuration.duplicates) }}{% if treatment_review_needed %}<small>Revisa cambios</small>{% elif current_version and configuration.treatments %}<small>Guardado</small>{% endif %}</li>
+        <li {% if request.endpoint == 'files.review_values' %}aria-current="step"{% endif %}>{{ step_link('files.review_values','Revisa propuestas de IA',current_version and configuration.treatments) }}</li>
+        <li {% if request.endpoint == 'files.wizard_preview' %}aria-current="step"{% endif %}>{{ step_link('files.wizard_preview','Revisa y aplica',current_version and configuration.treatments) }}</li>
         <li style="color:#666">Consulta tus resultados · Disponible al confirmar</li>
     </ol>
     <small>Estás configurando la limpieza. Ninguna fila cambia por guardar tus preferencias.</small>
