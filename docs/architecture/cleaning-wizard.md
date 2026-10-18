@@ -33,16 +33,31 @@ el proveedor ni la credencial desde la interfaz.
 
 Referencia: https://ai.google.dev/api/models
 
+## Etapa 2: configuración de columnas implementada
+
+Desde Resultados o Limpieza se accede a «Definir tipos de columnas». Una tarjeta
+por campo muestra muestras, sugerencia y elección editable, con formatos de fechas
+y separadores decimales cuando corresponden. Guardar confirma las sugerencias que
+no se hayan cambiado. No hay conversiones ni nuevas versiones por guardar.
+
+Las preferencias se guardan en `cleaning_configurations`, ligadas al archivo y a
+su propietario, con la versión de datos revisada y un contador de revisión. Las
+pantallas antiguas no sobrescriben decisiones guardadas en otra ventana. Si cambia
+la versión activa se recuperan preferencias, pero la interfaz exige revisarlas.
+La relación elimina la configuración cuando se elimina el archivo. La migración
+`0003_cleaning_configuration` agrega únicamente esta tabla.
+
+Este paso aún no gobierna el ejecutor: se indica explícitamente en pantalla.
+Su aplicación conjunta se conectará con duplicados, tratamientos y vista previa
+en los siguientes bloques, evitando aplicar parcialmente decisiones nuevas.
+
 ## Siguientes etapas pendientes
 
-1. Guardar un borrador persistente por archivo: tipos de columnas con nombres
-   Texto, Identificador, Número entero, Número decimal, Fecha, Correo, Teléfono
-   y Sí/No; formatos y muestras; navegación entre pasos sin perder decisiones.
-2. Duplicados por fila completa o combinación de campos; primero/último/más reciente;
+1. Duplicados por fila completa o combinación de campos; primero/último/más reciente;
    claves incompletas sin eliminación automática y ejemplos del impacto.
-3. Tratamientos por escenario: conservar, cuarentena, reemplazo, vacío o propuesta IA.
+2. Tratamientos por escenario: conservar, cuarentena, reemplazo, vacío o propuesta IA.
    No declarar conversión completa si se conservan valores incompatibles.
-4. Propuestas de transformación de valores distintos, con impacto y motivos;
+3. Propuestas de transformación de valores distintos, con impacto y motivos;
    validación local, aceptación explícita y versiones con cambios por celda.
-5. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
+4. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
    y pruebas de recorrido completo del asistente.

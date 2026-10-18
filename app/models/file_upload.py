@@ -52,6 +52,8 @@ class FileUpload(db.Model):
         active = [version for version in self.versions if version.is_active]
         return max(active, key=lambda version: version.version_number, default=None)
 
+    cleaning_configuration = db.relationship('CleaningConfiguration', cascade='all, delete-orphan', uselist=False)
+
     @property
     def active_stored_filename(self):
         version = self.active_version

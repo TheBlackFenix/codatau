@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Define tus columnas — CoDataU{% endblock %}
+{% block content %}
+<h1>Define tus columnas</h1>
+<p>{{ record.original_name }} · Paso 1 de la configuración de limpieza</p>
+<p>Revisa el tipo sugerido para cada campo. Guardar estas decisiones no cambia tus datos.</p>
+{% if stale %}<div class="flash-alert flash-warning">Estás viendo otra versión del archivo. Recuperamos tus preferencias; revísalas y guárdalas de nuevo para esta versión.</div>{% endif %}
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="source_version" value="{{ source_version }}">
+    <input type="hidden" name="revision" value="{{ configuration.revision if configuration else 0 }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+    {% for card in cards %}
+    <section class="card" data-column-card>
+        <h2 style="font-size:17px;overflow-wrap:anywhere">{{ card.name }}</h2>
+        <p>Sugerencia: {{ type_labels[card.suggested] }}</p>
+        <p style="overflow-wrap:anywhere">Ejemplos: {{ card.examples|join(' · ') if card.examples else 'Este campo no tiene ejemplos disponibles.' }}</p>
+        <label for="column-{{ card.index }}">¿Cómo quieres tratar este campo?</label>
+        <select class="form-control" id="column-{{ card.index }}" name="column_{{ card.index }}" data-column-type required>
+            {% for value, label in type_labels.items() %}<option value="{{ value }}" {% if value == card.choice.type %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <details class="context-help"><summary aria-label="Ayuda para elegir el tipo de dato">?</summary><span>Elige Identificador para documentos o códigos: no se suman y sus ceros iniciales son importantes. Número entero sirve para cantidades como 2; Número decimal, para valores como 2.5. No inventaremos valores que no se puedan convertir.</span></details>
+        <div data-decimal {% if card.choice.type != 'decimal' %}hidden{% endif %}>
+            <label for="separator-{{ card.index }}">¿Qué separa la parte decimal?</label>
+            <select class="form-control" id="separator-{{ card.index }}" name="column_{{ card.index }}_separator"><option value="." {% if card.choice.decimal_separator == '.' %}selected{% endif %}>Punto: 3.5</option><option value="," {% if card.choice.decimal_separator == ',' %}selected{% endif %}>Coma: 3,5</option></select>
+        </div>
+        <div data-date {% if card.choice.type != 'date' %}hidden{% endif %}>
+            <label for="date-{{ card.index }}">¿En qué orden aparecen las fechas?</label>
+            <select class="form-control" id="date-{{ card.index }}" name="column_{{ card.index }}_date">{% for value,label in date_formats.items() %}<option value="{{ value }}" {% if value == card.choice.date_format %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+            <small>Por ejemplo, 03/04 puede ser 3 de abril o 4 de marzo. Confirma el orden antes de convertir.</small>
+        </div>
+    </section>
+    {% endfor %}
+    </div>
+    <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn btn-purple">Guardar tipos de columnas</button>
+        <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Volver a resultados</a>
+        <a class="btn btn-secondary" href="{{ url_for('files.cleaning', file_id=record.id) }}">Ver limpieza actual</a>
+    </div>
+    <p>La selección de duplicados y la aplicación conjunta de estas preferencias se incorporarán en los siguientes pasos. La limpieza actual todavía utiliza sus propias reglas.</p>
+    <p data-save-warning role="status"></p>
+</form>
+<script>
+(() => {
+    const form = document.querySelector('[data-column-card]').closest('form');
+    let dirty = false;
+    form.addEventListener('change', () => { dirty = true; form.querySelector('[data-save-warning]').textContent = 'Tienes cambios sin guardar.'; });
+    form.addEventListener('submit', () => { dirty = false; });
+    window.addEventListener('beforeunload', event => { if (dirty) {event.preventDefault(); event.returnValue = '';} });
+    form.querySelectorAll('[data-column-card]').forEach(card => {
+        const select = card.querySelector('[data-column-type]');
+        const sync = () => {
+            card.querySelector('[data-decimal]').hidden = select.value !== 'decimal';
+            card.querySelector('[data-date]').hidden = select.value !== 'date';
+        };
+        select.addEventListener('change', sync); sync();
+    });
+})();
+</script>
+{% endblock %}

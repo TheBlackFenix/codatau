@@ -2,6 +2,7 @@
 {% block title %}Limpieza — CoDataU{% endblock %}
 
 {% block content %}
+<a class="btn btn-secondary" style="margin-bottom:16px" href="{{ url_for('files.configure_columns', file_id=record.id) }}">Paso 1 · Definir tipos de columnas</a>
 
 {% include 'files/_dataset_context.html' %}
 

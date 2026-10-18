@@ -47,6 +47,54 @@ from app.services.storage_service import LocalStorageService
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
 
+
+@files_bp.route('/cleaning/<int:file_id>/columns', methods=['GET', 'POST'])
+@login_required
+def configure_columns(file_id):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.column_type_service import ColumnTypeService
+    from sqlalchemy.orm.exc import StaleDataError
+    from sqlalchemy.exc import IntegrityError
+    record = _record_for_user(file_id)
+    _, version, _, profile = _cleaning_context(record)
+    configuration = CleaningConfiguration.query.filter_by(file_id=record.id, user_id=current_user.id).first()
+    stale = configuration is not None and configuration.source_version != version
+    saved = configuration.columns if configuration else {}
+    cards = ColumnTypeService.cards(profile, _latest_dataset_context(record, profile), saved)
+    form = CleaningActionForm()
+    if request.method == 'POST':
+        if not form.validate_on_submit():
+            abort(400)
+        revision = str(configuration.revision if configuration else 0)
+        if request.form.get('revision') != revision or request.form.get('source_version') != version:
+            flash('El archivo o la configuración cambió en otra ventana. Recarga antes de guardar.', 'warning')
+            return redirect(url_for('files.configure_columns', file_id=file_id))
+        try:
+            choices = ColumnTypeService.parse(request.form, cards)
+            if configuration is None:
+                configuration = CleaningConfiguration(file_id=record.id, user_id=current_user.id)
+                db.session.add(configuration)
+            configuration.columns = choices
+            configuration.source_version = version
+            db.session.commit()
+            flash('Tipos guardados. No se modificó ningún dato. Puedes regresar y cambiar tus decisiones.', 'success')
+            return redirect(url_for('files.configure_columns', file_id=file_id))
+        except ValueError as error:
+            db.session.rollback()
+            flash(str(error), 'warning')
+            # Preserve valid submitted selections when another column has an error.
+            for card in cards:
+                key = f'column_{card["index"]}'
+                if request.form.get(key) in ColumnTypeService.TYPES:
+                    card['choice'] = {'type': request.form[key], 'decimal_separator': request.form.get(key+'_separator', '.'), 'date_format': request.form.get(key+'_date', 'iso')}
+        except (StaleDataError, IntegrityError):
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Recarga la configuración antes de continuar.', 'warning')
+            return redirect(url_for('files.configure_columns', file_id=file_id))
+    return render_template('files/column_types.html', record=record, cards=cards, form=form,
+                           configuration=configuration, source_version=version, stale=stale,
+                           type_labels=ColumnTypeService.TYPES, date_formats=ColumnTypeService.DATES)
+
 CLEANING_PARAMETER_FIELDS = {
     'cast_type': ('decimal_separator',),
     'handle_missing': ('invalid_action', 'replacement_value'),
