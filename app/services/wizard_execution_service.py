@@ -10,6 +10,7 @@ from app.services.value_proposal_service import ValueProposalService as Proposal
 from app.services.date_normalization_service import DateNormalizationService as Dates
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 from app.services.text_normalization_service import TextNormalizationService as Texts
+from app.services.category_dictionary_service import CategoryDictionaryService as Categories
 
 
 def cell(value):
@@ -31,7 +32,7 @@ class WizardResult:
 
 
 class WizardExecutionService:
-    RULE_VERSION = '6-text-and-missing-catalog'
+    RULE_VERSION = '7-category-dictionaries'
 
     @staticmethod
     def convert(value, preference):
@@ -90,6 +91,9 @@ class WizardExecutionService:
         causes={}
         for issue in issues:
             policy=policies[issue['id']];action=policy['action'];column=issue['column']
+            if action=='apply_categories':
+                pref=config.columns[column]
+                Categories.validate(pref.get('category_dictionary',{}).get('mapping',{}),pref)
             for row in issue['rows']:
                 if row not in working.index:continue
                 key=(row,column)
@@ -98,6 +102,12 @@ class WizardExecutionService:
                     working.at[row,column]=policy['replacement'];causes[key]='Reemplazo elegido'
                     if Treatments.issues(pd.DataFrame({column:[policy['replacement']]}),{column:config.columns[column]}):protected.add(key)
                 elif action=='null':working.at[row,column]=None;causes[key]='Dejar vacío'
+                elif action=='apply_categories':
+                    pref=config.columns[column]
+                    replacement=Categories.replacement(original.at[row,column],pref)
+                    if replacement is None:raise ValueError('La equivalencia cambió. Revisa el diccionario y los tratamientos.')
+                    working.at[row,column]=replacement
+                    causes[key]='Diccionario de equivalencias confirmado para el grupo'
                 elif action=='normalize_text':
                     working.at[row,column]=Texts.normalize(original.at[row,column],config.columns[column])
                     causes[key]='Reglas de texto sin IA confirmadas para el grupo'

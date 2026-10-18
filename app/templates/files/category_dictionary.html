@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Equivalencias de categorías — CoDataU{% endblock %}
+{% block content %}
+<h1>Equivalencias de categorías</h1>
+<p>{{ record.original_name }} · <strong>{{ column }}</strong></p>
+<p>Selecciona valores que significan lo mismo y escribe el nombre final. Guardar prepara la propuesta; aplicarás el grupo después de revisar la vista previa.</p>
+<p>Mostramos los valores después de las reglas de texto que elegiste, aún sin aplicarlas. La coincidencia es exacta: no agrupamos palabras por parecido. Los cambios de texto necesarios para reconocer la equivalencia se aprobarán junto con ella.</p>
+<details class="context-help"><summary aria-label="Ayuda sobre equivalencias">?</summary><span>Pend., PENDIENTE y pendiente pueden convertirse en Pendiente si tú lo confirmas. Cancelado y Devuelto no se consideran equivalentes por defecto. El nombre final debe respetar tus reglas de texto. Cambiarlas o cambiar los marcadores después quitará este diccionario para que lo revises.</span></details>
+<a class="btn btn-secondary" href="{{ url_for('files.configure_columns',file_id=record.id) }}">Volver a definir columnas</a>
+<form method="GET" class="card" style="margin-top:16px">
+    <label for="category-search">Buscar un valor</label>
+    <input class="form-control" id="category-search" name="q" value="{{ query }}" maxlength="200">
+    <button class="btn btn-secondary">Buscar</button>
+</form>
+<form method="POST" class="card" style="margin-top:16px" data-category-form>
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="revision" value="{{ configuration.revision }}">
+    <input type="hidden" name="source_version" value="{{ record.active_stored_filename }}">
+    <input type="hidden" name="action" value="add">
+    <h2>Crear o actualizar una equivalencia</h2>
+    <p>{{ total }} valor(es) distinto(s) disponible(s), {{ filtered_count }} coincide(n) con la búsqueda. {{ excluded }} celda(s) vacías, marcadas como ausentes, no textuales o de más de 200 caracteres no se incluyen.</p>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Elegir</th><th>Valor encontrado</th><th>Registros</th></tr></thead><tbody>
+    {% for item in values %}<tr><td><input type="checkbox" name="selected" value="{{ item.id }}" aria-label="Seleccionar {{ item.value }}" {% if item.id in selected %}checked{% endif %}></td><td><code style="white-space:pre-wrap">{{ item.value }}</code></td><td>{{ item.count }}</td></tr>
+    {% else %}<tr><td colspan="3">No hay valores disponibles para esta búsqueda.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p>Página {{ page }} de {{ pages }} · Hasta 50 valores por grupo. Guarda el grupo antes de cambiar de página o buscar; puedes añadir más valores al mismo nombre final después.</p>
+    {% if page > 1 %}<a href="{{ url_for('files.configure_categories',file_id=record.id,column_index=column_index,q=query,page=page-1) }}">Anterior</a>{% endif %}
+    {% if page < pages %}<a href="{{ url_for('files.configure_categories',file_id=record.id,column_index=column_index,q=query,page=page+1) }}">Siguiente</a>{% endif %}
+    <label for="category-target">Nombre final para los valores elegidos</label>
+    <input class="form-control" id="category-target" name="target" value="{{ target }}" maxlength="200" required placeholder="Por ejemplo: Pendiente">
+    <button class="btn btn-purple">Guardar equivalencia</button>
+    <p data-category-warning role="status"></p>
+</form>
+<section class="card" style="margin-top:16px"><h2>Grupos guardados para esta columna</h2>
+{% for group in groups %}<div style="margin-top:12px"><strong>{{ group.target }}</strong> · {{ group.count }} registro(s) coincidente(s)<ul>{% for source in group.sources %}<li><code style="white-space:pre-wrap">{{ source }}</code> → {{ group.target }}</li>{% endfor %}</ul>
+<form method="POST">{{ form.hidden_tag() }}<input type="hidden" name="revision" value="{{ configuration.revision }}"><input type="hidden" name="source_version" value="{{ record.active_stored_filename }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="group" value="{{ group.id }}"><button class="btn btn-secondary">Quitar este grupo del diccionario</button></form></div>
+{% else %}<p>Aún no hay grupos guardados. Ningún valor se fusionará automáticamente.</p>{% endfor %}
+<p>Quitar un grupo cambia la configuración futura; no revierte versiones ya aplicadas. Puedes restaurar una versión desde el historial.</p>
+</section>
+<p><a class="btn btn-purple" href="{{ url_for('files.configure_duplicates',file_id=record.id) }}">Continuar con duplicados</a></p>
+<script>
+(() => {const form=document.querySelector('[data-category-form]');let dirty=false;form.addEventListener('change',()=>{dirty=true;form.querySelector('[data-category-warning]').textContent='Tienes una selección sin guardar.';});form.addEventListener('input',()=>{dirty=true;});form.addEventListener('submit',()=>{dirty=false;});window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});})();
+</script>
+{% endblock %}

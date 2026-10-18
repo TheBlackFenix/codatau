@@ -6,6 +6,7 @@ from app.services.date_normalization_service import DateNormalizationService as 
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 from app.services.text_normalization_service import TextNormalizationService as Texts
 from app.services.missing_value_service import MissingValueService as Missing
+from app.services.category_dictionary_service import CategoryDictionaryService as Categories
 
 
 class CleaningTreatmentService:
@@ -16,7 +17,8 @@ class CleaningTreatmentService:
                'date_dmy': 'Interpretar este grupo como día/mes/año',
                'date_mdy': 'Interpretar este grupo como mes/día/año',
                'normalize_number': 'Aplicar las conversiones numéricas propuestas, sin IA',
-               'normalize_text': 'Aplicar las reglas de texto propuestas, sin IA'}
+               'normalize_text': 'Aplicar las reglas de texto propuestas, sin IA',
+               'apply_categories': 'Aplicar las equivalencias guardadas para este grupo'}
 
     @staticmethod
     def number(value, preference):
@@ -32,6 +34,7 @@ class CleaningTreatmentService:
             series = dataframe[name]
             empty = series.isna() | series.map(lambda value: isinstance(value, str) and not value.strip())
             marked = series.map(lambda value: Missing.matches(value, pref))
+            category_changes = series.map(lambda value: Categories.replacement(value, pref) is not None)
             kind = pref['type']
             invalid = pd.Series(False, index=series.index)
             numeric = None
@@ -57,7 +60,9 @@ class CleaningTreatmentService:
                          ('invalid', 'Valores que no coinciden con el tipo elegido', invalid & ~empty)]
             if kind in {'text', 'identifier'} and pref.get('text_rules'):
                 changed = series.map(lambda value: isinstance(value, str) and Texts.normalize(value, pref) != value)
-                scenarios.append(('text_normalizable', 'Textos con cambios propuestos por tus reglas', changed & ~empty))
+                scenarios.append(('text_normalizable', 'Textos con cambios propuestos por tus reglas', changed & ~empty & ~category_changes))
+            if kind == 'text':
+                scenarios.append(('category_equivalence', 'Valores con equivalencias que confirmaste', category_changes & ~empty))
             if kind == 'date':
                 scenarios.append(('date_ambiguous', 'Fechas que necesitan confirmar el orden del día y mes', ambiguous))
             elif numeric is not None:
@@ -112,12 +117,14 @@ class CleaningTreatmentService:
                 raise ValueError('Confirma el orden de fechas únicamente para un grupo de fechas ambiguas.')
             if action == 'ai' and issue.get('type') == 'date':
                 raise ValueError('Resuelve las fechas por grupo; no pediremos a la IA adivinar fechas individuales.')
-            if action == 'ai' and issue['scenario'] in {'numeric_convertible', 'number_ambiguous', 'bounds', 'negative', 'range', 'text_normalizable'}:
+            if action == 'ai' and issue['scenario'] in {'numeric_convertible', 'number_ambiguous', 'bounds', 'negative', 'range', 'text_normalizable', 'category_equivalence'}:
                 raise ValueError('Este grupo se resuelve con reglas o una decisión de tratamiento, no con propuestas individuales de IA.')
             if action == 'normalize_number' and issue['scenario'] != 'numeric_convertible':
                 raise ValueError('Solo puedes aplicar conversiones numéricas a un grupo reconocido por el catálogo.')
             if action == 'normalize_text' and issue['scenario'] != 'text_normalizable':
                 raise ValueError('Solo puedes aplicar reglas de texto al grupo propuesto para esas reglas.')
+            if action == 'apply_categories' and issue['scenario'] != 'category_equivalence':
+                raise ValueError('Solo puedes aplicar equivalencias al grupo reconocido por el diccionario.')
             item = {'action':action}
             if action == 'replace':
                 replacement = form.get('replacement_'+issue['id'], '').strip()

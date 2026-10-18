@@ -1,4 +1,5 @@
 import re
+from copy import deepcopy
 from decimal import Decimal
 from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 from app.services.text_normalization_service import TextNormalizationService as Texts
@@ -63,6 +64,11 @@ class ColumnTypeService:
             missing_values = Missing.parse(form, key)
             if missing_values:
                 choice['missing_values'] = missing_values
+            previous = card.get('choice', {})
+            if (kind == 'text' and previous.get('category_dictionary') and
+                    previous.get('text_rules') == choice.get('text_rules') and
+                    previous.get('missing_values') == choice.get('missing_values')):
+                choice['category_dictionary'] = deepcopy(previous['category_dictionary'])
             if kind in {'integer', 'decimal'}:
                 policy = form.get(key + '_negative', 'unknown')
                 if policy not in {'allow', 'deny', 'unknown'}:

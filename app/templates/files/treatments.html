@@ -23,6 +23,10 @@
         {% for summary in text_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} celda(s).</p><ul>{% for example in summary.examples %}<li><code style="white-space:pre-wrap">{{ example.before }}</code> → <code style="white-space:pre-wrap">{{ example.after }}</code></li>{% endfor %}</ul>{% if summary.empty_count %}<p class="flash-alert flash-warning">{{ summary.empty_count }} celda(s) quedarán vacías al retirar esos caracteres. Puedes conservarlas o elegir otro tratamiento.</p>{% endif %}{% endfor %}
         <p>Elige aplicar las reglas en el grupo de la columna. Guardar la configuración no modifica datos.</p>
     </details>{% endif %}
+    {% if category_summaries %}<details class="card" style="margin-bottom:16px" open><summary>Equivalencias guardadas: ejemplos antes y después</summary>
+        {% for summary in category_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} celda(s).</p><ul>{% for example in summary.examples %}<li><code style="white-space:pre-wrap">{{ example.before }}</code> → <code>{{ example.after }}</code></li>{% endfor %}</ul>{% endfor %}
+        <p>Elige aplicar las equivalencias en el grupo de cada columna, o conservar sus valores. El resultado se revisará antes de crear una versión.</p>
+    </details>{% endif %}
     {% for column, scenarios in issues|groupby('column') %}
     <details class="card" style="margin-bottom:16px">
         <summary><strong>{{ column }}</strong> · {{ scenarios|length }} escenario(s)</summary>
@@ -32,6 +36,7 @@
             {% if issue.scenario == 'range' %}<p>Es una sugerencia del contexto, no una certeza. Si estos valores son válidos en tu caso, puedes conservarlos.</p>{% endif %}
             {% if issue.scenario == 'bounds' %}{% set limits = configuration.columns[issue.column] %}<p>Tu rango permitido: {{ limits.get('minimum', 'sin mínimo') }} a {{ limits.get('maximum', 'sin máximo') }}, incluidos los extremos. Una decisión cubre este grupo. No ajustaremos valores al límite ni inventaremos correcciones.</p>{% endif %}
             {% if issue.scenario == 'missing_marker' %}<p>Estos textos coinciden con los marcadores que guardaste para esta columna. Aún no se han cambiado: conservar mantiene el texto original; vaciar o reemplazar cambia solo la celda; separar aparta toda la fila. No se enviarán a IA ni se rellenarán automáticamente.</p>{% endif %}
+            {% if issue.scenario == 'category_equivalence' %}<p>Se usarán únicamente las equivalencias que guardaste para esta columna, junto con las reglas de texto necesarias para reconocerlas. No se fusionan valores por parecido ni se consulta a la IA.</p>{% endif %}
             {% if issue.scenario == 'date_ambiguous' %}<p>Una sola elección resolverá este grupo: 03/04 puede ser 3 de abril o 4 de marzo. Si el archivo mezcla ambos criterios, conserva o separa el grupo en lugar de adivinar.</p>{% endif %}
             {% if issue.scenario == 'number_ambiguous' %}<p>1,234 podría ser mil doscientos treinta y cuatro o un decimal. Vuelve a Definir columnas y confirma los separadores del archivo para resolver el grupo. No lo adivinaremos con IA.</p><a href="{{ url_for('files.configure_columns', file_id=record.id) }}">Revisar formato numérico de origen</a>{% endif %}
             {% if issue.scenario == 'numeric_convertible' %}<p>Estas celdas tienen una conversión reconocida por reglas. Una sola decisión aplica las propuestas para todo el grupo, sin consumir tokens. Los valores ambiguos o fuera de tus límites se revisan por separado.</p>{% endif %}
@@ -39,7 +44,7 @@
             {% if issue.examples %}<p>Ejemplos: {{ issue.examples|join(' · ') }}</p>{% endif %}
             <label for="action-{{ issue.id }}">¿Qué quieres hacer?</label>
             <select class="form-control" id="action-{{ issue.id }}" name="action_{{ issue.id }}" data-treatment-action>
-                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario != 'invalid' or issue.type not in ['integer', 'decimal', 'boolean'])) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') and not (value == 'normalize_number' and issue.scenario != 'numeric_convertible') and not (value == 'normalize_text' and issue.scenario != 'text_normalizable') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario != 'invalid' or issue.type not in ['integer', 'decimal', 'boolean'])) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') and not (value == 'normalize_number' and issue.scenario != 'numeric_convertible') and not (value == 'normalize_text' and issue.scenario != 'text_normalizable') and not (value == 'apply_categories' and issue.scenario != 'category_equivalence') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
             <details class="context-help"><summary aria-label="Ayuda sobre tratamientos">?</summary><span>Conservar no toca el valor. Separar apartará toda la fila para revisarla y recuperarla. Reemplazar o vaciar cambia solo esta celda. La IA propondrá una solución que deberás aprobar, sin reconstruir contactos ni inventar datos faltantes.</span></details>
             <div data-treatment-replacement {% if decision.action != 'replace' %}hidden{% endif %}>
@@ -70,6 +75,7 @@
  explanations.date_mdy='Se interpretará todo este grupo con el mes primero. Revisa los ejemplos antes de confirmar.';
  explanations.normalize_number='Se aplicará la regla reconocida a cada celda de este grupo, sin IA ni redondeos a entero. Revisa el resultado antes de confirmar la versión.';
  explanations.normalize_text='Se aplicarán las reglas de texto que elegiste a todo este grupo. No se eliminan tildes ni se llama a la IA. Revisa los ejemplos antes de confirmar.';
+ explanations.apply_categories='Una sola decisión aplicará las equivalencias guardadas y las reglas de texto necesarias a todo este grupo. Conservar no cambia las celdas.';
  select.addEventListener('change',sync);sync();
  });
  form.addEventListener('change',()=>{dirty=true;form.querySelector('[data-unsaved-warning]').textContent='Tienes cambios sin guardar.';});

@@ -29,7 +29,7 @@ vacío, inválido, ambiguo, signo, rango y conversión tienen tratamientos separ
 | Duplicados exactos o por claves | Implementado | Criterio y registro conservado explícitos | test_duplicate_configuration.py |
 | Correo/teléfono | Validación básica actual | No reconstruir contactos; pendiente mejorar validadores compartidos | test_cleaning_treatments.py |
 | Texto: espacios, controles seleccionados, Unicode NFC y mayúsculas | Implementado, opt-in por columna de texto o identificador | Propuesta agrupada, conservar protege el valor; mantiene tildes y saltos de línea | test_text_normalization.py |
-| Categorías y diccionarios de equivalencias | Pendiente | Aprobación de equivalencias; no fusionar por parecido automáticamente | Pendiente |
+| Categorías y diccionarios de equivalencias | Implementado por columna Texto | Selección de valores y nombre final; sin similitud ni IA; vista previa por grupo | test_category_dictionary.py |
 | Marcadores configurables de vacío | Implementado, opt-in por columna | Textos completos; tratamiento agrupado; no diccionario global | test_missing_markers.py |
 | Porcentajes, moneda, notación contable, unidades | Pendiente | Escala, moneda y unidad explícitas; no eliminar símbolos arbitrariamente | Pendiente |
 | Decimales escritos en palabras | Pendiente | No usar extracción parcial ni parser permisivo | Pendiente |
@@ -117,6 +117,43 @@ no se reconstruyen automáticamente, y para evaluarlos como texto hay que volver
 cargar el original. Los cambios de marcadores invalidan la configuración posterior,
 las huellas incorporan la versión de reglas y la nueva versión guarda preferencias
 y cambios por celda. Reemplazos que siguen siendo marcadores no se fuerzan al tipo.
+
+### Equivalencias `categories-v1`
+
+Desde Definir columnas, después de guardar el tipo Texto, se abre «Configurar
+equivalencias de categorías». Muestra valores completos y frecuencias calculados
+sobre la versión activa, después de las reglas de texto elegidas, todavía sin
+aplicarlas. Excluye vacíos, marcadores de ausencia, valores no textuales y textos
+preparados de más de 200 caracteres. Hay búsqueda y páginas de 50 valores; una
+selección de hasta 50 puede guardarse con un nombre final. Se pueden añadir otros
+valores al mismo nombre en otra operación. El límite es 500 alias por columna.
+
+El diccionario se guarda en `columns[column].category_dictionary` con versión y mapa
+de alias exactos. No hay coincidencia aproximada, expansión de abreviaturas inferida,
+IA, SQL generado ni eliminación de acentos. El nombre final respeta las reglas de
+texto y no puede ser un marcador de ausencia. Se rechazan cadenas y ciclos de alias:
+cada resultado debe ser estable si se consulta otra vez. Se pueden quitar grupos.
+
+Guardar no materializa datos ni crea versiones. Invalida duplicados, tratamientos y
+propuestas para revisarlos con la nueva configuración. No sobrescribe otros campos.
+Revisiones de borrador, propietario, versión de origen y CSRF protegen las mutaciones.
+Guardar tipos sin cambios preserva el diccionario; cambiar tipo, reglas de texto o
+marcadores de esa columna lo retira con aviso para que se vuelva a definir. Se
+conserva al revisar otra versión del mismo archivo si esas opciones no cambiaron;
+no hay aún importación automática entre archivos ni biblioteca compartida de recetas.
+
+El escenario `category_equivalence` reúne todas las celdas reconocidas; se muestran
+ejemplos y una aprobación `apply_categories` aplica el grupo. Si las reglas de texto
+son necesarias para reconocer un alias, esa aprobación incluye ambos pasos. Se
+excluyen de `text_normalizable` y su resumen para evitar decisiones solapadas. Elegir
+conservar protege la celda de ambos cambios. El resto de las celdas sigue sus reglas
+habituales. El resultado final se valida antes de confirmar, se compara después para
+duplicados, y queda con auditoría por celda y la instantánea del diccionario en la
+versión. Cambiar las reglas invalida tokens de confirmación antiguos.
+
+Quitar un grupo solo modifica configuraciones futuras; no revierte versiones ya
+aplicadas. El usuario puede restaurarlas desde el historial. Esta primera etapa no
+incluye propuestas automáticas de agrupaciones por IA.
 
 ## Referencias de diseño
 

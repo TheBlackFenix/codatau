@@ -37,6 +37,13 @@
             </select>
             <details class="context-help"><summary aria-label="Ayuda sobre reglas de texto">?</summary><span>Estas opciones solo preparan propuestas. Elegirás después si aplicarlas al grupo. Se conservan tildes y saltos de línea; la limpieza de controles retira controles no imprimibles, marcas de inicio de texto y espacios de ancho cero, no todos los caracteres invisibles. Cambiar códigos o mayúsculas puede crear coincidencias y duplicados: revisa la vista previa.</span></details>
         </details>
+        <div data-category-options {% if card.choice.type != 'text' %}hidden{% endif %}>
+            {% if configuration and not stale and configuration.columns.get(card.name, {}).get('type') == 'text' %}
+            <p><a href="{{ url_for('files.configure_categories',file_id=record.id,column_index=card.index) }}">Configurar equivalencias de categorías</a></p>
+            {% if card.choice.get('category_dictionary') %}<small>{{ card.choice.category_dictionary.mapping|length }} equivalencia(s) guardada(s).</small>{% endif %}
+            <small>Guarda primero los cambios de esta pantalla. Podrás elegir valores encontrados y un nombre final por grupo, sin IA.</small>
+            {% else %}<small>Guarda este campo como Texto para configurar equivalencias entre sus valores.</small>{% endif %}
+        </div>
         {% set missing_options = card.choice.get('missing_values', {}) %}
         <details>
             <summary>Textos que significan «sin dato» (opcional)</summary>
@@ -110,6 +117,7 @@
             card.querySelector('[data-date]').hidden = select.value !== 'date';
             card.querySelector('[data-negative]').hidden = !['integer', 'decimal'].includes(select.value);
             card.querySelector('[data-text-options]').hidden = !['text', 'identifier'].includes(select.value);
+            card.querySelector('[data-category-options]').hidden = select.value !== 'text';
         };
         select.addEventListener('change', sync); sync();
         const rules = card.querySelector('[data-numeric-rules]');

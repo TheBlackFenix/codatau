@@ -71,6 +71,9 @@ def configure_columns(file_id):
             return redirect(url_for('files.configure_columns', file_id=file_id))
         try:
             choices = ColumnTypeService.parse(request.form, cards)
+            dictionaries_reset = configuration is not None and any(
+                previous.get('category_dictionary') and not choices.get(name, {}).get('category_dictionary')
+                for name, previous in configuration.columns.items())
             if configuration is None:
                 configuration = CleaningConfiguration(file_id=record.id, user_id=current_user.id)
                 db.session.add(configuration)
@@ -81,6 +84,8 @@ def configure_columns(file_id):
             configuration.columns = choices
             configuration.source_version = version
             db.session.commit()
+            if dictionaries_reset:
+                flash('Cambiaste el tipo, las reglas de texto o los marcadores de una columna. Revisa de nuevo sus equivalencias.', 'warning')
             flash('Tipos guardados. No se modificó ningún dato. Puedes regresar y cambiar tus decisiones.', 'success')
             return redirect(url_for('files.configure_duplicates' if request.form.get('next') == 'duplicates' else 'files.configure_columns', file_id=file_id))
         except ValueError as error:
@@ -90,7 +95,10 @@ def configure_columns(file_id):
             for card in cards:
                 key = f'column_{card["index"]}'
                 if request.form.get(key) in ColumnTypeService.TYPES:
+                    previous_dictionary = card['choice'].get('category_dictionary')
                     card['choice'] = {'type': request.form[key], 'decimal_separator': request.form.get(key+'_separator', '.'), 'date_format': request.form.get(key+'_date', 'iso'), 'date_source': request.form.get(key+'_date_source', request.form.get(key+'_date', 'iso')), 'negative_policy': request.form.get(key+'_negative', 'unknown')}
+                    if previous_dictionary:
+                        card['choice']['category_dictionary'] = previous_dictionary
                     card['choice'].update({field: request.form.get(key+'_'+field, '')[:64] for field in ('minimum','maximum')})
                     card['choice'].update(numeric_rules=request.form.get(key+'_numeric_rules', ''), number_source=request.form.get(key+'_number_source', 'auto'))
                     card['choice']['text_rules'] = {field: request.form.get(key+'_text_'+field) == '1' for field in ('trim','collapse_spaces','clean_controls','nfc')}
@@ -103,6 +111,77 @@ def configure_columns(file_id):
     return render_template('files/column_types.html', record=record, cards=cards, form=form,
                            configuration=configuration, source_version=version, stale=stale,
                            type_labels=ColumnTypeService.TYPES, date_formats=ColumnTypeService.DATES)
+
+@files_bp.route('/cleaning/<int:file_id>/categories/<int:column_index>', methods=['GET', 'POST'])
+@login_required
+def configure_categories(file_id, column_index):
+    from copy import deepcopy
+    from sqlalchemy.orm.exc import StaleDataError
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.category_dictionary_service import CategoryDictionaryService as Categories
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename:
+        flash('Guarda primero los tipos de la versión actual para configurar equivalencias.', 'warning')
+        return redirect(url_for('files.configure_columns', file_id=file_id))
+    profile = _cleaning_context(record)[3]
+    if column_index >= len(profile['columns']): abort(404)
+    column = profile['columns'][column_index]['name']
+    preference = config.columns.get(column, {})
+    if preference.get('type') != 'text': abort(404)
+    available, excluded = Categories.values(_load_dataframe(record)[column], preference)
+    dictionary = preference.get('category_dictionary', {})
+    form = CleaningActionForm()
+    selected = request.form.getlist('selected') if request.method == 'POST' else []
+    target = request.form.get('target', '')[:200] if request.method == 'POST' else ''
+    if request.method == 'POST':
+        if not form.validate_on_submit(): abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('source_version') != record.active_stored_filename:
+            flash('La configuración o versión cambió. Recarga antes de guardar equivalencias.', 'warning')
+            return redirect(url_for('files.configure_categories', file_id=file_id, column_index=column_index))
+        try:
+            action = request.form.get('action')
+            if action == 'add':
+                updated = Categories.add(dictionary, selected, request.form.get('target', ''), available, preference)
+            elif action == 'remove':
+                mapping = dictionary.get('mapping', {})
+                targets = {Categories.key(value): value for value in mapping.values()}
+                group = targets.get(request.form.get('group'))
+                if group is None: raise ValueError('El grupo ya no existe. Recarga el diccionario.')
+                updated = Categories.validate({key: value for key, value in mapping.items() if value != group}, preference)
+            else:
+                raise ValueError('Elige si deseas guardar o quitar un grupo de equivalencias.')
+            columns = deepcopy(config.columns)
+            if updated['mapping']:
+                columns[column]['category_dictionary'] = updated
+            else:
+                columns[column].pop('category_dictionary', None)
+            if columns != config.columns:
+                config.columns = columns
+                config.duplicates = {}; config.treatments = {}; config.ai_review = {}
+            db.session.commit()
+            flash('Diccionario guardado. No se modificó ningún dato. Revisa los pasos siguientes para aplicarlo.', 'success')
+            return redirect(url_for('files.configure_categories', file_id=file_id, column_index=column_index))
+        except ValueError as error:
+            db.session.rollback(); flash(str(error), 'warning')
+        except StaleDataError:
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Recarga el diccionario.', 'warning')
+            return redirect(url_for('files.configure_categories', file_id=file_id, column_index=column_index))
+    query = request.args.get('q', '')[:200]
+    filtered = [item for item in available if query.casefold() in item['value'].casefold()]
+    pages = max(1, (len(filtered)+49)//50)
+    page = min(pages, max(1, request.args.get('page', 1, type=int)))
+    counts = {item['value']: item['count'] for item in available}
+    groups = {}
+    for source, destination in dictionary.get('mapping', {}).items():
+        group = groups.setdefault(destination, {'id': Categories.key(destination), 'target': destination, 'sources': [], 'count': 0})
+        group['sources'].append(source); group['count'] += counts.get(source, 0)
+    return render_template('files/category_dictionary.html', record=record, configuration=config, column=column,
+        column_index=column_index, form=form, values=filtered[(page-1)*50:page*50], total=len(available),
+        filtered_count=len(filtered), excluded=excluded, query=query, page=page, pages=pages,
+        groups=groups.values(), selected=selected, target=target)
+
 
 @files_bp.route('/cleaning/<int:file_id>/duplicates', methods=['GET', 'POST'])
 @login_required
@@ -158,6 +237,7 @@ def configure_treatments(file_id):
     from app.services.date_normalization_service import DateNormalizationService as Dates
     from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
     from app.services.text_normalization_service import TextNormalizationService as Texts
+    from app.services.category_dictionary_service import CategoryDictionaryService as Categories
     from sqlalchemy.orm.exc import StaleDataError
     record = _record_for_user(file_id)
     config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
@@ -195,6 +275,7 @@ def configure_treatments(file_id):
                            date_summaries=Dates.summaries(dataframe, config.columns),
                            numeric_summaries=Numbers.summaries(dataframe, config.columns),
                            text_summaries=Texts.summaries(dataframe, config.columns),
+                           category_summaries=Categories.summaries(dataframe, config.columns),
                            treatment_review_needed=bool(config.treatments) and set(decisions) != {issue['id'] for issue in issues})
 
 
