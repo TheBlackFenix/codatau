@@ -76,6 +76,7 @@ def configure_columns(file_id):
                 db.session.add(configuration)
             if configuration.columns != choices or configuration.source_version != version:
                 configuration.duplicates = {}
+                configuration.treatments = {}
             configuration.columns = choices
             configuration.source_version = version
             db.session.commit()
@@ -121,10 +122,12 @@ def configure_duplicates(file_id):
         try:
             settings = Duplicates.parse(request.form, list(dataframe.columns), config.columns)
             Duplicates.preview(dataframe, settings, config.columns)
+            if config.duplicates != settings:
+                config.treatments = {}
             config.duplicates = settings
             db.session.commit()
             flash('Comparación guardada. Todavía no se eliminó ninguna fila.', 'success')
-            return redirect(url_for('files.configure_duplicates', file_id=file_id))
+            return redirect(url_for('files.configure_treatments' if request.form.get('next') == 'treatments' else 'files.configure_duplicates', file_id=file_id))
         except ValueError as error:
             db.session.rollback()
             flash(str(error), 'warning')
@@ -138,6 +141,44 @@ def configure_duplicates(file_id):
     return render_template('files/duplicates.html', record=record, configuration=config, form=form,
                            settings=settings, preview=preview, columns=list(dataframe.columns),
                            date_columns=[name for name,item in config.columns.items() if item['type'] == 'date'])
+
+
+@files_bp.route('/cleaning/<int:file_id>/treatments', methods=['GET', 'POST'])
+@login_required
+def configure_treatments(file_id):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.cleaning_treatment_service import CleaningTreatmentService as Treatments
+    from sqlalchemy.orm.exc import StaleDataError
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename or not config.duplicates:
+        flash('Guarda primero los tipos y la comparación de duplicados de esta versión.', 'warning')
+        return redirect(url_for('files.configure_duplicates', file_id=file_id))
+    _, _, _, profile = _cleaning_context(record)
+    issues = Treatments.issues(_load_dataframe(record), config.columns, _latest_dataset_context(record, profile))
+    form = CleaningActionForm()
+    decisions = (config.treatments or {}).get('decisions', {})
+    if request.method == 'POST':
+        if not form.validate_on_submit(): abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('source_version') != record.active_stored_filename:
+            flash('La configuración cambió. Recarga la pantalla antes de guardar.', 'warning')
+            return redirect(url_for('files.configure_treatments', file_id=file_id))
+        try:
+            config.treatments = Treatments.parse(request.form, issues)
+            db.session.commit()
+            flash('Tratamientos guardados. No se modificó ningún dato ni se envió información a la IA.', 'success')
+            return redirect(url_for('files.configure_treatments', file_id=file_id))
+        except ValueError as error:
+            db.session.rollback()
+            flash(str(error), 'warning')
+            decisions = {issue['id']: {'action': request.form.get('action_'+issue['id'], 'keep'), 'replacement': request.form.get('replacement_'+issue['id'], '')[:200]} for issue in issues}
+        except StaleDataError:
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Revisa las decisiones actuales.', 'warning')
+            return redirect(url_for('files.configure_treatments', file_id=file_id))
+    return render_template('files/treatments.html', record=record, configuration=config, form=form,
+                           issues=issues, decisions=decisions, actions=Treatments.ACTIONS,
+                           treatment_review_needed=bool(config.treatments) and set(decisions) != {issue['id'] for issue in issues})
 
 
 CLEANING_PARAMETER_FIELDS = {

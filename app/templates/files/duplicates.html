@@ -28,6 +28,7 @@
     </div>
     <p>Las filas con campos de comparación vacíos se conservarán para revisión. Si una fecha no se entiende, conservaremos todo su grupo. En fechas iguales, se conserva el último registro del archivo.</p>
     <button class="btn btn-purple">Guardar y ver impacto</button>
+    <button class="btn btn-purple" name="next" value="treatments">Guardar y continuar</button>
     <a class="btn btn-secondary" href="{{ url_for('files.configure_columns', file_id=record.id) }}">Anterior</a>
     <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
 </form>

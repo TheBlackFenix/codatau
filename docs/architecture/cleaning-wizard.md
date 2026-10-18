@@ -53,11 +53,9 @@ en los siguientes bloques, evitando aplicar parcialmente decisiones nuevas.
 
 ## Siguientes etapas pendientes
 
-1. Tratamientos por escenario: conservar, cuarentena, reemplazo, vacío o propuesta IA.
-   No declarar conversión completa si se conservan valores incompatibles.
-2. Propuestas de transformación de valores distintos, con impacto y motivos;
+1. Propuestas de transformación de valores distintos, con impacto y motivos;
    validación local, aceptación explícita y versiones con cambios por celda.
-3. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
+2. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
    y pruebas de recorrido completo del asistente.
 
 ## Etapa 3: navegación y preferencias de duplicados implementadas
@@ -80,3 +78,27 @@ filas se quitarían y muestra hasta ocho ejemplos. No modifica los datos ni crea
 versiones: la aplicación conjunta se conectará en la siguiente etapa. Cambiar tipos
 o formatos limpia estos criterios para exigir una nueva revisión. Las revisiones
 de configuración y la versión activa impiden guardar desde pestañas antiguas.
+
+## Etapa 4: preferencias de tratamiento implementadas
+
+El tercer paso diagnostica valores vacíos y valores incompatibles con los tipos
+elegidos por el usuario. Enteros no admiten fracciones, decimales respetan el
+separador elegido y fechas usan el formato confirmado. Correo, teléfono y Sí/No
+tienen validaciones básicas de formato, no verificaciones de identidad ni de
+existencia real. Texto e identificadores no reciben conversiones numéricas.
+
+Cuando el contexto propone valores positivos/no negativos para un campo numérico,
+se muestra además un escenario de rango consultivo. Sin esa evidencia no se
+rechazan números negativos simplemente por ser negativos.
+
+Los escenarios se agrupan en desplegables por columna con ejemplos y recuentos.
+El usuario puede conservar, separar toda la fila, reemplazar únicamente la celda,
+dejarla vacía o solicitar una futura propuesta IA. Los vacíos no admiten IA para
+no inventar datos. Reemplazos requieren entre 1 y 200 caracteres. Conservar no
+envía valores ocultos de reemplazo al ejecutor; solo se guarda la acción elegida.
+
+La migración `0005_cleaning_treatments` añade preferencias a la configuración.
+Guardar no llama al proveedor, no transforma datos ni crea versiones. La próxima
+etapa consumirá únicamente las preferencias IA y la etapa final integrará todas
+las decisiones para la vista previa. Cambiar tipos o duplicados borra tratamientos
+para exigir revisión; versiones y revisiones de borrador rechazan pestañas antiguas.
