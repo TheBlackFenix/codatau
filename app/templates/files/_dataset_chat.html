@@ -10,6 +10,7 @@
         <span data-chat-status role="status"></span>
     </form>
 </section>
+<script src="{{ url_for('static', filename='js/chat-presentation.js') }}"></script>
 <script>
 (() => {
     const root = document.querySelector('.dataset-chat');
@@ -20,6 +21,7 @@
     let version = null;
     const calculations = {...{{ aggregation_labels|tojson }}, count: 'Cantidad'};
     const operators = {eq:'es igual a', neq:'es diferente de', gt:'es mayor que', gte:'es mayor o igual que', lt:'es menor que', lte:'es menor o igual que'};
+    const presentation = window.CoDataUChatPresentation;
     const write = (parent, tag, content) => {
         const node = document.createElement(tag);
         node.textContent = content;
@@ -29,31 +31,48 @@
     const render = result => {
         const item = document.createElement('article');
         item.className = 'chat-message';
-        write(item, 'strong', result.question);
-        write(item, 'p', result.answer);
+        write(item, 'strong', result.question).className = 'chat-question';
+        write(item, 'p', result.answer).className = 'chat-answer';
         if (result.evidence) {
             const evidence = result.evidence;
             const details = document.createElement('details');
+            details.className = 'chat-evidence';
             write(details, 'summary', 'Ver cómo se calculó');
-            write(details, 'p', `Dataset: ${evidence.dataset_rows} filas · Cálculo: ${calculations[evidence.aggregation]} · Campo: ${evidence.metric || 'registros'} · Fecha: ${evidence.date_column || 'no aplica'}`);
+            const metadata = document.createElement('dl');
+            metadata.className = 'chat-calculation-meta';
+            [['Registros del archivo', presentation.number(evidence.dataset_rows, true)], ['Cálculo', calculations[evidence.aggregation] || evidence.aggregation], ['Campo', evidence.metric || 'Registros'], ['Fecha', evidence.date_column || 'No aplica']].forEach(([name, value]) => { const entry = document.createElement('div'); write(entry, 'dt', name); write(entry, 'dd', value); metadata.appendChild(entry); });
+            details.appendChild(metadata);
             evidence.filters.forEach(filter => write(details, 'p', `Filtro: ${filter.column} ${operators[filter.operator]} ${filter.value}`));
-            evidence.periods.forEach(period => write(details, 'p', `${period.label}: ${period.start} incluido → ${period.end} excluido`));
+            evidence.periods.forEach(period => write(details, 'p', `${period.label}: desde ${presentation.label(period.start, true)} (incluido) hasta ${presentation.label(period.end, true)} (sin incluir)`));
             if (evidence.variation_percentage !== null) write(details, 'p', 'El porcentaje compara el segundo período con el valor absoluto del primero como base.');
             if (evidence.date_rows_excluded) write(details, 'p', `${evidence.date_rows_excluded} fila(s) sin fecha válida no participaron en los períodos.`);
             const wrap = document.createElement('div');
-            wrap.className = 'table-wrap';
+            wrap.className = 'table-wrap chat-table-wrap';
+            wrap.tabIndex = 0;
+            wrap.setAttribute('role', 'region');
+            wrap.setAttribute('aria-label', 'Detalle del cálculo; tabla desplazable');
             const table = document.createElement('table');
-            table.className = 'data-table';
+            table.className = 'data-table chat-evidence-table';
+            write(table, 'caption', 'Detalle de los resultados');
+            const thead = document.createElement('thead');
+            const tbody = document.createElement('tbody');
             const header = document.createElement('tr');
-            ['Grupo / período', 'Resultado', 'Filas coincidentes', 'Valores usados'].forEach(label => write(header, 'th', label));
-            table.appendChild(header);
+            ['Grupo / período', 'Resultado', 'Registros', 'Con dato'].forEach((label, index) => { const th = write(header, 'th', label); th.scope = 'col'; if(index) th.className = 'chat-number'; });
+            thead.appendChild(header);
+            table.appendChild(thead);
             evidence.rows.forEach(row => {
                 const tr = document.createElement('tr');
-                [row.label, row.value === null ? 'Sin dato' : row.value, row.rows, row.values_used].forEach(value => write(tr, 'td', value));
-                table.appendChild(tr);
+                const dateGroup = Boolean(evidence.date_column && !evidence.group_by);
+                const group = write(tr, 'th', presentation.label(row.label, dateGroup));
+                group.scope = 'row';
+                [presentation.number(row.value, ['count','unique_count'].includes(evidence.aggregation)), presentation.number(row.rows, true), presentation.number(row.values_used, true)].forEach(value => { write(tr, 'td', value).className = 'chat-number'; });
+                tbody.appendChild(tr);
             });
+            if (!evidence.rows.length) { const tr = document.createElement('tr'); write(tr, 'td', 'No hay registros para estos filtros.').colSpan = 4; tbody.appendChild(tr); }
+            table.appendChild(tbody);
             wrap.appendChild(table);
             details.appendChild(wrap);
+            write(details, 'small', 'Con dato indica cuántos valores se usaron en el cálculo. Las cantidades se muestran con separadores de miles; no se presupone una moneda.').className = 'chat-table-note';
             item.appendChild(details);
         }
         messages.appendChild(item);

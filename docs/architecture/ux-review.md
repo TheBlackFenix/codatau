@@ -36,3 +36,18 @@ versiones, exportación, permisos, CSRF y reglas. No implica haber probado manua
 todos los estados con datos reales, todas las tecnologías asistivas o todos los
 navegadores. Confirmaciones finales y operaciones destructivas no se ejecutan sobre
 archivos del usuario durante esta auditoría; se prueban con datos sintéticos aislados.
+
+## Tablas del chatbot
+
+El detalle usa caption, thead, tbody, encabezados de columna/fila, cifras alineadas
+a la derecha con dígitos tabulares, filas alternadas y región desplazable accesible.
+Los metadatos del cálculo se presentan en una lista de definiciones. Los números
+se formatean para es-CO, sin asumir moneda; cero y ausencia permanecen distintos.
+Solo las etiquetas de agrupaciones temporales se presentan como día/mes/año; se
+oculta medianoche, no horas reales ni fracciones. Categorías y formatos desconocidos
+se mantienen literales. Todos los datos se insertan con textContent, nunca como HTML.
+Es presentación: no se modifican consultas, planes, resultados guardados ni caché IA.
+
+Verificación específica: `node --test tests/chat_presentation.test.cjs`, suite Python
+y revisión del historial existente, sin consultas nuevas al proveedor. A 390 px la
+tabla conserva sus 570 px desplazables dentro del contenedor, sin desbordar la página.

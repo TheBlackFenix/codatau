@@ -58,6 +58,25 @@ summary { cursor: pointer; line-height: 1.6; }
 .context-help span { right: auto; left: 0; font-size: 13px; line-height: 1.6; }
 .flash-alert { overflow-wrap: anywhere; }
 .nav-avatar { flex-shrink: 0; }
+.chat-messages { max-height: 620px; padding: 4px; scrollbar-gutter: stable; }
+.chat-message { border: 1px solid var(--gray-200); background: var(--white); padding: 20px; }
+.chat-question { display: block; color: var(--purple-dark); margin-bottom: 8px; font-size: 15px; overflow-wrap: anywhere; }
+.chat-answer { margin-bottom: 14px; color: var(--gray-700); }
+.chat-evidence { border-top: 1px solid var(--gray-100); margin-top: 12px; }
+.chat-calculation-meta { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; padding: 14px; background: var(--gray-50); border-radius: 10px; margin: 10px 0 16px; }
+.chat-calculation-meta dt { color: var(--gray-600); font-size: 12px; }
+.chat-calculation-meta dd { margin: 3px 0 0; color: var(--gray-900); font-weight: 600; overflow-wrap: anywhere; }
+.chat-table-wrap { border: 1px solid var(--gray-200); margin-block: 16px; }
+.chat-evidence-table { min-width: 570px; }
+.chat-evidence-table caption { text-align: left; padding: 12px 16px; color: var(--gray-600); background: var(--gray-50); font-size: 12px; }
+.chat-evidence-table tbody th, .chat-evidence-table tbody td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--gray-200); font-size: 13px; font-weight: 400; line-height: 1.6; }
+.chat-evidence-table tbody th { color: var(--gray-900); overflow-wrap: anywhere; max-width: 360px; }
+.chat-evidence-table .chat-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chat-evidence-table tbody tr:nth-child(even) { background: #faf8fd; }
+.chat-evidence-table tbody tr:hover { background: var(--purple-soft); }
+.chat-evidence-table tbody td:first-of-type { font-weight: 600; }
+.chat-table-note { display: block; color: var(--gray-600); margin-bottom: 10px; }
+@media(max-width: 600px) { .chat-calculation-meta { grid-template-columns: repeat(2,minmax(0,1fr)); } .chat-message { padding: 14px; } }
 @media(max-width: 960px) {
     .insights-header-card { flex-wrap: wrap; }
     .insights-header-card > div { min-width: 0; }
