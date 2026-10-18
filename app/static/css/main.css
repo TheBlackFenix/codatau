@@ -1520,6 +1520,10 @@ body {
 }
 
 [hidden] { display: none !important; }
+.context-help { position: relative; display: inline-block; }
+.context-help summary { cursor: help; border: 1px solid #79559c; border-radius: 50%; width: 24px; text-align: center; list-style: none; }
+.context-help span { display: none; position: absolute; z-index: 100; top: 28px; right: 0; width: min(300px, 80vw); padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px #0002; color: #222; }
+.context-help[open] span, .context-help:hover span, .context-help:focus-within span { display: block; }
 
 .dataset-chat { margin-bottom: 24px; }
 .chat-messages { max-height: 450px; overflow-y: auto; margin: 16px 0; }

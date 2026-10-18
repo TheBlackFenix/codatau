@@ -46,6 +46,8 @@ def create_app(config_name='default', config_overrides=None):
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(files_bp)
     app.register_blueprint(reports_bp)
+    from app.routes.ai_settings import install_ai_settings
+    install_ai_settings(app)
 
     # Importar modelos para que SQLAlchemy los registre
     from app.models import (

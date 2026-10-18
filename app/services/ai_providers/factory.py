@@ -16,9 +16,19 @@ class AIProviderFactory:
 
     @classmethod
     def configuration_from_app(cls, app_config):
+        model = str(app_config.get('AI_MODEL', '')).strip()
+        from flask import has_request_context, session
+        from flask_login import current_user
+        if has_request_context() and current_user.is_authenticated and app_config.get('AI_MODEL_SELECTOR_ENABLED'):
+            choice = session.get('ai_model_choice', {})
+            if isinstance(choice, dict) and choice.get('user_id') == current_user.id:
+                from flask import current_app
+                models, _ = current_app.extensions['google_model_catalog'].get(app_config)
+                if choice.get('model') in {item['id'] for item in models}:
+                    model = choice['model']
         return ProviderConfiguration(
             provider=str(app_config.get('AI_PROVIDER', 'disabled')).strip().lower(),
-            model=str(app_config.get('AI_MODEL', '')).strip(),
+            model=model,
             api_key=str(app_config.get('AI_API_KEY', '')).strip(),
             base_url=str(app_config.get('AI_BASE_URL', '')).strip(),
             response_mode=str(app_config.get('AI_RESPONSE_MODE', 'json_schema')).strip(),

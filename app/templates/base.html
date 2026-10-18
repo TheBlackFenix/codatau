@@ -81,6 +81,23 @@
         </div>
     </nav>
 
+    {% if ai_models %}
+    <div style="padding:12px 28px;background:#f5f1fa;border-bottom:1px solid #ded5e9">
+        <form method="POST" action="{{ url_for('ai_settings.select_model') }}" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            {{ ai_model_form.hidden_tag() }}
+            <input type="hidden" name="return_to" value="{{ request.path }}">
+            <label for="ai-model">Modelo de IA · Pruebas</label>
+            <select id="ai-model" name="model" class="form-control" style="width:auto;max-width:100%">
+                {% for model in ai_models %}<option value="{{ model.id }}" {% if model.id == ai_selected_model %}selected{% endif %}>{{ model.label }} — {{ model.id }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-secondary btn-sm">Usar modelo</button>
+            <button name="action" value="refresh" class="btn btn-secondary btn-sm">Actualizar lista</button>
+            <details class="context-help"><summary aria-label="Ayuda sobre el modelo de IA">?</summary><span>El modelo es la IA que te ayuda a analizar y limpiar. Cambiarlo afecta solo tus próximas consultas en esta sesión. No modifica datos ni resultados anteriores. La disponibilidad y el consumo dependen de tu cuenta de Google. Los modelos especializados en imagen o audio no aparecen aquí.</span></details>
+        </form>
+        {% if ai_catalog_failed %}<small>No pudimos consultar Google. Mostramos el último listado disponible; puedes reintentar con «Actualizar lista».</small>{% endif %}
+    </div>
+    {% endif %}
+
     <!-- FLASH MESSAGES -->
     <div style="padding: 0 28px;">
         {% with messages = get_flashed_messages(with_categories=true) %}

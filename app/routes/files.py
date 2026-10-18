@@ -662,7 +662,7 @@ def cleaning(file_id):
         ai_candidate_count=ai_candidate_count,
         ai_configured=ai_configured,
         ai_provider=current_app.config.get('AI_PROVIDER'),
-        ai_model=current_app.config.get('AI_MODEL'),
+        ai_model=AIProviderFactory.configuration_from_app(current_app.config).model,
         ai_outcome=ai_outcome,
         ai_suggestions=ai_suggestions,
         dataset_context=dataset_context,

@@ -16,6 +16,7 @@ def _env_int(name, default):
         raise ValueError(f'{name} debe ser un número entero.') from exc
 
 class Config:
+    AI_MODEL_SELECTOR_ENABLED = os.environ.get('AI_MODEL_SELECTOR_ENABLED', '0') == '1'
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-insegura-cambiar-en-produccion'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = _env_int('MAX_CONTENT_LENGTH', 50 * 1024 * 1024)
@@ -38,6 +39,7 @@ class Config:
     AI_CONTEXT_MAX_COLUMNS = _env_int('AI_CONTEXT_MAX_COLUMNS', 80)
 
 class DevelopmentConfig(Config):
+    AI_MODEL_SELECTOR_ENABLED = os.environ.get('AI_MODEL_SELECTOR_ENABLED', '1') == '1'
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = (
         os.environ.get('DATABASE_URL') or
@@ -50,6 +52,7 @@ class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
 
 class TestingConfig(Config):
+    AI_MODEL_SELECTOR_ENABLED = True
     TESTING = True
     WTF_CSRF_ENABLED = False
     AUTO_CREATE_DATABASE = True
