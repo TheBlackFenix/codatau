@@ -23,10 +23,20 @@
         </select>
         <details class="context-help"><summary aria-label="Ayuda para elegir el tipo de dato">?</summary><span>Elige Identificador para documentos o códigos: no se suman y sus ceros iniciales son importantes. Número entero sirve para cantidades como 2; Número decimal, para valores como 2.5. No inventaremos valores que no se puedan convertir.</span></details>
         <div data-decimal {% if card.choice.type != 'decimal' %}hidden{% endif %}>
-            <label for="separator-{{ card.index }}">¿Qué separa la parte decimal?</label>
+            <label for="separator-{{ card.index }}">Separador decimal de referencia</label>
             <select class="form-control" id="separator-{{ card.index }}" name="column_{{ card.index }}_separator"><option value="." {% if card.choice.decimal_separator == '.' %}selected{% endif %}>Punto: 3.5</option><option value="," {% if card.choice.decimal_separator == ',' %}selected{% endif %}>Coma: 3,5</option></select>
         </div>
         <div data-negative {% if card.choice.type not in ['integer', 'decimal'] %}hidden{% endif %}>
+            <label><input type="checkbox" name="column_{{ card.index }}_numeric_rules" value="standard-es-v1" data-numeric-rules {% if card.choice.get('numeric_rules') == 'standard-es-v1' %}checked{% endif %}> Proponer conversiones numéricas sin IA</label>
+            <div data-number-source {% if not card.choice.get('numeric_rules') %}hidden{% endif %}>
+                <label for="number-source-{{ card.index }}">¿Cómo vienen escritos los números del archivo?</label>
+                <select class="form-control" id="number-source-{{ card.index }}" name="column_{{ card.index }}_number_source">
+                    <option value="auto" {% if card.choice.get('number_source', 'auto') == 'auto' %}selected{% endif %}>Detectar los claros; preguntar por los ambiguos</option>
+                    <option value="point" {% if card.choice.get('number_source') == 'point' %}selected{% endif %}>Punto decimal y coma de miles: 1,234.56</option>
+                    <option value="comma" {% if card.choice.get('number_source') == 'comma' %}selected{% endif %}>Coma decimal y punto de miles: 1.234,56</option>
+                </select>
+            </div>
+            <details class="context-help"><summary aria-label="Ayuda sobre conversiones numéricas">?</summary><span>Proponemos reglas para números en texto, notación científica y enteros escritos en español, como dos → 2. Una decisión aplicará el grupo en la vista previa. 1,234 puede tener dos significados: confirma el formato de origen para resolverlo. No extraemos números de frases como dos o tres ni inventamos cantidades.</span></details>
             <label for="negative-{{ card.index }}">¿Este campo puede tener valores negativos?</label>
             <select class="form-control" id="negative-{{ card.index }}" name="column_{{ card.index }}_negative">
                 <option value="unknown" {% if card.choice.get('negative_policy', 'unknown') == 'unknown' %}selected{% endif %}>No estoy seguro: revisar según el contexto</option>
@@ -78,6 +88,9 @@
             card.querySelector('[data-negative]').hidden = !['integer', 'decimal'].includes(select.value);
         };
         select.addEventListener('change', sync); sync();
+        const rules = card.querySelector('[data-numeric-rules]');
+        const syncRules = () => { card.querySelector('[data-number-source]').hidden = !rules.checked; };
+        rules.addEventListener('change', syncRules); syncRules();
     });
 })();
 </script>

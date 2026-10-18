@@ -8,6 +8,7 @@ from app.services.cleaning_treatment_service import CleaningTreatmentService as 
 from app.services.duplicate_configuration_service import DuplicateConfigurationService as Duplicates
 from app.services.value_proposal_service import ValueProposalService as Proposals
 from app.services.date_normalization_service import DateNormalizationService as Dates
+from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 
 
 def cell(value):
@@ -29,18 +30,14 @@ class WizardResult:
 
 
 class WizardExecutionService:
-    RULE_VERSION = '3-numeric-bounds'
+    RULE_VERSION = '4-numeric-catalog'
 
     @staticmethod
     def convert(value, preference):
         if pd.isna(value): return None
         kind=preference['type']
-        if kind=='integer':
-            return int(Decimal(str(value).strip()))
-        if kind=='decimal':
-            number=Treatments.number(value,preference)
-            if number is None: raise ValueError('Un valor no coincide con el tipo decimal.')
-            return number
+        if kind in {'integer', 'decimal'}:
+            return Numbers.convert(value, preference)
         if kind=='date':
             return Dates.convert(value, preference)
         if kind=='boolean':
@@ -100,25 +97,33 @@ class WizardExecutionService:
                     working.at[row,column]=policy['replacement'];causes[key]='Reemplazo elegido'
                     if Treatments.issues(pd.DataFrame({column:[policy['replacement']]}),{column:config.columns[column]}):protected.add(key)
                 elif action=='null':working.at[row,column]=None;causes[key]='Dejar vacío'
+                elif action=='normalize_number':
+                    preference=config.columns[column]
+                    parsed=Numbers.inspect(original.at[row,column],preference)
+                    if parsed.status!='valid' or not Numbers.allowed(parsed.value,preference):
+                        raise ValueError('Una conversión numérica ya no cumple tus reglas. Revisa los tratamientos.')
+                    working.at[row,column]=Numbers.convert(original.at[row,column],preference)
+                    causes[key]='Regla sin IA: '+Numbers.RULES[parsed.rule]
                 elif action in {'date_dmy','date_mdy'}:
                     preference={**config.columns[column], 'date_source':action.removeprefix('date_')}
                     working.at[row,column]=Dates.convert(original.at[row,column],preference)
                     causes[key]='Orden de día y mes confirmado para el grupo'
                 elif action=='absolute':
                     pref=config.columns[column]
-                    value=original.at[row,column]
-                    text=str(value).strip()
-                    if isinstance(value,str):text=text.replace(pref.get('decimal_separator','.'),'.')
-                    replacement=format(abs(Decimal(text)),'f')
+                    value=Treatments.number(original.at[row,column],pref)
+                    replacement=format(value.copy_abs(),'f')
                     if (('minimum' in pref and Decimal(replacement) < Decimal(pref['minimum'])) or
                             ('maximum' in pref and Decimal(replacement) > Decimal(pref['maximum']))):
                         raise ValueError('Convertir el grupo a positivo dejaría valores fuera de tu rango. Elige otro tratamiento para este grupo.')
-                    working.at[row,column]=replacement.replace('.',pref.get('decimal_separator','.'))
+                    working.at[row,column]=Decimal(replacement)
                     causes[key]='Conversión a positivo confirmada para el grupo'
                 elif action=='ai':
                     replacement=approved.get((column,str(original.at[row,column])))
                     if replacement is None:protected.add(key)
-                    else:working.at[row,column]=replacement;causes[key]='Propuesta de IA aceptada'
+                    else:
+                        pref=config.columns[column]
+                        working.at[row,column]=Numbers.convert(replacement,{**pref,'numeric_rules':''}) if pref['type'] in {'integer','decimal'} else replacement
+                        causes[key]='Propuesta de IA aceptada'
                 elif action!='quarantine':raise ValueError('Tratamiento no válido.')
         mixed=[]
         comparison_dates={}

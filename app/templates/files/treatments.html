@@ -15,6 +15,10 @@
         {% for summary in date_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} fecha(s) interpretables.</p><ul>{% for example in summary.examples %}<li>{{ example.before }} → {{ example.after }}</li>{% endfor %}</ul>{% endfor %}
         <p>Solo se aplicarán al confirmar la vista previa. Los casos problemáticos se muestran por separado.</p>
     </details>{% endif %}
+    {% if numeric_summaries %}<details class="card" style="margin-bottom:16px"><summary>Números reconocidos por reglas, sin consultas a IA</summary>
+        {% for summary in numeric_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.rule }} · {{ summary.count }} valor(es).</p><ul>{% for example in summary.examples %}<li>{{ example.before }} → {{ example.after }}</li>{% endfor %}</ul>{% endfor %}
+        <p>El texto numérico simple se convierte al tipo elegido. Para los otros patrones, elige aplicar las conversiones en el grupo de la columna o conservar los valores. Nada cambia hasta confirmar la vista previa.</p>
+    </details>{% endif %}
     {% for column, scenarios in issues|groupby('column') %}
     <details class="card" style="margin-bottom:16px">
         <summary><strong>{{ column }}</strong> · {{ scenarios|length }} escenario(s)</summary>
@@ -24,11 +28,13 @@
             {% if issue.scenario == 'range' %}<p>Es una sugerencia del contexto, no una certeza. Si estos valores son válidos en tu caso, puedes conservarlos.</p>{% endif %}
             {% if issue.scenario == 'bounds' %}{% set limits = configuration.columns[issue.column] %}<p>Tu rango permitido: {{ limits.get('minimum', 'sin mínimo') }} a {{ limits.get('maximum', 'sin máximo') }}, incluidos los extremos. Una decisión cubre este grupo. No ajustaremos valores al límite ni inventaremos correcciones.</p>{% endif %}
             {% if issue.scenario == 'date_ambiguous' %}<p>Una sola elección resolverá este grupo: 03/04 puede ser 3 de abril o 4 de marzo. Si el archivo mezcla ambos criterios, conserva o separa el grupo en lugar de adivinar.</p>{% endif %}
+            {% if issue.scenario == 'number_ambiguous' %}<p>1,234 podría ser mil doscientos treinta y cuatro o un decimal. Vuelve a Definir columnas y confirma los separadores del archivo para resolver el grupo. No lo adivinaremos con IA.</p><a href="{{ url_for('files.configure_columns', file_id=record.id) }}">Revisar formato numérico de origen</a>{% endif %}
+            {% if issue.scenario == 'numeric_convertible' %}<p>Estas celdas tienen una conversión reconocida por reglas. Una sola decisión aplica las propuestas para todo el grupo, sin consumir tokens. Los valores ambiguos o fuera de tus límites se revisan por separado.</p>{% endif %}
             {% if issue.scenario == 'negative' %}<p>Indicaste que este campo no permite negativos. Elige una sola acción para este grupo. Convertir a positivo conserva la magnitud: −3 pasa a 3. No elijas esta opción si el signo representa una devolución, un saldo u otra información válida.</p>{% endif %}
             {% if issue.examples %}<p>Ejemplos: {{ issue.examples|join(' · ') }}</p>{% endif %}
             <label for="action-{{ issue.id }}">¿Qué quieres hacer?</label>
             <select class="form-control" id="action-{{ issue.id }}" name="action_{{ issue.id }}" data-treatment-action>
-                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario == 'missing' or issue.type == 'date')) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario != 'invalid' or issue.type not in ['integer', 'decimal', 'boolean'])) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') and not (value == 'normalize_number' and issue.scenario != 'numeric_convertible') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
             <details class="context-help"><summary aria-label="Ayuda sobre tratamientos">?</summary><span>Conservar no toca el valor. Separar apartará toda la fila para revisarla y recuperarla. Reemplazar o vaciar cambia solo esta celda. La IA propondrá una solución que deberás aprobar, sin reconstruir contactos ni inventar datos faltantes.</span></details>
             <div data-treatment-replacement {% if decision.action != 'replace' %}hidden{% endif %}>
@@ -57,6 +63,7 @@
  const sync=()=>{const replacement=card.querySelector('[data-treatment-replacement]');replacement.hidden=select.value!=='replace';replacement.querySelector('input').required=select.value==='replace';card.querySelector('[data-treatment-explanation]').textContent=explanations[select.value]||'';};
  explanations.date_dmy='Se interpretará todo este grupo con el día primero. Las fechas claras y las imposibles no se modifican por esta decisión.';
  explanations.date_mdy='Se interpretará todo este grupo con el mes primero. Revisa los ejemplos antes de confirmar.';
+ explanations.normalize_number='Se aplicará la regla reconocida a cada celda de este grupo, sin IA ni redondeos a entero. Revisa el resultado antes de confirmar la versión.';
  select.addEventListener('change',sync);sync();
  });
  form.addEventListener('change',()=>{dirty=true;form.querySelector('[data-unsaved-warning]').textContent='Tienes cambios sin guardar.';});

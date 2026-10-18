@@ -1,10 +1,9 @@
 import hashlib
-import math
-import numbers
 import re
 from decimal import Decimal
 import pandas as pd
 from app.services.date_normalization_service import DateNormalizationService as Dates
+from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 
 
 class CleaningTreatmentService:
@@ -13,18 +12,13 @@ class CleaningTreatmentService:
                'ai': 'Pedir una propuesta a la IA',
                'absolute': 'Convertir todos estos negativos a positivo',
                'date_dmy': 'Interpretar este grupo como día/mes/año',
-               'date_mdy': 'Interpretar este grupo como mes/día/año'}
+               'date_mdy': 'Interpretar este grupo como mes/día/año',
+               'normalize_number': 'Aplicar las conversiones numéricas propuestas, sin IA'}
 
     @staticmethod
     def number(value, preference):
-        if isinstance(value, bool): return None
-        if isinstance(value, numbers.Real):
-            return float(value) if math.isfinite(float(value)) else None
-        separator = preference.get('decimal_separator', '.')
-        text = str(value).strip()
-        if not re.fullmatch(r'[+-]?\d+(?:' + re.escape(separator) + r'\d+)?', text): return None
-        result = float(text.replace(separator, '.'))
-        return result if math.isfinite(result) else None
+        result = Numbers.inspect(value, preference)
+        return result.value if result.status == 'valid' else None
 
     @classmethod
     def issues(cls, dataframe, preferences, context=None, include_rows=False):
@@ -39,9 +33,11 @@ class CleaningTreatmentService:
             numeric = None
             ambiguous = pd.Series(False, index=series.index)
             if kind in {'integer','decimal'}:
-                numeric = series.map(lambda value: cls.number(value, pref))
-                invalid = numeric.isna()
-                if kind == 'integer': invalid |= numeric.map(lambda value: pd.notna(value) and not float(value).is_integer())
+                interpretations = series.map(lambda value: Numbers.inspect(value, pref))
+                numeric = interpretations.map(lambda result: result.value)
+                ambiguous = interpretations.map(lambda result: result.status == 'ambiguous')
+                invalid = interpretations.map(lambda result: result.status == 'invalid')
+                if kind == 'integer': invalid |= numeric.map(lambda value: pd.notna(value) and value != value.to_integral_value())
             elif kind == 'email':
                 invalid = ~series.map(lambda value: bool(re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', str(value).strip())))
             elif kind == 'phone':
@@ -55,6 +51,8 @@ class CleaningTreatmentService:
             scenarios = [('missing', 'Valores vacíos', empty), ('invalid', 'Valores que no coinciden con el tipo elegido', invalid & ~empty)]
             if kind == 'date':
                 scenarios.append(('date_ambiguous', 'Fechas que necesitan confirmar el orden del día y mes', ambiguous))
+            elif numeric is not None:
+                scenarios.append(('number_ambiguous', 'Números que necesitan confirmar sus separadores', ambiguous))
             constraints = roles.get(name, {}).get('suggested_constraints', [])
             negative_policy = pref.get('negative_policy', 'unknown')
             if numeric is not None and negative_policy == 'deny':
@@ -64,15 +62,20 @@ class CleaningTreatmentService:
                 scenarios.append(('range', 'Valores fuera del rango sugerido por el contexto', mask & ~empty & ~invalid))
             if numeric is not None and any(k in pref for k in ('minimum', 'maximum')):
                 def outside(value):
-                    if cls.number(value, pref) is None:
+                    number = cls.number(value, pref)
+                    if number is None:
                         return False
-                    number = Decimal(str(value).strip().replace(pref.get('decimal_separator', '.'), '.'))
                     if negative_policy == 'deny' and number < 0:
                         return False  # The sign group already owns this cell.
                     return (('minimum' in pref and number < Decimal(pref['minimum'])) or
                             ('maximum' in pref and number > Decimal(pref['maximum'])))
                 mask = series.map(outside) & ~empty & ~invalid
                 scenarios.append(('bounds', 'Valores fuera del rango que definiste', mask))
+            if numeric is not None and pref.get('numeric_rules') == Numbers.VERSION:
+                convertible = interpretations.map(lambda result: result.status == 'valid' and result.rule != 'numeric_text')
+                for _, _, mask in scenarios:
+                    convertible &= ~mask
+                scenarios.append(('numeric_convertible', 'Conversiones numéricas disponibles sin IA', convertible))
             for scenario, label, mask in scenarios:
                 if not mask.any(): continue
                 key = hashlib.sha256((name+'\0'+scenario).encode()).hexdigest()[:24]
@@ -98,6 +101,10 @@ class CleaningTreatmentService:
                 raise ValueError('Confirma el orden de fechas únicamente para un grupo de fechas ambiguas.')
             if action == 'ai' and issue.get('type') == 'date':
                 raise ValueError('Resuelve las fechas por grupo; no pediremos a la IA adivinar fechas individuales.')
+            if action == 'ai' and issue['scenario'] in {'numeric_convertible', 'number_ambiguous', 'bounds', 'negative', 'range'}:
+                raise ValueError('Este grupo se resuelve con reglas o una decisión de tratamiento, no con propuestas individuales de IA.')
+            if action == 'normalize_number' and issue['scenario'] != 'numeric_convertible':
+                raise ValueError('Solo puedes aplicar conversiones numéricas a un grupo reconocido por el catálogo.')
             item = {'action':action}
             if action == 'replace':
                 replacement = form.get('replacement_'+issue['id'], '').strip()

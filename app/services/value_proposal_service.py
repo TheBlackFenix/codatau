@@ -9,6 +9,7 @@ from app.services.structured_ai_service import StructuredAIService
 from app.services.cleaning_treatment_service import CleaningTreatmentService as Treatments
 from app.extensions import db
 from app.services.data_service import classify_numeric_column
+from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 
 
 class ValueProposalService:
@@ -56,7 +57,7 @@ class ValueProposalService:
     def fingerprint(cls, record, configuration, context, app_config):
         provider = AIProviderFactory.configuration_from_app(app_config)
         payload = {'columns':configuration.columns,'duplicates':configuration.duplicates,
-                   'treatments':configuration.treatments,'context':context or {}}
+                   'treatments':configuration.treatments,'context':context or {}, 'numeric_rule_version':Numbers.VERSION}
         return StructuredAIService.fingerprint(record, provider, cls.PURPOSE, cls.VERSION, payload)
 
     @staticmethod
@@ -76,14 +77,21 @@ class ValueProposalService:
             if not isinstance(value,str) or len(value)>200: raise ValueError('Invalid value')
             status=proposal['status']
             if status=='replace':
-                check=Treatments.issues(pd.DataFrame({'value':[value]}),{'value':pref})
+                # Provider output uses the requested target separator, not the
+                # source file's thousands/decimal convention.
+                target_pref={**pref, 'numeric_rules': ''} if pref['type'] in {'integer','decimal'} else pref
+                check=Treatments.issues(pd.DataFrame({'value':[value]}),{'value':target_pref})
                 if check or not value.strip(): raise ValueError('Replacement does not match target')
                 original=expected[key]['original']
                 # Never silently round or change an already intelligible magnitude.
                 if pref['type'] in {'integer','decimal'}:
                     from decimal import Decimal, InvalidOperation
-                    try: parsed=Decimal(original.replace(',','.'))
-                    except InvalidOperation: parsed=None
+                    source=Numbers.inspect(original,pref)
+                    if source.status=='ambiguous':raise ValueError('Ambiguous source needs a format decision')
+                    if source.status=='valid':parsed=source.value
+                    else:
+                        try: parsed=Decimal(original.replace(',','.'))
+                        except InvalidOperation: parsed=None
                     if parsed is not None and parsed.is_finite() and parsed != Decimal(value.replace(',','.')):
                         raise ValueError('Changed magnitude')
             elif value:

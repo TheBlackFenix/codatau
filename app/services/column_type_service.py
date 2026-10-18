@@ -1,5 +1,6 @@
 import re
 from decimal import Decimal
+from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
 
 
 class ColumnTypeService:
@@ -41,7 +42,7 @@ class ColumnTypeService:
                     break
             choice = (saved or {}).get(name, {})
             cards.append({'index': index, 'name': name, 'suggested': inferred,
-                          'choice': choice or {'type': inferred, 'decimal_separator': '.', 'date_format': 'iso', 'date_source': 'auto'},
+                          'choice': choice or {'type': inferred, 'decimal_separator': '.', 'date_format': 'iso', 'date_source': 'auto', 'numeric_rules': Numbers.VERSION, 'number_source': 'auto'},
                           'examples': examples})
         return cards
 
@@ -75,6 +76,14 @@ class ColumnTypeService:
                 if len(bounds) == 2 and Decimal(bounds['minimum']) > Decimal(bounds['maximum']):
                     raise ValueError('El mínimo no puede ser mayor que el máximo.')
                 choice.update(bounds)
+                rules = form.get(key + '_numeric_rules', '')
+                if rules:
+                    if rules != Numbers.VERSION:
+                        raise ValueError('Elige un catálogo válido de conversiones numéricas.')
+                    source = form.get(key + '_number_source', 'auto')
+                    if source not in Numbers.SOURCES:
+                        raise ValueError('Elige cómo interpretar los separadores de los números de origen.')
+                    choice.update(numeric_rules=rules, number_source=source)
             if kind == 'decimal':
                 separator = form.get(key + '_separator')
                 if separator not in {'.', ','}:
