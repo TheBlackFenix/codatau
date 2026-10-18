@@ -51,10 +51,11 @@ Este paso aún no gobierna el ejecutor: se indica explícitamente en pantalla.
 Su aplicación conjunta se conectará con duplicados, tratamientos y vista previa
 en los siguientes bloques, evitando aplicar parcialmente decisiones nuevas.
 
-## Siguientes etapas pendientes
+## Estado del recorrido
 
-1. Integrar vista previa, restauración, invalidación de propuestas al cambiar tipos
-   y pruebas de recorrido completo del asistente.
+Los pasos de configuración, propuestas, vista previa, aplicación versionada y
+resultado ya están conectados. Siguen pendientes validación de usabilidad con
+archivos reales y optimizaciones para grandes volúmenes; no hay trabajos en cola.
 
 ## Etapa 3: navegación y preferencias de duplicados implementadas
 
@@ -126,3 +127,43 @@ antiguas y respuestas recibidas después de cambiar el borrador en otra ventana.
 El próximo bloque debe consumir SOLO decisiones aceptadas en la vista previa
 conjunta y la aplicación versionada. Rechazar conserva los valores originales;
 no es permiso para borrarlos ni enviarlos automáticamente a cuarentena.
+
+## Etapa 6: vista previa y confirmación implementadas
+
+`WizardExecutionService` toma una copia de la versión activa. Valida que estén
+guardados todos los escenarios y que cada valor solicitado a la IA tenga decisión
+actual. Revalida las propuestas aceptadas; las rechazadas se conservan. No ejecuta
+SQL ni código del modelo. El orden es separar filas solicitadas, resolver celdas,
+convertir tipos y recalcular duplicados sobre ese resultado. Los recuentos del paso
+2 son orientativos hasta esta vista previa conjunta.
+
+Los valores conservados o reemplazos incompatibles no se convierten silenciosamente
+a nulos. Cuando una columna mezcla texto con números o fechas, se almacena como
+texto preservando representaciones y se advierte que no quedó totalmente convertida.
+Enteros fuera del rango representable también quedan como texto, sin redondearse.
+El pipeline inicial ya normalizó la carga: no se reconstruyen ceros iniciales ni
+información que no exista en esa versión de origen.
+
+Confirmar exige un token firmado con propietario, archivo, versión de origen,
+revisión de configuración, huella del plan/modelo y hash del archivo analítico.
+Vence a los 30 minutos. El servidor vuelve a calcular y valida el estado antes
+de materializar. Una actualización atómica consume la revisión del borrador y
+serializa confirmaciones; los archivos se escriben con nombres únicos para que
+un fallo no borre artefactos de otra solicitud. La transacción activa la versión
+solo después de generar y perfilar el resultado. En un fallo se revierte la base
+y se eliminan únicamente los nuevos artefactos de esa solicitud.
+
+La versión registra instantánea de columnas, duplicados, tratamientos, propuestas,
+decisiones y cambios por celda (registro de origen, columna, antes, después, motivo),
+además de números de registros duplicados retirados. El registro 1 representa el
+primer dato de la versión de origen, no una línea física del CSV original. El
+paquete de calidad existente incluye esa auditoría en `reporte_calidad.json`.
+Puede haber registros transformados que después sean retirados como duplicados:
+los contadores de cambios, cuarentena y duplicados no deben sumarse como categorías
+mutuamente excluyentes. Las filas separadas conservan sus valores de origen y motivos.
+
+La pantalla final permite descargar el paquete, consultar el historial/restaurar
+versiones y solicitar métricas de la versión activa. Un resultado vacío también
+puede confirmarse, con advertencia explícita previa y filas separadas recuperables.
+La configuración conserva su versión de origen: para limpiar una versión nueva
+hay que revisarla de nuevo, impidiendo reaplicar por accidente una vista antigua.

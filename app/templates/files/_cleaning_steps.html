@@ -4,8 +4,8 @@
         <li {% if request.endpoint == 'files.configure_duplicates' %}aria-current="step"{% endif %}><a href="{{ url_for('files.configure_duplicates', file_id=record.id) }}">Identifica duplicados</a>{% if configuration and configuration.duplicates and configuration.source_version == record.active_stored_filename %}<small> · Guardado</small>{% endif %}</li>
         <li {% if request.endpoint == 'files.configure_treatments' %}aria-current="step"{% endif %}><a href="{{ url_for('files.configure_treatments', file_id=record.id) }}">Decide cómo limpiar</a>{% if treatment_review_needed %}<small> · Revisa cambios</small>{% elif configuration and configuration.treatments and configuration.source_version == record.active_stored_filename %}<small> · Guardado</small>{% endif %}</li>
         <li {% if request.endpoint == 'files.review_values' %}aria-current="step"{% endif %}><a href="{{ url_for('files.review_values', file_id=record.id) }}">Revisa propuestas de IA</a></li>
-        <li style="color:#666">Revisa y aplica (próximamente)</li>
-        <li style="color:#666">Consulta tus resultados (próximamente)</li>
+        <li {% if request.endpoint == 'files.wizard_preview' %}aria-current="step"{% endif %}><a href="{{ url_for('files.wizard_preview',file_id=record.id) }}">Revisa y aplica</a></li>
+        <li style="color:#666">Consulta tus resultados · Disponible al confirmar</li>
     </ol>
     <small>Estás configurando la limpieza. Ninguna fila cambia por guardar tus preferencias.</small>
 </nav>

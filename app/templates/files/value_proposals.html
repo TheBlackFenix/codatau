@@ -36,9 +36,10 @@
     {% endif %}{% endfor %}
     {% if not candidates %}<p>No solicitaste transformaciones con IA. No es necesario enviar datos al proveedor en este paso.</p>{% else %}<p>Quedan {{ undecided }} valores sin una decisión guardada, incluidos los que todavía no se han analizado.</p>{% endif %}
     <button class="btn btn-purple" name="action" value="decide">Guardar decisiones</button>
+    <a class="btn btn-purple" href="{{ url_for('files.wizard_preview',file_id=record.id) }}">Revisar limpieza completa</a>
     <a class="btn btn-secondary" href="{{ url_for('files.configure_treatments', file_id=record.id) }}">Anterior</a>
     <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
-    <p>La vista previa conjunta y la aplicación de una nueva versión se incorporarán en el próximo paso. Tus datos siguen intactos.</p>
+    <p>Guarda tus decisiones antes de revisar la limpieza completa. La vista previa usará únicamente lo guardado; tus datos siguen intactos hasta confirmar.</p>
 </form>
 <script>
 (() => {

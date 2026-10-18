@@ -304,7 +304,8 @@ class DataService:
             stats['row_count'] = len(df)
 
         # Preview: primeras 10 filas como lista de dicts
-        summary['preview'] = df.head(10).fillna('').to_dict(orient='records')
+        preview = df.head(10).astype(object)
+        summary['preview'] = preview.where(pd.notna(preview), '').to_dict(orient='records')
 
         return summary
 

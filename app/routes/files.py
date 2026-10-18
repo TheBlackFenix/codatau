@@ -257,6 +257,99 @@ def review_values(file_id):
                            ai_configured=AIProviderFactory.is_configured(current_app.config), fingerprint=fingerprint)
 
 
+def _wizard_ready(record):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    config=CleaningConfiguration.query.filter_by(file_id=record.id,user_id=current_user.id).first()
+    if config is None or config.source_version!=record.active_stored_filename or not config.treatments:
+        raise ValueError('Guarda la configuración completa de la versión activa antes de revisar y aplicar.')
+    return config
+
+
+def _wizard_token(record, config, context):
+    from app.services.value_proposal_service import ValueProposalService
+    return {'file':record.id,'user':current_user.id,'source':record.active_stored_filename,
+            'revision':config.revision,'fingerprint':ValueProposalService.fingerprint(record,config,context,current_app.config),
+            'source_hash':_pipeline()._sha256(_pipeline().paths_for(record.active_stored_filename)[0])}
+
+
+@files_bp.route('/cleaning/<int:file_id>/wizard-preview',methods=['GET','POST'])
+@login_required
+def wizard_preview(file_id):
+    from itsdangerous import URLSafeTimedSerializer, BadSignature
+    from werkzeug.exceptions import HTTPException
+    from sqlalchemy import update, func
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.wizard_execution_service import WizardExecutionService
+    record=_record_for_user(file_id)
+    form=CleaningActionForm()
+    serializer=URLSafeTimedSerializer(current_app.secret_key,salt='cleaning-wizard-confirmation')
+    filename=None
+    try:
+        config=_wizard_ready(record)
+        pipeline,_,_,profile=_cleaning_context(record)
+        context=_latest_dataset_context(record,profile)
+        expected=_wizard_token(record,config,context)
+        if request.method=='POST':
+            if not form.validate_on_submit():abort(400)
+            try:submitted=serializer.loads(request.form.get('preview_token',''),max_age=1800)
+            except BadSignature:raise ValueError('La vista previa venció o no es válida. Revísala de nuevo.')
+            if submitted!=expected:raise ValueError('El archivo o tus decisiones cambiaron. Genera otra vista previa.')
+            # Consume the draft revision atomically before writing any artifacts.
+            locked=db.session.execute(update(CleaningConfiguration).where(CleaningConfiguration.id==config.id,CleaningConfiguration.revision==expected['revision']).values(revision=expected['revision']+1))
+            if locked.rowcount!=1:raise ValueError('La limpieza ya se confirmó o cambió en otra ventana.')
+            db.session.expire(record,['versions'])
+            if record.active_stored_filename!=expected['source']:raise ValueError('La versión activa cambió. Revisa de nuevo la limpieza.')
+        result=WizardExecutionService.build(_load_dataframe(record),record,config,context,current_app.config)
+        if request.method=='POST':
+            import duckdb
+            number=(db.session.query(func.max(DatasetVersion.version_number)).filter_by(file_id=record.id).scalar() or 0)+1
+            filename=f'{Path(record.filename).stem}.wizard-{uuid.uuid4().hex}.csv'
+            parquet,_=pipeline.paths_for(filename)
+            connection=duckdb.connect()
+            try:
+                connection.from_df(result.cleaned).write_parquet(str(parquet),compression='zstd')
+                if not result.quarantine.empty:
+                    connection.from_df(result.quarantine).write_parquet(str(pipeline.quarantine_path_for(filename)),compression='zstd')
+            finally:connection.close()
+            artifact=pipeline.profile_existing(filename,_storage().path_for(record.filename))
+            for old in record.versions:old.is_active=False
+            version=DatasetVersion(file_id=record.id,created_by=current_user.id,version_number=number,
+                stored_filename=filename,is_active=True,
+                quarantine_filename=pipeline.quarantine_path_for(filename).name if not result.quarantine.empty else None,
+                metrics=result.metrics,operations=[{'operation':'configured_cleaning','source_version':expected['source'],
+                'columns':config.columns,'duplicates':config.duplicates,'treatments':config.treatments,
+                'ai_review':config.ai_review,'changes':result.changes,'duplicate_source_rows':result.duplicate_rows,
+                'mixed_columns':result.mixed_columns}])
+            db.session.add(version)
+            record.row_count=artifact.profile['row_count'];record.column_count=artifact.profile['column_count']
+            db.session.commit()
+            flash(f'Limpieza confirmada. Se creó la versión {number}; el original sigue intacto.','success')
+            return redirect(url_for('files.wizard_result',file_id=file_id,version_id=version.id))
+        return render_template('files/wizard_preview.html',record=record,configuration=config,form=form,
+                               result=result,preview_token=serializer.dumps(expected))
+    except ValueError as error:
+        db.session.rollback()
+        if filename:_pipeline().remove_artifacts(filename)
+        flash(str(error),'warning')
+        return redirect(url_for('files.review_values',file_id=file_id))
+    except HTTPException:
+        raise
+    except Exception:
+        db.session.rollback()
+        if filename:_pipeline().remove_artifacts(filename)
+        current_app.logger.exception('No se pudo completar el asistente del archivo %s',record.id)
+        flash('No pudimos crear la versión. No se aplicaron cambios; puedes intentarlo de nuevo.','danger')
+        return redirect(url_for('files.review_values',file_id=file_id))
+
+
+@files_bp.route('/cleaning/<int:file_id>/wizard-result/<int:version_id>')
+@login_required
+def wizard_result(file_id,version_id):
+    record=_record_for_user(file_id)
+    version=DatasetVersion.query.filter_by(id=version_id,file_id=file_id).first_or_404()
+    return render_template('files/wizard_result.html',record=record,version=version,form=CleaningActionForm())
+
+
 CLEANING_PARAMETER_FIELDS = {
     'cast_type': ('decimal_separator',),
     'handle_missing': ('invalid_action', 'replacement_value'),
