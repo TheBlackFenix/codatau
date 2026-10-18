@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Decide cómo limpiar — CoDataU{% endblock %}
+{% block content %}
+{% include 'files/_cleaning_steps.html' %}
+<h1>Decide cómo limpiar</h1>
+<p>{{ record.original_name }} · Paso 3</p>
+{% if treatment_review_needed %}<p class="flash-alert flash-warning">El análisis muestra escenarios distintos de los guardados. Revisa los tratamientos y guárdalos de nuevo.</p>{% endif %}
+<p>Revisamos los valores según los tipos y formatos que elegiste. Una fila puede tener varios problemas: no sumes los escenarios como si fueran filas distintas.</p>
+<p>Las fechas inequívocas se convertirán directamente al formato elegido, sin consultar a la IA. Solo necesitas decidir sobre fechas ambiguas, imposibles o vacías; verás los cambios antes de confirmar.</p>
+<form method="POST" data-treatments-form>
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="revision" value="{{ configuration.revision }}">
+    <input type="hidden" name="source_version" value="{{ record.active_stored_filename }}">
+    {% if date_summaries %}<details class="card" style="margin-bottom:16px"><summary>Fechas claras: conversión directa, sin decisiones individuales ni IA</summary>
+        {% for summary in date_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} fecha(s) interpretables.</p><ul>{% for example in summary.examples %}<li>{{ example.before }} → {{ example.after }}</li>{% endfor %}</ul>{% endfor %}
+        <p>Solo se aplicarán al confirmar la vista previa. Los casos problemáticos se muestran por separado.</p>
+    </details>{% endif %}
+    {% if numeric_summaries %}<details class="card" style="margin-bottom:16px"><summary>Números reconocidos por reglas, sin consultas a IA</summary>
+        {% for summary in numeric_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.rule }} · {{ summary.count }} valor(es).</p><ul>{% for example in summary.examples %}<li>{{ example.before }} → {{ example.after }}</li>{% endfor %}</ul>{% endfor %}
+        <p>El texto numérico simple se convierte al tipo elegido. Para los otros patrones, elige aplicar las conversiones en el grupo de la columna o conservar los valores. Nada cambia hasta confirmar la vista previa.</p>
+    </details>{% endif %}
+    {% if text_summaries %}<details class="card" style="margin-bottom:16px"><summary>Propuestas de texto sin IA: ejemplos antes y después</summary>
+        {% for summary in text_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} celda(s).</p><ul>{% for example in summary.examples %}<li><code style="white-space:pre-wrap">{{ example.before }}</code> → <code style="white-space:pre-wrap">{{ example.after }}</code></li>{% endfor %}</ul>{% if summary.empty_count %}<p class="flash-alert flash-warning">{{ summary.empty_count }} celda(s) quedarán vacías al retirar esos caracteres. Puedes conservarlas o elegir otro tratamiento.</p>{% endif %}{% endfor %}
+        <p>Elige aplicar las reglas en el grupo de la columna. Guardar la configuración no modifica datos.</p>
+    </details>{% endif %}
+    {% if category_summaries %}<details class="card" style="margin-bottom:16px" open><summary>Equivalencias guardadas: ejemplos antes y después</summary>
+        {% for summary in category_summaries %}<p><strong>{{ summary.column }}</strong> · {{ summary.count }} celda(s).</p><ul>{% for example in summary.examples %}<li><code style="white-space:pre-wrap">{{ example.before }}</code> → <code>{{ example.after }}</code></li>{% endfor %}</ul>{% endfor %}
+        <p>Elige aplicar las equivalencias en el grupo de cada columna, o conservar sus valores. El resultado se revisará antes de crear una versión.</p>
+    </details>{% endif %}
+    {% for column, scenarios in issues|groupby('column') %}
+    <details class="card" style="margin-bottom:16px">
+        <summary><strong>{{ column }}</strong> · {{ scenarios|length }} escenario(s)</summary>
+        {% for issue in scenarios %}{% set decision = decisions.get(issue.id, {'action':'keep'}) %}
+        <section data-treatment-card style="margin-top:14px;padding-top:10px;border-top:1px solid #ddd">
+            <p><strong>{{ issue.label }}</strong> · {{ issue.count }} fila(s)</p>
+            {% if issue.scenario == 'range' %}<p>Es una sugerencia del contexto, no una certeza. Si estos valores son válidos en tu caso, puedes conservarlos.</p>{% endif %}
+            {% if issue.scenario == 'bounds' %}{% set limits = configuration.columns[issue.column] %}<p>Tu rango permitido: {{ limits.get('minimum', 'sin mínimo') }} a {{ limits.get('maximum', 'sin máximo') }}, incluidos los extremos. Una decisión cubre este grupo. No ajustaremos valores al límite ni inventaremos correcciones.</p>{% endif %}
+            {% if issue.scenario == 'missing_marker' %}<p>Estos textos coinciden con los marcadores que guardaste para esta columna. Aún no se han cambiado: conservar mantiene el texto original; vaciar o reemplazar cambia solo la celda; separar aparta toda la fila. No se enviarán a IA ni se rellenarán automáticamente.</p>{% endif %}
+            {% if issue.scenario == 'category_equivalence' %}<p>Se usarán únicamente las equivalencias que guardaste para esta columna, junto con las reglas de texto necesarias para reconocerlas. No se fusionan valores por parecido ni se consulta a la IA.</p>{% endif %}
+            {% if issue.scenario == 'date_ambiguous' %}<p>Una sola elección resolverá este grupo: 03/04 puede ser 3 de abril o 4 de marzo. Si el archivo mezcla ambos criterios, conserva o separa el grupo en lugar de adivinar.</p>{% endif %}
+            {% if issue.scenario == 'number_ambiguous' %}<p>1,234 podría ser mil doscientos treinta y cuatro o un decimal. Vuelve a Definir columnas y confirma los separadores del archivo para resolver el grupo. No lo adivinaremos con IA.</p><a href="{{ url_for('files.configure_columns', file_id=record.id) }}">Revisar formato numérico de origen</a>{% endif %}
+            {% if issue.scenario == 'numeric_convertible' %}<p>Estas celdas tienen una conversión reconocida por reglas. Una sola decisión aplica las propuestas para todo el grupo, sin consumir tokens. Los valores ambiguos o fuera de tus límites se revisan por separado.</p>{% endif %}
+            {% if issue.scenario == 'negative' %}<p>Indicaste que este campo no permite negativos. Elige una sola acción para este grupo. Convertir a positivo conserva la magnitud: −3 pasa a 3. No elijas esta opción si el signo representa una devolución, un saldo u otra información válida.</p>{% endif %}
+            {% if issue.examples %}<p>Ejemplos: {{ issue.examples|join(' · ') }}</p>{% endif %}
+            <label for="action-{{ issue.id }}">¿Qué quieres hacer?</label>
+            <select class="form-control" id="action-{{ issue.id }}" name="action_{{ issue.id }}" data-treatment-action>
+                {% for value,label in actions.items() if not (value == 'ai' and (issue.scenario != 'invalid' or issue.type not in ['integer', 'decimal', 'boolean'])) and not (value == 'absolute' and issue.scenario != 'negative') and not (value in ['date_dmy', 'date_mdy'] and issue.scenario != 'date_ambiguous') and not (value == 'normalize_number' and issue.scenario != 'numeric_convertible') and not (value == 'normalize_text' and issue.scenario != 'text_normalizable') and not (value == 'apply_categories' and issue.scenario != 'category_equivalence') %}<option value="{{ value }}" {% if decision.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <details class="context-help"><summary aria-label="Ayuda sobre tratamientos">?</summary><span>Conservar no toca el valor. Separar apartará toda la fila para revisarla y recuperarla. Reemplazar o vaciar cambia solo esta celda. La IA propondrá una solución que deberás aprobar, sin reconstruir contactos ni inventar datos faltantes.</span></details>
+            <div data-treatment-replacement {% if decision.action != 'replace' %}hidden{% endif %}>
+                <label for="replacement-{{ issue.id }}">Valor de reemplazo</label>
+                <input class="form-control" id="replacement-{{ issue.id }}" name="replacement_{{ issue.id }}" value="{{ decision.get('replacement','') }}" maxlength="200" placeholder="Por ejemplo: No tiene o N/A">
+                <small>Un texto como N/A en un campo numérico conservará una mezcla de tipos; no quedará completamente convertido.</small>
+            </div>
+            <p data-treatment-explanation aria-live="polite"></p>
+        </section>
+        {% endfor %}
+    </details>
+    {% else %}<p>No encontramos valores vacíos ni incompatibles con los tipos elegidos. Puedes guardar este paso.</p>{% endfor %}
+    <div class="wizard-actions">
+    <button class="btn btn-purple" name="next" value="ai">Guardar y continuar</button>
+    <button class="btn btn-secondary">Guardar tratamientos</button>
+    <a class="btn btn-secondary" href="{{ url_for('files.configure_duplicates', file_id=record.id) }}">Anterior</a>
+    <a class="btn btn-secondary" href="{{ url_for('files.results', file_id=record.id) }}">Continuar después</a>
+    </div>
+    <p>Guardar solo configura el proceso. En los siguientes pasos revisarás las propuestas de IA y una vista previa antes de aplicar los cambios. No se ha modificado nada.</p>
+    <p data-unsaved-warning role="status"></p>
+</form>
+<script>
+(() => {
+ const form=document.querySelector('[data-treatments-form]');let dirty=false;
+ const explanations={keep:'El valor se conservará, aunque no coincida con el tipo elegido.',quarantine:'Se apartará la fila completa, sin borrar el original.',replace:'Se cambiará únicamente la celda problemática.',null:'La fila se conservará y esta celda quedará vacía.',ai:'La IA preparará una propuesta para tu revisión en el siguiente paso; no se ejecuta al guardar.',absolute:'Una sola decisión convertirá todos los negativos válidos de este grupo a positivo. Revisa el resultado antes de confirmar la nueva versión.'};
+ form.querySelectorAll('[data-treatment-card]').forEach(card=>{
+ const select=card.querySelector('[data-treatment-action]');
+ const sync=()=>{const replacement=card.querySelector('[data-treatment-replacement]');replacement.hidden=select.value!=='replace';replacement.querySelector('input').required=select.value==='replace';card.querySelector('[data-treatment-explanation]').textContent=explanations[select.value]||'';};
+ explanations.date_dmy='Se interpretará todo este grupo con el día primero. Las fechas claras y las imposibles no se modifican por esta decisión.';
+ explanations.date_mdy='Se interpretará todo este grupo con el mes primero. Revisa los ejemplos antes de confirmar.';
+ explanations.normalize_number='Se aplicará la regla reconocida a cada celda de este grupo, sin IA ni redondeos a entero. Revisa el resultado antes de confirmar la versión.';
+ explanations.normalize_text='Se aplicarán las reglas de texto que elegiste a todo este grupo. No se eliminan tildes ni se llama a la IA. Revisa los ejemplos antes de confirmar.';
+ explanations.apply_categories='Una sola decisión aplicará las equivalencias guardadas y las reglas de texto necesarias a todo este grupo. Conservar no cambia las celdas.';
+ select.addEventListener('change',sync);sync();
+ });
+ form.addEventListener('change',()=>{dirty=true;form.querySelector('[data-unsaved-warning]').textContent='Tienes cambios sin guardar.';});
+ form.addEventListener('submit',()=>{dirty=false;});
+ window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+})();
+</script>
+{% endblock %}

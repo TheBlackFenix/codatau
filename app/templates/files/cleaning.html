@@ -2,6 +2,12 @@
 {% block title %}Limpieza — CoDataU{% endblock %}
 
 {% block content %}
+<section class="card" style="margin-bottom:20px;border-left:4px solid var(--purple)">
+<h1>Limpia tu archivo paso a paso</h1>
+<p>Define columnas, duplicados y tratamientos. Revisa el resultado antes de crear una nueva versión; el original se conserva.</p>
+<a class="btn btn-purple" href="{{ url_for('files.configure_columns', file_id=record.id) }}">Abrir asistente de limpieza</a>
+<small>Más abajo conservas el historial, las reglas manuales y las opciones de limpieza individual.</small>
+</section>
 
 {% include 'files/_dataset_context.html' %}
 
@@ -20,7 +26,7 @@
     <p>Guarda primero las decisiones desde su vista previa. Este paso analiza la versión activa y propone métricas; no aplica decisiones pendientes ni modifica datos.</p>
     <form method="POST" action="{{ url_for('dashboard.recommend_metrics', file_id=record.id) }}">
         {{ form.hidden_tag() }}
-        <button class="btn btn-purple" {% if not ai_configured %}disabled{% endif %}>Finalizar revisión ETL y proponer métricas</button>
+        <button class="btn btn-purple" {% if not ai_configured %}disabled{% endif %}>Terminar revisión y proponer métricas</button>
     </form>
 </div>
 

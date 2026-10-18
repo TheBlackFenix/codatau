@@ -109,7 +109,7 @@ def test_xls_extension_uses_excel_reader(tmp_path):
     with patch('app.services.data_service.pd.read_excel', return_value=expected) as reader:
         result = DataService.read_file(str(filepath))
 
-    reader.assert_called_once_with(str(filepath))
+    reader.assert_called_once_with(str(filepath), keep_default_na=False, na_values=[''])
     assert result.equals(expected)
 
 

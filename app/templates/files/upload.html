@@ -67,7 +67,7 @@
         {% if uploads %}
         <div style="display:flex;flex-direction:column;gap:8px">
             {% for u in uploads %}
-            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+            <div class="file-list-item" style="display:flex;align-items:center;gap:12px;padding:12px 14px;
                         background:var(--gray-50);border-radius:var(--radius);
                         border:1px solid var(--gray-100);transition:all 0.15s"
                  onmouseover="this.style.borderColor='var(--gray-300)'"
@@ -85,25 +85,25 @@
                 </div>
                 <div class="table-actions">
                     <a href="{{ url_for('files.results', file_id=u.id) }}"
-                       class="btn btn-secondary btn-sm btn-icon" title="Ver resultados">
-                        <i class="bi bi-eye"></i>
+                       class="btn btn-secondary btn-sm" title="Ver resultados">
+                        <i class="bi bi-eye"></i> Ver
                     </a>
                     <a href="{{ url_for('files.select', file_id=u.id) }}"
-                       class="btn btn-sm btn-icon" title="Activar en dashboard"
+                       class="btn btn-sm" title="Activar en dashboard"
                        style="background:var(--purple-soft);color:var(--purple);border:none">
-                        <i class="bi bi-graph-up"></i>
+                        <i class="bi bi-graph-up"></i> Usar
                     </a>
                     <a href="{{ url_for('files.cleaning', file_id=u.id) }}"
-                       class="btn btn-sm btn-icon" title="Limpiar datos"
+                       class="btn btn-sm" title="Limpiar datos"
                        style="background:#F0FDF4;color:#15803D;border:none">
-                        <i class="bi bi-magic"></i>
+                        <i class="bi bi-magic"></i> Limpiar
                     </a>
                     <form method="POST" action="{{ url_for('files.delete', file_id=u.id) }}"
                           style="display:inline"
-                          onsubmit="return confirm('¿Eliminar {{ u.original_name }}?')">
+                          data-confirm="¿Eliminar {{ u.original_name }}? Se quitarán el archivo y sus versiones. Esta acción no se puede deshacer.">
                         {{ form.hidden_tag() }}
-                        <button type="submit" class="btn btn-danger-outline btn-sm btn-icon" title="Eliminar">
-                            <i class="bi bi-trash"></i>
+                        <button type="submit" class="btn btn-danger-outline btn-sm" title="Eliminar">
+                            <i class="bi bi-trash"></i> Eliminar
                         </button>
                     </form>
                 </div>

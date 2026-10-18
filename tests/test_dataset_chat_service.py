@@ -26,7 +26,7 @@ def plan(kind='compare'):
             'date_column': 'fecha' if kind == 'compare' else None, 'granularity': 'month', 'filters': [],
             'periods': [{'label': 'Julio', 'start': '2026-07-01', 'end': '2026-08-01'},
                         {'label': 'Agosto', 'start': '2026-08-01', 'end': '2026-09-01'}] if kind == 'compare' else [],
-            'clarification': ''}
+            'limit': 20, 'clarification': ''}
 
 
 def test_comparison_uses_all_rows_and_reports_exclusions():
@@ -130,6 +130,35 @@ def test_multiple_sales_measures_require_clarification():
     candidate = {**plan(), 'metric': 'valor_total'}
     assert Chat.validate(candidate, Chat.catalog(data, {}), 'Variación de ventas 2026', [])['kind'] == 'clarify'
     assert Chat.validate(candidate, Chat.catalog(data, {}), 'Variación de valor total 2026', [])['kind'] == 'compare'
+
+
+def test_top_five_products_sums_quantity_within_requested_year():
+    data = pd.DataFrame({
+        'producto': ['A', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'G'],
+        'cantidad': [5, 8, 12, 11, 10, 9, 9, 999, 999],
+        'fecha': ['2026-01-01'] * 7 + ['2025-12-31', '2027-01-01'],
+        'precio_total': [200] * 9, 'valor_unitario': [10] * 9,
+    })
+    candidate = {**plan('group'), 'metric': 'cantidad', 'group_by': 'producto',
+                 'limit': 5, 'date_column': 'fecha',
+                 'periods': [{'label': '2026', 'start': '2026-01-01', 'end': '2027-01-01'}]}
+    validated = Chat.validate(candidate, Chat.catalog(data, {}),
+                              'Cuales son los 5 productos estrella del 2026 por cantidad vendida', [])
+    result = Chat.execute(data, {}, validated)
+    assert [(row['label'], row['value']) for row in result['evidence']['rows']] == [
+        ('A', 13), ('B', 12), ('C', 11), ('D', 10), ('E', 9),
+    ]
+    assert result['evidence']['rows'][0]['rows'] == 2  # Units, not transactions.
+    assert result['evidence']['limit'] == 5
+    assert 'los 5 grupos' in result['answer']
+    assert Chat.validate(candidate, Chat.catalog(data, {}), 'Top ventas por cantidad 2026', [])['kind'] == 'group'
+
+
+@pytest.mark.parametrize('limit', [0, 21, -1, True, '5', 5.0, None, '5; DROP TABLE dataset'])
+def test_invalid_ranking_limits_are_rejected(limit):
+    with pytest.raises(ValueError, match='ranking limit'):
+        Chat.validate({**plan('group'), 'group_by': 'ciudad', 'limit': limit},
+                      Chat.catalog(frame(), {}), 'Top ciudades', [])
 
 
 class ChatProvider:

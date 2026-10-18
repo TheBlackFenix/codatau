@@ -33,7 +33,7 @@ def _number(value):
 
 class DatasetChatService:
     PURPOSE = 'dataset_chat'
-    VERSION = '1-es'
+    VERSION = '2-es-ranking'
     MAX_QUESTION = 1000
     AGGREGATIONS = {'sum', 'mean', 'min', 'max', 'count', 'unique_count'}
     COMPARATORS = {'eq': '=', 'neq': '<>', 'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<='}
@@ -44,6 +44,7 @@ class DatasetChatService:
         'group_by': {'type': ['string', 'null']},
         'date_column': {'type': ['string', 'null']},
         'granularity': {'type': 'string', 'enum': ['hour', 'day', 'month', 'year']},
+        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 20},
         'filters': {'type': 'array', 'maxItems': 5, 'items': _object({
             'column': {'type': 'string'}, 'operator': {'type': 'string', 'enum': list(COMPARATORS)},
             'value': {'type': 'string'},
@@ -59,7 +60,12 @@ class DatasetChatService:
         'aggregate resume una medida; group agrupa por un campo o fecha; compare '
         'compara exactamente dos períodos sobre una fecha. Los filtros se unen con AND. '
         'count con metric=null cuenta filas; count con metric cuenta valores no nulos. '
-        'unique_count cuenta valores distintos no nulos. Para tiempo usa hour, day, '
+        'unique_count cuenta valores distintos no nulos. '
+        'Para productos más vendidos por cantidad, suma la cantidad y agrupa por producto; '
+        'no cuentes transacciones ni uses el precio. En group, limit indica cuántos grupos '
+        'mostrar: respeta la cantidad pedida (por ejemplo, los 5 productos: limit=5). '
+        'El máximo es 20; si pide más, solicita aclaración. Si no indica cantidad usa 20. '
+        'En los otros tipos usa limit=20. Para tiempo usa hour, day, '
         'month o year, nunca minutos ni segundos. Los períodos usan fechas ISO YYYY-MM-DD '
         'con inicio incluido y fin excluido; julio termina el 1 de agosto. Usa fechas '
         'solo presentes en el catálogo. No sumes ni promedies IDs o contactos. '
@@ -137,6 +143,8 @@ class DatasetChatService:
             raise ValueError('Unsupported calculation')
         if not isinstance(plan['clarification'], str) or len(plan['clarification']) > 800:
             raise ValueError('Invalid clarification')
+        if type(plan['limit']) is not int or not 1 <= plan['limit'] <= 20:
+            raise ValueError('Invalid ranking limit')
         if plan['kind'] == 'clarify':
             if not plan['clarification'].strip():
                 raise ValueError('Missing clarification')
@@ -152,7 +160,8 @@ class DatasetChatService:
         monetary = [column for column, info in columns.items() if info['arithmetic'] and
                     re.search(r'(valor|venta|monto|importe|precio|amount|revenue|sales)', column, re.I)]
         normalized_question = re.sub(r'[_\W]+', ' ', question.casefold())
-        mentions_measure = any(re.sub(r'[_\W]+', ' ', column.casefold()) in normalized_question for column in monetary)
+        mentions_measure = any(re.sub(r'[_\W]+', ' ', column.casefold()) in normalized_question
+                               for column, info in columns.items() if info['arithmetic'])
         if plan['aggregation'] in {'sum', 'mean', 'min', 'max'} and len(monetary) > 1 and (
             re.search(r'\b(ventas?|sales)\b', normalized_question) and not mentions_measure
         ):
@@ -217,7 +226,7 @@ class DatasetChatService:
     def clarification(message):
         return {'kind': 'clarify', 'metric': None, 'aggregation': 'count', 'group_by': None,
                 'date_column': None, 'granularity': 'month', 'filters': [], 'periods': [],
-                'clarification': message.strip()}
+                'limit': 20, 'clarification': message.strip()}
 
     @classmethod
     def execute(cls, dataframe, context, plan):
@@ -254,7 +263,8 @@ class DatasetChatService:
             if grouped:
                 group = _identifier(plan['group_by']) if plan['group_by'] else f"date_trunc('{plan['granularity']}', {_identifier(plan['date_column'])})"
                 return connection.execute(
-                    f'SELECT {group} AS bucket, {selection} FROM dataset{where} GROUP BY bucket ORDER BY value DESC NULLS LAST, bucket LIMIT 20', params,
+                    f'SELECT {group} AS bucket, {selection} FROM dataset{where} GROUP BY bucket ORDER BY value DESC NULLS LAST, bucket LIMIT ?',
+                    [*params, plan['limit']],
                 ).fetchall()
             return connection.execute(f'SELECT {selection} FROM dataset{where}', params).fetchone()
         connection = duckdb.connect(config={'enable_external_access': 'false', 'threads': '2', 'memory_limit': '256MB'})
@@ -288,13 +298,14 @@ class DatasetChatService:
             else:
                 answer = 'No hay datos suficientes en ambos períodos para calcular la variación. Revisa las fechas y filtros.'
         elif plan['kind'] == 'group':
-            answer = f'{label} por {plan["group_by"] or plan["date_column"]}: se muestran como máximo los 20 grupos con mayor valor.' if rows else 'No hay registros para estos filtros.'
+            answer = f'{label} por {plan["group_by"] or plan["date_column"]}: se muestran como máximo los {plan["limit"]} grupos con mayor valor.' if rows else 'No hay registros para estos filtros.'
         else:
             answer = f"{label}: {display(rows[0]['value'])}." if rows[0]['rows'] else 'No hay registros para estos filtros.'
         return {'answer': answer, 'evidence': {
             'metric': metric, 'aggregation': plan['aggregation'], 'rows': rows,
             'dataset_rows': len(dataframe), 'filters': plan['filters'], 'periods': plan['periods'],
             'group_by': plan['group_by'], 'date_column': plan['date_column'],
+            'limit': plan['limit'],
             'variation': variation, 'variation_percentage': percentage,
             'date_rows_excluded': int(dates[plan['date_column']].isna().sum()) if plan['date_column'] else 0,
         }}

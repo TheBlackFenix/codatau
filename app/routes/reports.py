@@ -16,6 +16,8 @@ from werkzeug.utils import secure_filename
 
 from app.models.file_upload import FileUpload
 from app.services.dataset_pipeline import DatasetPipeline
+from app.services.cleaning_export_service import CleaningExportService
+from app.services.date_normalization_service import DateNormalizationService as Dates
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -69,6 +71,7 @@ def download(file_id):
         return redirect(url_for('reports.index'))
 
     buffer = io.BytesIO()
+    df = Dates.format_dataframe(df, CleaningExportService.column_preferences(record.active_version))
     df.to_csv(buffer, index=False, encoding='utf-8-sig')
     buffer.seek(0)
 

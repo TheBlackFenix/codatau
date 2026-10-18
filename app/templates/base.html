@@ -10,8 +10,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/ux.css') }}" rel="stylesheet">
 </head>
 <body>
+{% if current_user.is_authenticated %}<a class="skip-link" href="#page-content">Saltar al contenido</a>{% endif %}
 
 {% if current_user.is_authenticated %}
 <div id="app-layout">
@@ -25,7 +27,8 @@
             <span class="nav-brand-name">Co<span>Data</span>U</span>
         </a>
 
-        <div class="nav-links">
+        <button type="button" class="nav-menu-toggle btn btn-secondary" aria-expanded="false" aria-controls="main-navigation">Menú</button>
+        <div class="nav-links" id="main-navigation">
             <a href="{{ url_for('dashboard.index') }}"
                class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
                 <i class="bi bi-house"></i> Inicio
@@ -35,7 +38,7 @@
                 <i class="bi bi-stars"></i> Análisis
             </a>
             <a href="{{ url_for('files.cleaning_current') }}"
-               class="nav-link {% if request.endpoint and request.endpoint.startswith('files.cleaning') %}active{% endif %}">
+               class="nav-link {% if request.endpoint and (request.endpoint.startswith('files.cleaning') or request.endpoint in ['files.configure_columns','files.configure_duplicates','files.configure_treatments','files.configure_categories','files.review_values','files.wizard_preview','files.wizard_result']) %}active{% endif %}">
                 <i class="bi bi-magic"></i> Limpieza
             </a>
             <a href="{{ url_for('reports.index') }}"
@@ -50,7 +53,7 @@
 
         <div class="nav-right">
             <div class="dropdown" id="userDropdown">
-                <button class="nav-avatar" onclick="toggleDropdown()" type="button">
+                <button class="nav-avatar" onclick="toggleDropdown()" type="button" aria-label="Abrir menú de cuenta" aria-expanded="false" aria-controls="dropdownMenu">
                     {{ current_user.username[0].upper() }}
                 </button>
                 <div class="nav-dropdown" id="dropdownMenu" style="display:none">
@@ -81,16 +84,34 @@
         </div>
     </nav>
 
+    {% if ai_models %}
+    <details class="model-settings">
+        <summary>Configuración de IA <span>Modelo actual: {{ ai_selected_model }}</span></summary>
+        <form method="POST" action="{{ url_for('ai_settings.select_model') }}" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            {{ ai_model_form.hidden_tag() }}
+            <input type="hidden" name="return_to" value="{{ request.path }}">
+            <label for="ai-model">Modelo de IA · Pruebas</label>
+            <select id="ai-model" name="model" class="form-control" style="width:auto;max-width:100%">
+                {% for model in ai_models %}<option value="{{ model.id }}" {% if model.id == ai_selected_model %}selected{% endif %}>{{ model.label }} — {{ model.id }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-secondary btn-sm">Usar modelo</button>
+            <button name="action" value="refresh" class="btn btn-secondary btn-sm">Actualizar lista</button>
+            <details class="context-help"><summary aria-label="Ayuda sobre el modelo de IA">?</summary><span>El modelo es la IA que te ayuda a analizar y limpiar. Cambiarlo afecta solo tus próximas consultas en esta sesión. No modifica datos ni resultados anteriores. La disponibilidad y el consumo dependen de tu cuenta de Google. Los modelos especializados en imagen o audio no aparecen aquí.</span></details>
+        </form>
+        {% if ai_catalog_failed %}<small>No pudimos consultar Google. Mostramos el último listado disponible; puedes reintentar con «Actualizar lista».</small>{% endif %}
+    </details>
+    {% endif %}
+
     <!-- FLASH MESSAGES -->
     <div style="padding: 0 28px;">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="flash-container" style="max-width:1400px;margin:16px auto 0;">
                 {% for category, message in messages %}
-                <div class="flash-alert flash-{{ category }}">
+                <div class="flash-alert flash-{{ category }}" role="status">
                     <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
                     {{ message }}
-                    <button class="flash-close" onclick="this.parentElement.remove()">
+                    <button class="flash-close" type="button" aria-label="Cerrar aviso" onclick="this.parentElement.remove()">
                         <i class="bi bi-x"></i>
                     </button>
                 </div>
@@ -101,9 +122,9 @@
     </div>
 
     <!-- PAGE CONTENT -->
-    <div id="page-content">
+    <main id="page-content" tabindex="-1">
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
 </div>
 
@@ -116,6 +137,7 @@
 function toggleDropdown() {
     const menu = document.getElementById('dropdownMenu');
     menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    document.querySelector('.nav-avatar').setAttribute('aria-expanded', String(menu.style.display !== 'none'));
 }
 
 document.addEventListener('click', function(e) {
@@ -123,7 +145,23 @@ document.addEventListener('click', function(e) {
     if (dropdown && !dropdown.contains(e.target)) {
         const menu = document.getElementById('dropdownMenu');
         if (menu) menu.style.display = 'none';
+        document.querySelector('.nav-avatar')?.setAttribute('aria-expanded', 'false');
     }
+});
+const navToggle = document.querySelector('.nav-menu-toggle');
+document.querySelectorAll('form[data-confirm]').forEach(form => form.addEventListener('submit', event => {
+    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+}));
+navToggle?.addEventListener('click', () => {
+    const expanded = navToggle.getAttribute('aria-expanded') !== 'true';
+    navToggle.setAttribute('aria-expanded', String(expanded));
+    document.getElementById('topnav').classList.toggle('nav-menu-open', expanded);
+});
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const menu = document.getElementById('dropdownMenu');
+    if (menu && menu.style.display !== 'none') { menu.style.display = 'none'; document.querySelector('.nav-avatar').setAttribute('aria-expanded','false'); document.querySelector('.nav-avatar').focus(); }
+    if (navToggle?.getAttribute('aria-expanded') === 'true') { navToggle.setAttribute('aria-expanded','false'); document.getElementById('topnav').classList.remove('nav-menu-open'); navToggle.focus(); }
 });
 </script>
 {% block scripts %}{% endblock %}

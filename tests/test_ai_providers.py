@@ -108,3 +108,59 @@ def test_factory_is_disabled_by_default_and_validates_provider():
 
     assert disabled_error.value.code == 'provider_disabled'
     assert unknown_error.value.code == 'unknown_provider'
+
+
+@pytest.mark.parametrize('provider_class,token_field,partial,complete', [
+    (OpenAICompatibleChatProvider, 'max_tokens',
+     {'choices': [{'finish_reason': 'length', 'message': {'content': '{"suggestions":'}}]},
+     {'choices': [{'finish_reason': 'stop', 'message': {'content': '{"suggestions":[]}'}}]}),
+    (OpenAIResponsesProvider, 'max_output_tokens',
+     {'status': 'incomplete', 'incomplete_details': {'reason': 'max_output_tokens'},
+      'output_text': '{"suggestions":'},
+     {'status': 'completed', 'output_text': '{"suggestions":[]}'}),
+])
+def test_truncated_output_retries_once_with_bounded_budget_and_combined_usage(
+    provider_class, token_field, partial, complete,
+):
+    calls = []
+
+    def transport(_url, _headers, body, _timeout):
+        calls.append(body)
+        return {**(partial if len(calls) == 1 else complete),
+                'usage': {'input_tokens': 10, 'output_tokens': 20,
+                          'prompt_tokens': 10, 'completion_tokens': 20}}
+
+    result = provider_class(_configuration(), transport).generate_json('instructions', {}, SCHEMA)
+    assert [body[token_field] for body in calls] == [321, 642]
+    assert calls[0]['model'] == calls[1]['model']
+    assert result.data == {'suggestions': []}
+    assert result.input_tokens == 20
+    assert result.output_tokens == 40
+
+
+def test_repeated_truncation_never_accepts_even_valid_partial_json():
+    from dataclasses import replace
+    calls = []
+
+    def transport(_url, _headers, body, _timeout):
+        calls.append(body)
+        return {'choices': [{'finish_reason': 'length', 'message': {'content': '{"suggestions":[]}'}}]}
+
+    config = replace(_configuration('openai_compatible'), max_output_tokens=8000)
+    with pytest.raises(AIProviderError) as raised:
+        OpenAICompatibleChatProvider(config, transport).generate_json('instructions', {}, SCHEMA)
+    assert raised.value.code == 'truncated_structured_output'
+    assert [body['max_tokens'] for body in calls] == [8000, 12096]
+
+
+def test_malformed_output_without_token_exhaustion_is_not_retried():
+    calls = []
+
+    def transport(*args):
+        calls.append(args)
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': 'not-json'}}]}
+
+    with pytest.raises(AIProviderError) as raised:
+        OpenAICompatibleChatProvider(_configuration(), transport).generate_json('instructions', {}, SCHEMA)
+    assert raised.value.code == 'invalid_structured_output'
+    assert len(calls) == 1

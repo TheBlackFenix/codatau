@@ -47,6 +47,407 @@ from app.services.storage_service import LocalStorageService
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
 
+
+@files_bp.route('/cleaning/<int:file_id>/columns', methods=['GET', 'POST'])
+@login_required
+def configure_columns(file_id):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.column_type_service import ColumnTypeService
+    from sqlalchemy.orm.exc import StaleDataError
+    from sqlalchemy.exc import IntegrityError
+    record = _record_for_user(file_id)
+    _, version, _, profile = _cleaning_context(record)
+    configuration = CleaningConfiguration.query.filter_by(file_id=record.id, user_id=current_user.id).first()
+    stale = configuration is not None and configuration.source_version != version
+    saved = configuration.columns if configuration else {}
+    cards = ColumnTypeService.cards(profile, _latest_dataset_context(record, profile), saved)
+    form = CleaningActionForm()
+    if request.method == 'POST':
+        if not form.validate_on_submit():
+            abort(400)
+        revision = str(configuration.revision if configuration else 0)
+        if request.form.get('revision') != revision or request.form.get('source_version') != version:
+            flash('El archivo o la configuración cambió en otra ventana. Recarga antes de guardar.', 'warning')
+            return redirect(url_for('files.configure_columns', file_id=file_id))
+        try:
+            choices = ColumnTypeService.parse(request.form, cards)
+            dictionaries_reset = configuration is not None and any(
+                previous.get('category_dictionary') and not choices.get(name, {}).get('category_dictionary')
+                for name, previous in configuration.columns.items())
+            if configuration is None:
+                configuration = CleaningConfiguration(file_id=record.id, user_id=current_user.id)
+                db.session.add(configuration)
+            if configuration.columns != choices or configuration.source_version != version:
+                configuration.duplicates = {}
+                configuration.treatments = {}
+                configuration.ai_review = {}
+            configuration.columns = choices
+            configuration.source_version = version
+            db.session.commit()
+            if dictionaries_reset:
+                flash('Cambiaste el tipo, las reglas de texto o los marcadores de una columna. Revisa de nuevo sus equivalencias.', 'warning')
+            flash('Tipos guardados. No se modificó ningún dato. Puedes regresar y cambiar tus decisiones.', 'success')
+            return redirect(url_for('files.configure_duplicates' if request.form.get('next') == 'duplicates' else 'files.configure_columns', file_id=file_id))
+        except ValueError as error:
+            db.session.rollback()
+            flash(str(error), 'warning')
+            # Preserve valid submitted selections when another column has an error.
+            for card in cards:
+                key = f'column_{card["index"]}'
+                if request.form.get(key) in ColumnTypeService.TYPES:
+                    previous_dictionary = card['choice'].get('category_dictionary')
+                    card['choice'] = {'type': request.form[key], 'decimal_separator': request.form.get(key+'_separator', '.'), 'date_format': request.form.get(key+'_date', 'iso'), 'date_source': request.form.get(key+'_date_source', request.form.get(key+'_date', 'iso')), 'negative_policy': request.form.get(key+'_negative', 'unknown')}
+                    if previous_dictionary:
+                        card['choice']['category_dictionary'] = previous_dictionary
+                    card['choice'].update({field: request.form.get(key+'_'+field, '')[:64] for field in ('minimum','maximum')})
+                    card['choice'].update(numeric_rules=request.form.get(key+'_numeric_rules', ''), number_source=request.form.get(key+'_number_source', 'auto'))
+                    card['choice']['text_rules'] = {field: request.form.get(key+'_text_'+field) == '1' for field in ('trim','collapse_spaces','clean_controls','nfc')}
+                    card['choice']['text_rules']['case'] = request.form.get(key+'_text_case', 'keep')
+                    card['choice']['missing_values'] = {'values': request.form.get(key+'_missing_markers', '')[:2020].splitlines(), 'ignore_case': request.form.get(key+'_missing_ignore_case') == '1'}
+        except (StaleDataError, IntegrityError):
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Recarga la configuración antes de continuar.', 'warning')
+            return redirect(url_for('files.configure_columns', file_id=file_id))
+    return render_template('files/column_types.html', record=record, cards=cards, form=form,
+                           configuration=configuration, source_version=version, stale=stale,
+                           type_labels=ColumnTypeService.TYPES, date_formats=ColumnTypeService.DATES)
+
+@files_bp.route('/cleaning/<int:file_id>/categories/<int:column_index>', methods=['GET', 'POST'])
+@login_required
+def configure_categories(file_id, column_index):
+    from copy import deepcopy
+    from sqlalchemy.orm.exc import StaleDataError
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.category_dictionary_service import CategoryDictionaryService as Categories
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename:
+        flash('Guarda primero los tipos de la versión actual para configurar equivalencias.', 'warning')
+        return redirect(url_for('files.configure_columns', file_id=file_id))
+    profile = _cleaning_context(record)[3]
+    if column_index >= len(profile['columns']): abort(404)
+    column = profile['columns'][column_index]['name']
+    preference = config.columns.get(column, {})
+    if preference.get('type') != 'text': abort(404)
+    available, excluded = Categories.values(_load_dataframe(record)[column], preference)
+    dictionary = preference.get('category_dictionary', {})
+    form = CleaningActionForm()
+    selected = request.form.getlist('selected') if request.method == 'POST' else []
+    target = request.form.get('target', '')[:200] if request.method == 'POST' else ''
+    if request.method == 'POST':
+        if not form.validate_on_submit(): abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('source_version') != record.active_stored_filename:
+            flash('La configuración o versión cambió. Recarga antes de guardar equivalencias.', 'warning')
+            return redirect(url_for('files.configure_categories', file_id=file_id, column_index=column_index))
+        try:
+            action = request.form.get('action')
+            if action == 'add':
+                updated = Categories.add(dictionary, selected, request.form.get('target', ''), available, preference)
+            elif action == 'remove':
+                mapping = dictionary.get('mapping', {})
+                targets = {Categories.key(value): value for value in mapping.values()}
+                group = targets.get(request.form.get('group'))
+                if group is None: raise ValueError('El grupo ya no existe. Recarga el diccionario.')
+                updated = Categories.validate({key: value for key, value in mapping.items() if value != group}, preference)
+            else:
+                raise ValueError('Elige si deseas guardar o quitar un grupo de equivalencias.')
+            columns = deepcopy(config.columns)
+            if updated['mapping']:
+                columns[column]['category_dictionary'] = updated
+            else:
+                columns[column].pop('category_dictionary', None)
+            if columns != config.columns:
+                config.columns = columns
+                config.duplicates = {}; config.treatments = {}; config.ai_review = {}
+            db.session.commit()
+            flash('Diccionario guardado. No se modificó ningún dato. Revisa los pasos siguientes para aplicarlo.', 'success')
+            return redirect(url_for('files.configure_categories', file_id=file_id, column_index=column_index))
+        except ValueError as error:
+            db.session.rollback(); flash(str(error), 'warning')
+        except StaleDataError:
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Recarga el diccionario.', 'warning')
+            return redirect(url_for('files.configure_categories', file_id=file_id, column_index=column_index))
+    query = request.args.get('q', '')[:200]
+    filtered = [item for item in available if query.casefold() in item['value'].casefold()]
+    pages = max(1, (len(filtered)+49)//50)
+    page = min(pages, max(1, request.args.get('page', 1, type=int)))
+    counts = {item['value']: item['count'] for item in available}
+    groups = {}
+    for source, destination in dictionary.get('mapping', {}).items():
+        group = groups.setdefault(destination, {'id': Categories.key(destination), 'target': destination, 'sources': [], 'count': 0})
+        group['sources'].append(source); group['count'] += counts.get(source, 0)
+    return render_template('files/category_dictionary.html', record=record, configuration=config, column=column,
+        column_index=column_index, form=form, values=filtered[(page-1)*50:page*50], total=len(available),
+        filtered_count=len(filtered), excluded=excluded, query=query, page=page, pages=pages,
+        groups=groups.values(), selected=selected, target=target)
+
+
+@files_bp.route('/cleaning/<int:file_id>/duplicates', methods=['GET', 'POST'])
+@login_required
+def configure_duplicates(file_id):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.duplicate_configuration_service import DuplicateConfigurationService as Duplicates
+    from sqlalchemy.orm.exc import StaleDataError
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename:
+        flash('Guarda primero los tipos de columnas de la versión activa.', 'warning')
+        return redirect(url_for('files.configure_columns', file_id=file_id))
+    dataframe = _load_dataframe(record)
+    form = CleaningActionForm()
+    settings = config.duplicates or {'mode': 'none'}
+    preview = None
+    if request.method == 'POST':
+        if not form.validate_on_submit():
+            abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('source_version') != record.active_stored_filename:
+            flash('La configuración cambió en otra ventana. Recarga antes de guardar.', 'warning')
+            return redirect(url_for('files.configure_duplicates', file_id=file_id))
+        try:
+            settings = Duplicates.parse(request.form, list(dataframe.columns), config.columns)
+            Duplicates.preview(dataframe, settings, config.columns)
+            if config.duplicates != settings:
+                config.treatments = {}
+                config.ai_review = {}
+            config.duplicates = settings
+            db.session.commit()
+            flash('Comparación guardada. Todavía no se eliminó ninguna fila.', 'success')
+            return redirect(url_for('files.configure_treatments' if request.form.get('next') == 'treatments' else 'files.configure_duplicates', file_id=file_id))
+        except ValueError as error:
+            db.session.rollback()
+            flash(str(error), 'warning')
+            settings = config.duplicates or {'mode': 'none'}
+        except StaleDataError:
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Revisa la configuración actual.', 'warning')
+            return redirect(url_for('files.configure_duplicates', file_id=file_id))
+    if config.duplicates:
+        preview = Duplicates.preview(dataframe, settings, config.columns)
+    return render_template('files/duplicates.html', record=record, configuration=config, form=form,
+                           settings=settings, preview=preview, columns=list(dataframe.columns),
+                           date_columns=[name for name,item in config.columns.items() if item['type'] == 'date'])
+
+
+@files_bp.route('/cleaning/<int:file_id>/treatments', methods=['GET', 'POST'])
+@login_required
+def configure_treatments(file_id):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.cleaning_treatment_service import CleaningTreatmentService as Treatments
+    from app.services.date_normalization_service import DateNormalizationService as Dates
+    from app.services.numeric_normalization_service import NumericNormalizationService as Numbers
+    from app.services.text_normalization_service import TextNormalizationService as Texts
+    from app.services.category_dictionary_service import CategoryDictionaryService as Categories
+    from sqlalchemy.orm.exc import StaleDataError
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename or not config.duplicates:
+        flash('Guarda primero los tipos y la comparación de duplicados de esta versión.', 'warning')
+        return redirect(url_for('files.configure_duplicates', file_id=file_id))
+    _, _, _, profile = _cleaning_context(record)
+    dataframe = _load_dataframe(record)
+    issues = Treatments.issues(dataframe, config.columns, _latest_dataset_context(record, profile))
+    form = CleaningActionForm()
+    decisions = (config.treatments or {}).get('decisions', {})
+    if request.method == 'POST':
+        if not form.validate_on_submit(): abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('source_version') != record.active_stored_filename:
+            flash('La configuración cambió. Recarga la pantalla antes de guardar.', 'warning')
+            return redirect(url_for('files.configure_treatments', file_id=file_id))
+        try:
+            treatments = Treatments.parse(request.form, issues)
+            if config.treatments != treatments:
+                config.ai_review = {}
+            config.treatments = treatments
+            db.session.commit()
+            flash('Tratamientos guardados. No se modificó ningún dato ni se envió información a la IA.', 'success')
+            return redirect(url_for('files.review_values' if request.form.get('next') == 'ai' else 'files.configure_treatments', file_id=file_id))
+        except ValueError as error:
+            db.session.rollback()
+            flash(str(error), 'warning')
+            decisions = {issue['id']: {'action': request.form.get('action_'+issue['id'], 'keep'), 'replacement': request.form.get('replacement_'+issue['id'], '')[:200]} for issue in issues}
+        except StaleDataError:
+            db.session.rollback()
+            flash('Otra ventana guardó cambios. Revisa las decisiones actuales.', 'warning')
+            return redirect(url_for('files.configure_treatments', file_id=file_id))
+    return render_template('files/treatments.html', record=record, configuration=config, form=form,
+                           issues=issues, decisions=decisions, actions=Treatments.ACTIONS,
+                           date_summaries=Dates.summaries(dataframe, config.columns),
+                           numeric_summaries=Numbers.summaries(dataframe, config.columns),
+                           text_summaries=Texts.summaries(dataframe, config.columns),
+                           category_summaries=Categories.summaries(dataframe, config.columns),
+                           treatment_review_needed=bool(config.treatments) and set(decisions) != {issue['id'] for issue in issues})
+
+
+@files_bp.route('/cleaning/<int:file_id>/value-proposals', methods=['GET', 'POST'])
+@login_required
+def review_values(file_id):
+    from copy import deepcopy
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.value_proposal_service import ValueProposalService as Proposals
+    from sqlalchemy.orm.exc import StaleDataError
+    record = _record_for_user(file_id)
+    config = CleaningConfiguration.query.filter_by(file_id=file_id, user_id=current_user.id).first()
+    if config is None or config.source_version != record.active_stored_filename or not config.treatments:
+        flash('Guarda primero los tratamientos de esta versión.', 'warning')
+        return redirect(url_for('files.configure_treatments', file_id=file_id))
+    _, _, _, profile = _cleaning_context(record)
+    context = _latest_dataset_context(record, profile)
+    try:
+        candidates = Proposals.candidates(_load_dataframe(record), config, context)
+    except ValueError as error:
+        flash(str(error), 'warning')
+        return redirect(url_for('files.configure_treatments', file_id=file_id))
+    fingerprint = Proposals.fingerprint(record, config, context, current_app.config)
+    review = deepcopy(config.ai_review or {})
+    if review.get('fingerprint') != fingerprint:
+        review = {'fingerprint':fingerprint, 'proposals':{}, 'decisions':{}}
+    form = CleaningActionForm()
+    if request.method == 'POST':
+        if not form.validate_on_submit(): abort(400)
+        if request.form.get('revision') != str(config.revision) or request.form.get('fingerprint') != fingerprint:
+            flash('El archivo, el modelo o tus decisiones cambiaron. Recarga antes de continuar.', 'warning')
+            return redirect(url_for('files.review_values', file_id=file_id))
+        try:
+            if request.form.get('action') == 'analyze':
+                review = Proposals.analyze(record, config, candidates, context, current_app.config)
+                flash('Propuestas preparadas para tu revisión. No se modificaron los datos.', 'success')
+            elif request.form.get('action') in {'decide', 'decide_continue'}:
+                for item in candidates:
+                    proposal = review['proposals'].get(item['id'])
+                    if not proposal: continue
+                    choice = request.form.get('decision_'+item['id'])
+                    if choice not in {None, '', 'accept', 'reject'}: raise ValueError('Elige aceptar o conservar para cada propuesta.')
+                    if choice == 'accept' and proposal['status'] != 'replace': raise ValueError('Esta propuesta requiere una decisión manual; no se puede aplicar.')
+                    if choice:
+                        review['decisions'][item['id']] = choice
+                    elif choice == '':
+                        review['decisions'].pop(item['id'], None)
+                flash('Decisiones guardadas. Se aplicarán únicamente al confirmar la limpieza completa.', 'success')
+            else: abort(400)
+            # A different tab may have changed the configuration while the provider was responding.
+            db.session.refresh(config)
+            db.session.expire(record, ['versions'])
+            if str(config.revision) != request.form['revision'] or record.active_stored_filename != config.source_version:
+                db.session.commit()  # Preserve the provider audit, not stale choices.
+                flash('La configuración cambió durante el análisis. Vuelve a revisar las propuestas.', 'warning')
+                return redirect(url_for('files.review_values', file_id=file_id))
+            config.ai_review = review
+            db.session.commit()
+            if request.form.get('action') == 'decide_continue':
+                return redirect(url_for('files.wizard_preview', file_id=file_id))
+            return redirect(url_for('files.review_values', file_id=file_id))
+        except AIProviderError as error:
+            db.session.commit()
+            flash(error.user_message + ' Tus datos y decisiones anteriores siguen intactos.', 'warning')
+        except ValueError as error:
+            db.session.rollback(); flash(str(error), 'warning')
+        except StaleDataError:
+            db.session.rollback(); flash('Otra ventana guardó cambios. Recarga esta pantalla.', 'warning')
+            return redirect(url_for('files.review_values', file_id=file_id))
+    remaining = sum(item['id'] not in review['proposals'] for item in candidates)
+    undecided = sum(item['id'] not in review['decisions'] for item in candidates)
+    return render_template('files/value_proposals.html', record=record, configuration=config,
+                           form=form, review=review, candidates=candidates, remaining=remaining, undecided=undecided,
+                           ai_configured=AIProviderFactory.is_configured(current_app.config), fingerprint=fingerprint)
+
+
+def _wizard_ready(record):
+    from app.models.cleaning_configuration import CleaningConfiguration
+    config=CleaningConfiguration.query.filter_by(file_id=record.id,user_id=current_user.id).first()
+    if config is None or config.source_version!=record.active_stored_filename or not config.treatments:
+        raise ValueError('Guarda la configuración completa de la versión activa antes de revisar y aplicar.')
+    return config
+
+
+def _wizard_token(record, config, context):
+    from app.services.value_proposal_service import ValueProposalService
+    from app.services.wizard_execution_service import WizardExecutionService
+    return {'file':record.id,'user':current_user.id,'source':record.active_stored_filename,
+            'rule_version':WizardExecutionService.RULE_VERSION,
+            'revision':config.revision,'fingerprint':ValueProposalService.fingerprint(record,config,context,current_app.config),
+            'source_hash':_pipeline()._sha256(_pipeline().paths_for(record.active_stored_filename)[0])}
+
+
+@files_bp.route('/cleaning/<int:file_id>/wizard-preview',methods=['GET','POST'])
+@login_required
+def wizard_preview(file_id):
+    from itsdangerous import URLSafeTimedSerializer, BadSignature
+    from werkzeug.exceptions import HTTPException
+    from sqlalchemy import update, func
+    from app.models.cleaning_configuration import CleaningConfiguration
+    from app.services.wizard_execution_service import WizardExecutionService
+    record=_record_for_user(file_id)
+    form=CleaningActionForm()
+    serializer=URLSafeTimedSerializer(current_app.secret_key,salt='cleaning-wizard-confirmation')
+    filename=None
+    try:
+        config=_wizard_ready(record)
+        pipeline,_,_,profile=_cleaning_context(record)
+        context=_latest_dataset_context(record,profile)
+        expected=_wizard_token(record,config,context)
+        if request.method=='POST':
+            if not form.validate_on_submit():abort(400)
+            try:submitted=serializer.loads(request.form.get('preview_token',''),max_age=1800)
+            except BadSignature:raise ValueError('La vista previa venció o no es válida. Revísala de nuevo.')
+            if submitted!=expected:raise ValueError('El archivo o tus decisiones cambiaron. Genera otra vista previa.')
+            # Consume the draft revision atomically before writing any artifacts.
+            locked=db.session.execute(update(CleaningConfiguration).where(CleaningConfiguration.id==config.id,CleaningConfiguration.revision==expected['revision']).values(revision=expected['revision']+1))
+            if locked.rowcount!=1:raise ValueError('La limpieza ya se confirmó o cambió en otra ventana.')
+            db.session.expire(record,['versions'])
+            if record.active_stored_filename!=expected['source']:raise ValueError('La versión activa cambió. Revisa de nuevo la limpieza.')
+        result=WizardExecutionService.build(_load_dataframe(record),record,config,context,current_app.config)
+        if request.method=='POST':
+            import duckdb
+            number=(db.session.query(func.max(DatasetVersion.version_number)).filter_by(file_id=record.id).scalar() or 0)+1
+            filename=f'{Path(record.filename).stem}.wizard-{uuid.uuid4().hex}.csv'
+            parquet,_=pipeline.paths_for(filename)
+            connection=duckdb.connect()
+            try:
+                connection.from_df(result.cleaned).write_parquet(str(parquet),compression='zstd')
+                if not result.quarantine.empty:
+                    connection.from_df(result.quarantine).write_parquet(str(pipeline.quarantine_path_for(filename)),compression='zstd')
+            finally:connection.close()
+            artifact=pipeline.profile_existing(filename,_storage().path_for(record.filename))
+            for old in record.versions:old.is_active=False
+            version=DatasetVersion(file_id=record.id,created_by=current_user.id,version_number=number,
+                stored_filename=filename,is_active=True,
+                quarantine_filename=pipeline.quarantine_path_for(filename).name if not result.quarantine.empty else None,
+                metrics=result.metrics,operations=[{'operation':'configured_cleaning','source_version':expected['source'],
+                'rule_version':WizardExecutionService.RULE_VERSION,
+                'columns':config.columns,'duplicates':config.duplicates,'treatments':config.treatments,
+                'ai_review':config.ai_review,'changes':result.changes,'duplicate_source_rows':result.duplicate_rows,
+                'mixed_columns':result.mixed_columns}])
+            db.session.add(version)
+            record.row_count=artifact.profile['row_count'];record.column_count=artifact.profile['column_count']
+            db.session.commit()
+            flash(f'Limpieza confirmada. Se creó la versión {number}; el original sigue intacto.','success')
+            return redirect(url_for('files.wizard_result',file_id=file_id,version_id=version.id))
+        return render_template('files/wizard_preview.html',record=record,configuration=config,form=form,
+                               result=result,preview_token=serializer.dumps(expected))
+    except ValueError as error:
+        db.session.rollback()
+        if filename:_pipeline().remove_artifacts(filename)
+        flash(str(error),'warning')
+        return redirect(url_for('files.review_values',file_id=file_id))
+    except HTTPException:
+        raise
+    except Exception:
+        db.session.rollback()
+        if filename:_pipeline().remove_artifacts(filename)
+        current_app.logger.exception('No se pudo completar el asistente del archivo %s',record.id)
+        flash('No pudimos crear la versión. No se aplicaron cambios; puedes intentarlo de nuevo.','danger')
+        return redirect(url_for('files.review_values',file_id=file_id))
+
+
+@files_bp.route('/cleaning/<int:file_id>/wizard-result/<int:version_id>')
+@login_required
+def wizard_result(file_id,version_id):
+    record=_record_for_user(file_id)
+    version=DatasetVersion.query.filter_by(id=version_id,file_id=file_id).first_or_404()
+    return render_template('files/wizard_result.html',record=record,version=version,form=CleaningActionForm())
+
+
 CLEANING_PARAMETER_FIELDS = {
     'cast_type': ('decimal_separator',),
     'handle_missing': ('invalid_action', 'replacement_value'),
@@ -334,7 +735,8 @@ def upload():
 
             # Limpiar
             processing_stage = 'normalización de datos'
-            df = DataService.clean_dataframe(df)
+            # Preserve text so the wizard can propose, rather than pre-apply, trim.
+            df = DataService.clean_dataframe(df, trim_text=False)
 
             # Crear artefacto analítico portable y perfil compacto para IA.
             processing_stage = 'creación del perfil analítico'
@@ -662,7 +1064,7 @@ def cleaning(file_id):
         ai_candidate_count=ai_candidate_count,
         ai_configured=ai_configured,
         ai_provider=current_app.config.get('AI_PROVIDER'),
-        ai_model=current_app.config.get('AI_MODEL'),
+        ai_model=AIProviderFactory.configuration_from_app(current_app.config).model,
         ai_outcome=ai_outcome,
         ai_suggestions=ai_suggestions,
         dataset_context=dataset_context,

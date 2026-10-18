@@ -198,7 +198,7 @@ class DataService:
             delimiter = ','
 
         try:
-            return pd.read_csv(path, encoding=encoding, sep=delimiter)
+            return pd.read_csv(path, encoding=encoding, sep=delimiter, keep_default_na=False, na_values=[''])
         except EmptyDataError as exc:
             raise FileReadError(
                 'empty_file',
@@ -215,7 +215,7 @@ class DataService:
     @staticmethod
     def _read_excel(path, extension):
         try:
-            return pd.read_excel(str(path))
+            return pd.read_excel(str(path), keep_default_na=False, na_values=[''])
         except (BadZipFile, InvalidFileException, XLRDError, ValueError, KeyError) as exc:
             expected_format = 'Excel moderno (.xlsx)' if extension == '.xlsx' else 'Excel 97-2003 (.xls)'
             raise FileReadError(
@@ -304,12 +304,13 @@ class DataService:
             stats['row_count'] = len(df)
 
         # Preview: primeras 10 filas como lista de dicts
-        summary['preview'] = df.head(10).fillna('').to_dict(orient='records')
+        preview = df.head(10).astype(object)
+        summary['preview'] = preview.where(pd.notna(preview), '').to_dict(orient='records')
 
         return summary
 
     @staticmethod
-    def clean_dataframe(df):
+    def clean_dataframe(df, *, trim_text=True):
         df = df.copy()
         # Eliminar filas completamente vacías
         df = df.dropna(how='all')
@@ -317,7 +318,8 @@ class DataService:
         df = df.dropna(axis=1, how='all')
         # Limpiar solo valores de texto sin alterar tipos mixtos.
         for col in DataService.text_columns(df):
-            df[col] = df[col].map(
-                lambda value: value.strip() if isinstance(value, str) else value
-            )
+            if trim_text:
+                df[col] = df[col].map(
+                    lambda value: value.strip() if isinstance(value, str) else value
+                )
         return df

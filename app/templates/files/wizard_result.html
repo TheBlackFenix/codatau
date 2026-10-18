@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Resultado de limpieza — CoDataU{% endblock %}
+{% block content %}
+<h1>Limpieza completada</h1>
+<p>{{ record.original_name }} · Versión {{ version.version_number }}{% if not version.is_active %} · No es la versión activa{% endif %}</p>
+<div class="card"><p>{{ version.metrics.after_rows }} filas en el resultado, {{ version.metrics.quarantined_rows }} separadas para revisión y {{ version.metrics.duplicates_removed }} duplicados retirados.</p>
+<p>El original permanece intacto. El paquete incluye el resultado, las filas separadas y la configuración con los cambios registrados por celda.</p>
+<a class="btn btn-purple" href="{{ url_for('files.cleaning_export',file_id=record.id,version_id=version.id) }}">Descargar resultado y registro de cambios</a>
+<a class="btn btn-secondary" href="{{ url_for('files.cleaning',file_id=record.id) }}">Ver historial y restaurar versiones</a>
+{% if version.quarantine_filename %}<a class="btn btn-secondary" href="{{ url_for('files.cleaning_quarantine',file_id=record.id,version_id=version.id) }}">Descargar filas separadas</a>{% endif %}
+</div>
+{% if version.is_active %}
+<form method="POST" action="{{ url_for('dashboard.recommend_metrics',file_id=record.id) }}" style="margin-top:20px">
+{{ form.hidden_tag() }}<button class="btn btn-purple">Proponer métricas de esta versión</button>
+</form>
+{% else %}<p>Para proponer métricas de esta versión, actívala primero desde el historial.</p>{% endif %}
+{% endblock %}

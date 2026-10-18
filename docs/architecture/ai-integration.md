@@ -134,7 +134,8 @@ consultas arbitrarias.
 El modelo devuelve un plan, nunca SQL. Se admiten:
 
 - total, promedio, mínimo, máximo, conteo y valores únicos;
-- grupos por campo o tiempo (hora, día, mes o año), hasta veinte resultados;
+- grupos por campo o tiempo (hora, día, mes o año), con `limit` entero entre 1 y 20
+  para respetar rankings como «los 5 productos por cantidad vendida»;
 - hasta cinco filtros simples unidos con AND;
 - comparación de dos períodos no superpuestos, inicio incluido y fin excluido;
 - aclaraciones cuando falta información o la pregunta está fuera del alcance.
@@ -147,6 +148,18 @@ La respuesta se construye localmente con números verificables, sin segunda llam
 al modelo. Incluye filas coincidentes, valores usados, filtros, fechas y exclusiones.
 Los valores infinitos no intervienen en cálculos numéricos. Una base cero no produce
 un porcentaje ficticio; la ausencia de datos no se presenta como ventas cero.
+
+Los rankings suman la medida solicitada (por ejemplo, unidades), no necesariamente
+el número de compras. Los empates se ordenan por el campo agrupado de forma estable.
+El límite también se parametriza y el contrato del prompt está versionado para no
+reutilizar planes antiguos que no incluían la cantidad de resultados.
+
+Si el proveedor declara que agotó el límite de salida (`finish_reason=length` o
+su equivalente en Responses), se permite un único reintento con presupuesto inicial
+más `min(presupuesto inicial, 4096)` tokens. No se reintenta cualquier JSON inválido,
+no se cambia de modelo ni se reconstruye JSON truncado. Si vuelve a agotarse, se
+informa al usuario sin ejecutar el plan. La auditoría de una respuesta exitosa suma
+el uso de ambos intentos; el reintento puede aumentar costo y latencia.
 
 El servidor también solicita aclaración ante varios años sin año explícito o varias
 medidas monetarias para una pregunta genérica de ventas. La comprensión lingüística

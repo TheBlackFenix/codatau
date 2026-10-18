@@ -5,3 +5,4 @@ from app.models.ai_analysis_run import AIAnalysisRun
 from app.models.dataset_version import DatasetVersion
 from app.models.cleaning_decision import CleaningDecision
 from app.models.dashboard_configuration import DashboardConfiguration
+from app.models.cleaning_configuration import CleaningConfiguration

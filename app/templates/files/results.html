@@ -10,6 +10,7 @@
         </div>
     </div>
     <div style="display:flex;gap:8px">
+        <a href="{{ url_for('files.configure_columns', file_id=record.id) }}" class="btn btn-secondary btn-sm">Definir tipos de columnas</a>
         <a href="{{ url_for('files.cleaning', file_id=record.id) }}" class="btn btn-purple btn-sm">
             <i class="bi bi-magic"></i> Revisar limpieza
         </a>

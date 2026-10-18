@@ -11,6 +11,7 @@ from app.services.dataset_context_service import DatasetContextService
 from app.services.ai_dashboard_service import AIDashboardService
 from app.services.dataset_chat_service import DatasetChatService
 from app.services.data_service import DataService
+from app.services.value_proposal_service import ValueProposalService
 
 
 @pytest.mark.skipif(
@@ -196,3 +197,43 @@ def test_provider_interprets_period_comparison_and_duckdb_calculates():
     answer = DatasetChatService.execute(dataframe, {}, plan)
     assert answer['evidence']['variation'] == 350
     assert answer['evidence']['variation_percentage'] == 350
+
+
+@pytest.mark.skipif(os.environ.get('RUN_LIVE_AI_TEST') != '1', reason='Prueba opt-in que consume API.')
+def test_provider_interprets_top_five_products_by_units():
+    application = create_app()
+    dataframe = pd.DataFrame({
+        'Producto': ['A', 'A', 'B', 'C', 'D', 'E', 'F', 'G'],
+        'Cantidad': [10, 5, 14, 13, 12, 11, 10, 999],
+        'Precio Total': [100] * 8,
+        'Fecha Compra': ['2026-01-01'] * 7 + ['2027-01-01'],
+    })
+    catalog = DatasetChatService.catalog(dataframe, {})
+    question = 'Cuales son los 5 productos estrella del 2026 por cantidad vendida'
+    result = AIProviderFactory.create(application.config).generate_json(
+        DatasetChatService.INSTRUCTIONS,
+        {'question': question, 'rows': len(dataframe), 'columns': catalog,
+         'context': {'domain': 'Ventas'}, 'history': []},
+        DatasetChatService.SCHEMA,
+    )
+    plan = DatasetChatService.validate(result.data, catalog, question, [])
+    assert plan['kind'] == 'group'
+    assert plan['metric'] == 'Cantidad'
+    assert plan['aggregation'] == 'sum'
+    assert plan['group_by'] == 'Producto'
+    assert plan['limit'] == 5
+    answer = DatasetChatService.execute(dataframe, {}, plan)
+    assert [(row['label'], row['value']) for row in answer['evidence']['rows']] == [
+        ('A', 15), ('B', 14), ('C', 13), ('D', 12), ('E', 11),
+    ], plan
+
+
+@pytest.mark.skipif(os.environ.get('RUN_LIVE_AI_TEST') != '1', reason='Prueba opt-in que consume API.')
+def test_provider_proposes_safe_value_conversions():
+    application=create_app()
+    batch=[{'id':'a','column':'cantidad','original':'dos','target':{'type':'integer'},'count':3,'safe':True},
+           {'id':'b','column':'precio','original':'3,5','target':{'type':'decimal','decimal_separator':'.'},'count':2,'safe':True}]
+    result=AIProviderFactory.create(application.config).generate_json(
+        ValueProposalService.INSTRUCTIONS,{'context':{'domain':'Ventas'},'candidates':batch},ValueProposalService.SCHEMA)
+    proposals=ValueProposalService.validate(result.data,batch)['proposals']
+    assert {item['id']:item['value'] for item in proposals} == {'a':'2','b':'3.5'}

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Revisa y aplica — CoDataU{% endblock %}
+{% block content %}
+{% include 'files/_cleaning_steps.html' %}
+<h1>Revisa y aplica</h1>
+<p>{{ record.original_name }} · Paso 5 · Todavía no se modificó ningún dato.</p>
+<p>Los números de registro se refieren a la versión de origen: 1 es el primer registro de datos, sin contar encabezados. Los recuentos de transformados y duplicados pueden incluir los mismos registros.</p>
+<div class="card">
+    <p>{{ result.metrics.before_rows }} filas iniciales → {{ result.metrics.after_rows }} filas en el resultado.</p>
+    <p>{{ result.metrics.changed_rows }} filas transformadas · {{ result.metrics.changed_cells }} celdas modificadas · {{ result.metrics.quarantined_rows }} filas separadas para revisión · {{ result.metrics.duplicates_removed }} duplicados retirados.</p>
+    <p>Primero apartamos las filas que elegiste revisar; después transformamos las celdas y finalmente identificamos duplicados sobre el resultado. Por eso el recuento puede diferir del paso 2.</p>
+    {% if result.mixed_columns %}<p class="flash-alert flash-warning">Estos campos conservarán texto o formatos mezclados por tus decisiones: {{ result.mixed_columns|join(', ') }}. No los presentamos como columnas completamente convertidas.</p>{% endif %}
+    {% if result.metrics.after_rows == 0 %}<p class="flash-alert flash-warning">El resultado quedará sin filas. Revisa especialmente las decisiones de separar registros antes de confirmar.</p>{% endif %}
+    <p>{{ result.metrics.duplicate_incomplete_rows }} filas con claves incompletas y {{ result.metrics.duplicate_invalid_date_rows }} filas en grupos con fechas no interpretables se protegieron de la eliminación de duplicados.</p>
+</div>
+<details class="card" style="margin-top:16px" open><summary>Ejemplos de cambios (primeros 20)</summary>
+<div class="table-wrap"><table class="data-table"><thead><tr><th>Fila de origen</th><th>Campo</th><th>Antes</th><th>Después</th><th>Motivo</th></tr></thead><tbody>{% for change in result.changes[:20] %}<tr><td>{{ change.source_row }}</td><td>{{ change.column }}</td><td>{{ change.before if change.before is not none else 'Vacío' }}</td><td>{{ change.display_after if change.display_after is not none else 'Vacío' }}</td><td>{{ change.reason }}</td></tr>{% endfor %}</tbody></table></div></details>
+<form method="POST" style="margin-top:20px" data-confirm-cleaning>
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="preview_token" value="{{ preview_token }}">
+    <p>Confirmar crea una versión nueva. Podrás descargarla y restaurar versiones anteriores. El original no se sobrescribe.</p>
+    <button class="btn btn-purple">Confirmar limpieza y crear versión</button>
+    <a class="btn btn-secondary" href="{{ url_for('files.review_values',file_id=record.id) }}">Anterior</a>
+    <a class="btn btn-secondary" href="{{ url_for('files.results',file_id=record.id) }}">Continuar después</a>
+</form>
+<script>
+(() => {const form=document.querySelector('[data-confirm-cleaning]');let busy=false;form.addEventListener('submit',event=>{if(busy){event.preventDefault();return;}busy=true;const button=form.querySelector('button');button.style.pointerEvents='none';button.setAttribute('aria-disabled','true');button.textContent='Creando la nueva versión…';});})();
+</script>
+{% endblock %}

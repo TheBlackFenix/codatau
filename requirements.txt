@@ -14,3 +14,4 @@ xlrd==2.0.2
 python-dotenv==1.0.1
 WTForms==3.2.2
 email-validator==2.2.0
+text2num==3.0.2

@@ -2,6 +2,7 @@ import csv
 import io
 import json
 from zipfile import ZIP_DEFLATED, ZipFile
+from app.services.date_normalization_service import DateNormalizationService as Dates
 
 
 class CleaningExportService:
@@ -10,6 +11,7 @@ class CleaningExportService:
     @classmethod
     def build(cls, record, version, cleaned, quarantine, decisions):
         output = io.BytesIO()
+        cleaned = Dates.format_dataframe(cleaned, cls.column_preferences(version))
         with ZipFile(output, 'w', compression=ZIP_DEFLATED) as archive:
             archive.writestr(
                 'datos_limpios.csv',
@@ -44,6 +46,13 @@ class CleaningExportService:
             )
         output.seek(0)
         return output
+
+    @staticmethod
+    def column_preferences(version):
+        for operation in (version.operations or []) if version else []:
+            if operation.get('operation') == 'configured_cleaning':
+                return operation.get('columns', {})
+        return {}
 
     @staticmethod
     def _report(record, version, decisions):

@@ -15,6 +15,30 @@ def _authorization(api_key):
     return {'Authorization': f'Bearer {api_key}'} if api_key else {}
 
 
+def _complete_response(transport, url, headers, body, timeout, token_field, truncated):
+    """Retry only explicit token exhaustion, once, with a bounded extra budget.
+
+    Never try to repair or execute partial JSON. Include both attempts in usage.
+    """
+    totals = {}
+    for attempt in range(2):
+        response = transport(url, headers, body, timeout)
+        for key, value in (response.get('usage') or {}).items():
+            if type(value) is int:
+                totals[key] = totals.get(key, 0) + value
+        if not truncated(response):
+            response = {**response, 'usage': {**(response.get('usage') or {}), **totals}}
+            return response
+        if attempt == 0:
+            budget = body[token_field]
+            body = {**body, token_field: budget + min(budget, 4096)}
+    raise AIProviderError(
+        'truncated_structured_output',
+        'El modelo agotó el límite de respuesta, incluso tras un reintento. '
+        'Prueba un modelo más ligero o una pregunta más sencilla. No se modificaron datos.',
+    )
+
+
 def _load_structured_text(text):
     try:
         data = json.loads(text)
@@ -53,11 +77,15 @@ class OpenAIResponsesProvider:
             'max_output_tokens': self.configuration.max_output_tokens,
             'store': False,
         }
-        response = self.transport(
+        response = _complete_response(
+            self.transport,
             _endpoint(self.configuration.base_url, 'responses'),
             _authorization(self.configuration.api_key),
             body,
             self.configuration.timeout_seconds,
+            'max_output_tokens',
+            lambda result: result.get('status') == 'incomplete' and
+            (result.get('incomplete_details') or {}).get('reason') == 'max_output_tokens',
         )
         text = response.get('output_text')
         if not text:
@@ -110,11 +138,15 @@ class OpenAICompatibleChatProvider:
             'max_tokens': self.configuration.max_output_tokens,
             'temperature': 0,
         }
-        response = self.transport(
+        response = _complete_response(
+            self.transport,
             _endpoint(self.configuration.base_url, 'chat/completions'),
             _authorization(self.configuration.api_key),
             body,
             self.configuration.timeout_seconds,
+            'max_tokens',
+            lambda result: any(choice.get('finish_reason') == 'length'
+                               for choice in (result.get('choices') or [])),
         )
         choices = response.get('choices') or []
         text = choices[0].get('message', {}).get('content') if choices else None
