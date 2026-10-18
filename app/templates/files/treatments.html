@@ -22,6 +22,7 @@
         <section data-treatment-card style="margin-top:14px;padding-top:10px;border-top:1px solid #ddd">
             <p><strong>{{ issue.label }}</strong> · {{ issue.count }} fila(s)</p>
             {% if issue.scenario == 'range' %}<p>Es una sugerencia del contexto, no una certeza. Si estos valores son válidos en tu caso, puedes conservarlos.</p>{% endif %}
+            {% if issue.scenario == 'bounds' %}{% set limits = configuration.columns[issue.column] %}<p>Tu rango permitido: {{ limits.get('minimum', 'sin mínimo') }} a {{ limits.get('maximum', 'sin máximo') }}, incluidos los extremos. Una decisión cubre este grupo. No ajustaremos valores al límite ni inventaremos correcciones.</p>{% endif %}
             {% if issue.scenario == 'date_ambiguous' %}<p>Una sola elección resolverá este grupo: 03/04 puede ser 3 de abril o 4 de marzo. Si el archivo mezcla ambos criterios, conserva o separa el grupo en lugar de adivinar.</p>{% endif %}
             {% if issue.scenario == 'negative' %}<p>Indicaste que este campo no permite negativos. Elige una sola acción para este grupo. Convertir a positivo conserva la magnitud: −3 pasa a 3. No elijas esta opción si el signo representa una devolución, un saldo u otra información válida.</p>{% endif %}
             {% if issue.examples %}<p>Ejemplos: {{ issue.examples|join(' · ') }}</p>{% endif %}

@@ -29,7 +29,7 @@ class WizardResult:
 
 
 class WizardExecutionService:
-    RULE_VERSION = '2-deterministic-dates'
+    RULE_VERSION = '3-numeric-bounds'
 
     @staticmethod
     def convert(value, preference):
@@ -110,6 +110,9 @@ class WizardExecutionService:
                     text=str(value).strip()
                     if isinstance(value,str):text=text.replace(pref.get('decimal_separator','.'),'.')
                     replacement=format(abs(Decimal(text)),'f')
+                    if (('minimum' in pref and Decimal(replacement) < Decimal(pref['minimum'])) or
+                            ('maximum' in pref and Decimal(replacement) > Decimal(pref['maximum']))):
+                        raise ValueError('Convertir el grupo a positivo dejaría valores fuera de tu rango. Elige otro tratamiento para este grupo.')
                     working.at[row,column]=replacement.replace('.',pref.get('decimal_separator','.'))
                     causes[key]='Conversión a positivo confirmada para el grupo'
                 elif action=='ai':

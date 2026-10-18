@@ -2,6 +2,7 @@ import hashlib
 import math
 import numbers
 import re
+from decimal import Decimal
 import pandas as pd
 from app.services.date_normalization_service import DateNormalizationService as Dates
 
@@ -58,9 +59,20 @@ class CleaningTreatmentService:
             negative_policy = pref.get('negative_policy', 'unknown')
             if numeric is not None and negative_policy == 'deny':
                 scenarios.append(('negative', 'Valores negativos no permitidos por tu regla', numeric.lt(0) & ~empty & ~invalid))
-            elif numeric is not None and negative_policy != 'allow' and any(c in constraints for c in ('positive','non_negative')):
+            elif numeric is not None and negative_policy != 'allow' and not any(k in pref for k in ('minimum','maximum')) and any(c in constraints for c in ('positive','non_negative')):
                 mask = numeric.le(0) if 'positive' in constraints else numeric.lt(0)
                 scenarios.append(('range', 'Valores fuera del rango sugerido por el contexto', mask & ~empty & ~invalid))
+            if numeric is not None and any(k in pref for k in ('minimum', 'maximum')):
+                def outside(value):
+                    if cls.number(value, pref) is None:
+                        return False
+                    number = Decimal(str(value).strip().replace(pref.get('decimal_separator', '.'), '.'))
+                    if negative_policy == 'deny' and number < 0:
+                        return False  # The sign group already owns this cell.
+                    return (('minimum' in pref and number < Decimal(pref['minimum'])) or
+                            ('maximum' in pref and number > Decimal(pref['maximum'])))
+                mask = series.map(outside) & ~empty & ~invalid
+                scenarios.append(('bounds', 'Valores fuera del rango que definiste', mask))
             for scenario, label, mask in scenarios:
                 if not mask.any(): continue
                 key = hashlib.sha256((name+'\0'+scenario).encode()).hexdigest()[:24]

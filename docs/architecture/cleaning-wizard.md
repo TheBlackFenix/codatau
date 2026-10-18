@@ -221,3 +221,22 @@ nuevas. Cambios de configuración siguen invalidando los pasos posteriores. Una
 preferencia IA antigua para fechas exige volver a tratamientos y guardar el nuevo
 criterio agrupado. Esta etapa elimina la revisión individual de fechas, no reemplaza
 todavía todos los escenarios numéricos y semánticos por reglas agrupadas.
+
+## Límites numéricos configurables
+
+Enteros y decimales admiten `minimum` y `maximum` opcionales e inclusivos. Se guardan
+como cadenas decimales exactas en las preferencias; se comparan sin redondear los
+límites. Se admiten punto o coma decimal sin miles, pero no límites no finitos,
+fraccionarios para enteros, contradictorios o negativos cuando se prohíbe el signo.
+Una columna de texto o identificador ignora los controles numéricos ocultos.
+
+Los límites explícitos sustituyen restricciones de rango inferidas del contexto.
+La regla de signo explícita también sigue vigente; las celdas negativas que viola
+esa regla se asignan solo al grupo de negativos para evitar tratamientos solapados.
+El escenario `bounds` reúne las otras celdas interpretables fuera de los límites.
+Vacíos y formatos incompatibles conservan sus escenarios separados. No se recortan
+valores al mínimo o máximo. Convertir un negativo a positivo se rechaza si el
+resultado queda fuera de límites. Las propuestas de IA también deben cumplirlos.
+
+Cambiar un límite invalida duplicados, tratamientos y propuestas anteriores. La
+confirmación versionada guarda estos parámetros junto con las decisiones y cambios.

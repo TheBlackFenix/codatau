@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 
 
 class ColumnTypeService:
@@ -58,6 +59,22 @@ class ColumnTypeService:
                 if policy not in {'allow', 'deny', 'unknown'}:
                     raise ValueError('Indica si este campo permite valores negativos.')
                 choice['negative_policy'] = policy
+                bounds = {}
+                for field, label in [('minimum', 'mínimo'), ('maximum', 'máximo')]:
+                    value = form.get(key + '_' + field, '').strip()
+                    if not value:
+                        continue
+                    if len(value) > 64 or not re.fullmatch(r'[+-]?\d+(?:[.,]\d+)?', value):
+                        raise ValueError(f'El {label} de {card["name"]} debe ser un número sin separadores de miles.')
+                    bound = Decimal(value.replace(',', '.'))
+                    if kind == 'integer' and bound != bound.to_integral_value():
+                        raise ValueError(f'El {label} de un campo entero no puede tener fracciones.')
+                    if policy == 'deny' and bound < 0:
+                        raise ValueError('Si no permites negativos, los límites tampoco pueden ser negativos.')
+                    bounds[field] = str(bound)
+                if len(bounds) == 2 and Decimal(bounds['minimum']) > Decimal(bounds['maximum']):
+                    raise ValueError('El mínimo no puede ser mayor que el máximo.')
+                choice.update(bounds)
             if kind == 'decimal':
                 separator = form.get(key + '_separator')
                 if separator not in {'.', ','}:

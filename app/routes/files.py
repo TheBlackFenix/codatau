@@ -91,6 +91,7 @@ def configure_columns(file_id):
                 key = f'column_{card["index"]}'
                 if request.form.get(key) in ColumnTypeService.TYPES:
                     card['choice'] = {'type': request.form[key], 'decimal_separator': request.form.get(key+'_separator', '.'), 'date_format': request.form.get(key+'_date', 'iso'), 'date_source': request.form.get(key+'_date_source', request.form.get(key+'_date', 'iso')), 'negative_policy': request.form.get(key+'_negative', 'unknown')}
+                    card['choice'].update({field: request.form.get(key+'_'+field, '')[:64] for field in ('minimum','maximum')})
         except (StaleDataError, IntegrityError):
             db.session.rollback()
             flash('Otra ventana guardó cambios. Recarga la configuración antes de continuar.', 'warning')
