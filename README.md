@@ -32,6 +32,12 @@
 
 ## 📋 Tabla de Contenidos
 
+La documentación del cierre de desarrollo está en [documentos/](documentos/README.md):
+[código e instalación (2.7)](documentos/2.7_codigo_fuente_e_instalacion.md),
+[manual de usuario (2.8)](documentos/2.8_manual_de_usuario.md) e
+[informe técnico (2.9)](documentos/2.9_informe_tecnico.md).
+Incluye los scripts de entrega y el alcance vigente del MVP, con sus límites conocidos.
+
 - [Sobre el Proyecto](#-sobre-el-proyecto)
 - [¿Qué problema resuelve?](#-qué-problema-resuelve)
 - [Funcionalidades](#-funcionalidades)
