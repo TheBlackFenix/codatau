@@ -11,6 +11,10 @@ artifacts/
 
 # Variables de entorno (NUNCA subir)
 .env
+.env.*
+deploy/*.env
+!.env.example
+!deploy/*.env.example
 
 # Python cache
 __pycache__/

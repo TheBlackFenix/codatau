@@ -617,6 +617,10 @@ operación y adopción del esquema están en
 
 ---
 
+## Despliegue local y nube
+
+La guía [Ejecutar CoDataU en local y en nube](documentos/despliegue_local_y_nube.md) incluye Docker Compose con PostgreSQL, proveedores de archivos local/S3/Azure, configuración de Render y pruebas con emuladores aislados.
+
 ## 📝 Licencia
 
 Este proyecto fue desarrollado con fines académicos. Todos los derechos reservados a Kevin Santiago Sarmiento Rincón.
