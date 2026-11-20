@@ -15,3 +15,8 @@ python-dotenv==1.0.1
 WTForms==3.2.2
 email-validator==2.2.0
 text2num==3.0.2
+psycopg[binary]==3.2.10
+boto3==1.40.0
+azure-storage-blob==12.26.0
+azure-identity==1.25.1
+gunicorn==23.0.0; sys_platform != 'win32'

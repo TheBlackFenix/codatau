@@ -8,6 +8,7 @@ from app.models.file_upload import FileUpload
 from app.models.ai_insight import AIInsight
 from app.services.data_service import DataService
 from app.services.dataset_pipeline import DatasetPipeline
+from app.services.storage_service import storage_for
 from app.services.ai_service import AIService
 from app.services.dataset_context_service import DatasetContextService
 from app.services.cleaning_decision_service import CleaningDecisionService
@@ -52,15 +53,9 @@ def index():
         session['active_file_id'] = active_file.id
 
     if active_file:
-        filepath = os.path.join(
-            current_app.config['UPLOAD_FOLDER'],
-            active_file.filename
-        )
         try:
-            pipeline = DatasetPipeline(
-                current_app.config['ANALYTICS_FOLDER'],
-                current_app.config['PROFILE_SAMPLE_SIZE'],
-            )
+            filepath = storage_for('uploads').path_for(active_file.filename)
+            pipeline = DatasetPipeline.configured()
             df = pipeline.load_dataframe_or_source(
                 active_file.active_stored_filename,
                 filepath,
@@ -134,8 +129,8 @@ def index():
 
 
 def _recommendation_inputs(record):
-    pipeline = DatasetPipeline(current_app.config['ANALYTICS_FOLDER'], current_app.config['PROFILE_SAMPLE_SIZE'])
-    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
+    pipeline = DatasetPipeline.configured()
+    filepath = storage_for('uploads').path_for(record.filename)
     summary = DataService.get_summary(pipeline.load_dataframe_or_source(record.active_stored_filename, filepath))
     profile = pipeline.ensure_current_profile(record.active_stored_filename, filepath)
     context = DatasetContextService.latest(record, profile, current_user.id, current_app.config)
@@ -198,8 +193,8 @@ def dataset_chat(file_id):
     if payload.get('version') != record.active_stored_filename:
         return jsonify({'error': 'La versión activa cambió. Recarga el chat antes de preguntar.'}), 409
     try:
-        pipeline = DatasetPipeline(current_app.config['ANALYTICS_FOLDER'], current_app.config['PROFILE_SAMPLE_SIZE'])
-        path = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
+        pipeline = DatasetPipeline.configured()
+        path = storage_for('uploads').path_for(record.filename)
         dataframe = pipeline.load_dataframe_or_source(record.active_stored_filename, path)
         profile = pipeline.ensure_current_profile(record.active_stored_filename, path)
         context = DatasetContextService.latest(record, profile, current_user.id, current_app.config)
@@ -234,11 +229,8 @@ def save_metrics(file_id):
     if not isinstance(payload, dict):
         return jsonify({'error': 'La configuración de métricas no es válida.'}), 400
     try:
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], record.filename)
-        pipeline = DatasetPipeline(
-            current_app.config['ANALYTICS_FOLDER'],
-            current_app.config['PROFILE_SAMPLE_SIZE'],
-        )
+        filepath = storage_for('uploads').path_for(record.filename)
+        pipeline = DatasetPipeline.configured()
         dataframe = pipeline.load_dataframe_or_source(
             record.active_stored_filename,
             filepath,
