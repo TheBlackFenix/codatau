@@ -621,6 +621,40 @@ operación y adopción del esquema están en
 
 La guía [Ejecutar CoDataU en local y en nube](documentos/despliegue_local_y_nube.md) incluye Docker Compose con PostgreSQL, proveedores de archivos local/S3/Azure, configuración de Render y pruebas con emuladores aislados.
 
+### Inicio rápido con Docker
+
+Instala Docker Desktop y activa el motor de contenedores Linux. Desde la carpeta del repositorio:
+
+```powershell
+# Solo la primera vez; no sobrescribir un archivo privado que ya exista.
+Copy-Item deploy/local.env.example deploy/local.env
+docker compose --env-file deploy/local.env up --build -d
+```
+
+Abre <http://localhost:5055>. Se levantan Flask y PostgreSQL; las migraciones se aplican automáticamente. Los archivos y la base quedan en volúmenes persistentes. Esta configuración inicial no consume IA.
+
+Para habilitar Gemini, añade a `deploy/local.env`:
+
+```dotenv
+AI_PROVIDER=openai_compatible
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+AI_MODEL=identificador-del-modelo-disponible-en-tu-cuenta
+AI_API_KEY=tu-clave-privada
+AI_MODEL_SELECTOR_ENABLED=1
+```
+
+Guarda y ejecuta `docker compose --env-file deploy/local.env up -d` para aplicar los cambios. El selector aparece al iniciar sesión; si Google no permite consultar el catálogo, solo se muestra el modelo configurado. Si ya usabas IA en el `.env` de la raíz, la guía explica cómo conservar esa configuración con `scripts/configure-local.py`.
+
+`deploy/local.env` configura Docker; `.env` configura la ejecución directa con Python. Usa siempre `--env-file deploy/local.env` para que Docker no tome accidentalmente la antigua URL de SQLite del `.env` raíz. Las claves reales y los archivos privados están excluidos de Git y de la imagen; el repositorio solo incluye ejemplos.
+
+```powershell
+# Comprobar estado y detener conservando datos.
+docker compose --env-file deploy/local.env ps
+docker compose --env-file deploy/local.env down
+```
+
+Para nube, la guía detalla `render.yaml`, PostgreSQL y Azure/S3. Cambiar las variables selecciona el proveedor; no migra automáticamente datos existentes.
+
 ## 📝 Licencia
 
 Este proyecto fue desarrollado con fines académicos. Todos los derechos reservados a Kevin Santiago Sarmiento Rincón.

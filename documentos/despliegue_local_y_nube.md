@@ -54,6 +54,38 @@ Los volúmenes `postgres_data` y `app_data` conservan la información. **No aña
 
 ## 4. Seleccionar base de datos
 
+### Dónde colocar las variables
+
+| Archivo o panel | Cuándo se usa |
+|---|---|
+| `.env` en la raíz | Ejecución directa con Python, normalmente en el puerto 5000. |
+| `deploy/local.env` | Docker con PostgreSQL local, normalmente en el puerto 5055. Se pasa explícitamente con `--env-file`. |
+| `deploy/cloud.env` | Docker local conectado a los servicios remotos. Se utiliza con el archivo Compose adicional. |
+| Render → Environment | Variables privadas del despliegue. No se sube un `.env` al repositorio ni a la imagen. |
+
+Los archivos `.example` solo contienen valores ficticios o campos vacíos. Cada persona completa su archivo privado; los archivos reales están excluidos de Git. Las contraseñas locales de ejemplo no deben reutilizarse en servicios públicos.
+
+| Variable | Para qué sirve |
+|---|---|
+| `SECRET_KEY` | Firma las sesiones y formularios. Usar un valor largo y estable; Render puede generarlo. |
+| `WEB_PORT` / `POSTGRES_PORT` | Puertos del computador para acceder a Docker; no cambian los puertos internos. |
+| `POSTGRES_PASSWORD` | Contraseña inicial de PostgreSQL local. No modifica automáticamente una base existente. |
+| `DATABASE_PROVIDER` / `DATABASE_URL` | Seleccionan SQLite o PostgreSQL y su conexión. En Compose, omitir la URL utiliza la base local `db`. |
+| `STORAGE_PROVIDER` / `STORAGE_PREFIX` | Seleccionan dónde guardar archivos y el espacio de nombres de los objetos remotos. |
+| `AI_PROVIDER` | `disabled` apaga la IA; Gemini usa `openai_compatible`. |
+| `AI_BASE_URL` | Para Gemini: `https://generativelanguage.googleapis.com/v1beta/openai/`. |
+| `AI_MODEL` | Identificador exacto de un modelo disponible para la cuenta. |
+| `AI_API_KEY` | Clave privada del proveedor; nunca se incluye en capturas o commits. |
+| `AI_MODEL_SELECTOR_ENABLED` | `1` muestra el selector a usuarios autenticados. Necesita un modelo configurado; el catálogo requiere una clave válida. |
+| `AI_RESPONSE_MODE` | `json_schema` para respuestas estructuradas; `json_object` como compatibilidad. |
+| `AI_TIMEOUT_SECONDS` / `AI_MAX_OUTPUT_TOKENS` | Tiempo de espera y límite de salida; predeterminados: 30 segundos y 1200 tokens. |
+| `AI_MAX_CANDIDATE_COLUMNS` / `AI_SAMPLE_VALUES` | Límites de columnas candidatas y muestras por caso; predeterminados: 8 y 4. |
+| `AI_CONTEXT_SAMPLE_ROWS` / `AI_CONTEXT_MAX_COLUMNS` | Límites para inferir contexto: 5 filas y 80 columnas. |
+
+Para habilitar Gemini en Docker se añaden sus variables a `deploy/local.env`, usando una clave privada y un modelo disponible. Las demás variables de IA pueden omitirse para conservar sus valores predeterminados. Después de editar el archivo se ejecuta `docker compose --env-file deploy/local.env up -d`: recrea el servicio afectado y conserva los volúmenes. Editar el archivo sin actualizar el contenedor no modifica la aplicación en ejecución.
+
+El selector se consulta después de iniciar sesión. Si el proveedor rechaza el catálogo, se conserva el modelo configurado; eso no confirma que una llamada de generación funcione. Hay que verificar la clave, el acceso al modelo y la cuota en la cuenta del proveedor.
+
 `DATABASE_PROVIDER` acepta `auto`, `sqlite` y `postgresql`. `auto` mantiene la compatibilidad con instalaciones anteriores que solo usaban `DATABASE_URL`. Un proveedor explícito incompatible con la URL produce un error claro al arrancar.
 
 | Proveedor | Ejemplo de DATABASE_URL |
