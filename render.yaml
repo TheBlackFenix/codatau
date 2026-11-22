@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: codatau-demo
+    runtime: docker
+    dockerCommand: sh scripts/start-web.sh
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_PROVIDER
+        value: postgresql
+      - key: DATABASE_URL
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: azure
+      - key: STORAGE_PREFIX
+        value: codatau-demo
+      - key: AZURE_STORAGE_CONTAINER
+        sync: false
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        sync: false
+      - key: AI_PROVIDER
+        value: disabled

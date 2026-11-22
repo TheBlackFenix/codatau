@@ -1,0 +1,5 @@
+# Override: run only the app against PostgreSQL/Storage already provisioned in cloud.
+# docker compose --env-file deploy/cloud.env -f compose.yaml -f compose.remote.yaml up --build -d web
+services:
+  web:
+    depends_on: !reset {}

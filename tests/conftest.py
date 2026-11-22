@@ -1,3 +1,4 @@
+import os
 import pytest
 
 from app import create_app
@@ -14,6 +15,7 @@ def app(tmp_path):
             'SECRET_KEY': 'test-secret-key',
             'UPLOAD_FOLDER': str(upload_folder),
             'ANALYTICS_FOLDER': str(analytics_folder),
+            'SQLALCHEMY_DATABASE_URI': os.environ.get('TEST_DATABASE_URL', 'sqlite:///:memory:'),
             # Keep the suite independent from a developer's local .env. Tests
             # that exercise an AI provider opt in and supply their own stub.
             'AI_PROVIDER': 'disabled',

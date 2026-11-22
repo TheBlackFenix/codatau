@@ -15,6 +15,14 @@ def create_app(config_name='default', config_overrides=None):
     if config_overrides:
         app.config.update(config_overrides)
 
+    from pathlib import Path
+    from app.services.database_config import database_uri
+    from app.services.storage_service import init_storage
+    # Explicit test/custom URIs keep precedence over environment configuration.
+    if config_name != 'testing' and not (config_overrides and 'SQLALCHEMY_DATABASE_URI' in config_overrides):
+        app.config['SQLALCHEMY_DATABASE_URI'] = database_uri(app.config, Path(app.root_path).parent)
+    init_storage(app)
+
     if config_name == 'production':
         missing = [
             name for name in ('SECRET_KEY', 'SQLALCHEMY_DATABASE_URI')
@@ -74,6 +82,12 @@ def create_app(config_name='default', config_overrides=None):
         return render_template('auth/inicio.html')
 
     # Manejo de archivo demasiado grande
+    @app.route('/healthz')
+    def health():
+        from sqlalchemy import text
+        db.session.execute(text('SELECT 1'))
+        return {'status': 'ok'}
+
     @app.errorhandler(413)
     def too_large(e):
         from flask import flash

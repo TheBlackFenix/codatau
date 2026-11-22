@@ -48,24 +48,37 @@ def _json_value(value):
 class DatasetPipeline:
     """Creates portable analytical artifacts and compact AI-ready profiles."""
 
-    def __init__(self, analytics_folder, sample_size=12):
+    @classmethod
+    def configured(cls):
+        from flask import current_app
+        from app.services.storage_service import storage_for
+        storage = storage_for('artifacts')
+        return cls(storage.root, current_app.config['PROFILE_SAMPLE_SIZE'], storage=storage)
+
+    def __init__(self, analytics_folder, sample_size=12, storage=None):
         self.analytics_folder = Path(analytics_folder).resolve()
         self.analytics_folder.mkdir(parents=True, exist_ok=True)
         self.sample_size = max(1, int(sample_size))
+        self.storage = storage
 
     def paths_for(self, stored_filename):
         safe_name = Path(stored_filename).name
         if safe_name != stored_filename:
             raise ValueError('El nombre almacenado no puede contener rutas.')
         stem = Path(safe_name).stem
-        return (
-            self.analytics_folder / f'{stem}.parquet',
-            self.analytics_folder / f'{stem}.profile.json',
-        )
+        path_for = self.storage.path_for if self.storage else self.analytics_folder.__truediv__
+        return (path_for(f'{stem}.parquet'), path_for(f'{stem}.profile.json'))
 
     def quarantine_path_for(self, stored_filename):
         parquet_path, _ = self.paths_for(stored_filename)
-        return parquet_path.with_name(f'{parquet_path.stem}.quarantine.parquet')
+        name = f'{parquet_path.stem}.quarantine.parquet'
+        return self.storage.path_for(name) if self.storage else parquet_path.with_name(name)
+
+    def publish(self, stored_filename):
+        if self.storage:
+            for path in (*self.paths_for(stored_filename), self.quarantine_path_for(stored_filename)):
+                if path.exists():
+                    self.storage.publish(path.name)
 
     def ingest_dataframe(self, dataframe, stored_filename, source_path):
         if dataframe.empty or len(dataframe.columns) == 0:
@@ -90,6 +103,7 @@ class DatasetPipeline:
             os.replace(temporary_parquet, parquet_path)
             profile = self._build_profile(parquet_path, source_path)
             self._write_json_atomic(profile_path, profile)
+            self.publish(stored_filename)
             return DatasetArtifact(parquet_path, profile_path, profile)
         finally:
             if temporary_parquet.exists():
@@ -138,6 +152,7 @@ class DatasetPipeline:
             raise FileNotFoundError(parquet_path)
         profile = self._build_profile(parquet_path, source_path)
         self._write_json_atomic(profile_path, profile)
+        self.publish(stored_filename)
         return DatasetArtifact(parquet_path, profile_path, profile)
 
     def ensure_current_profile(self, stored_filename, source_path):
@@ -147,6 +162,14 @@ class DatasetPipeline:
         return self.profile_existing(stored_filename, source_path).profile
 
     def remove_artifacts(self, stored_filename):
+        if Path(stored_filename).name != stored_filename:
+            raise ValueError('El nombre almacenado no puede contener rutas.')
+        if self.storage:
+            # Do not download objects just to delete them.
+            stem = Path(stored_filename).stem
+            for suffix in ('.parquet', '.profile.json', '.quarantine.parquet'):
+                self.storage.delete(stem + suffix)
+            return
         for path in self.paths_for(stored_filename):
             if path.exists():
                 path.unlink()

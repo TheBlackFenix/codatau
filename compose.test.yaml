@@ -1,0 +1,51 @@
+# Isolated infrastructure: never uses the developer's .env or production data.
+name: codatau-adapter-tests
+services:
+  db:
+    image: postgres:17-bookworm
+    tmpfs:
+      - /var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: codatau_tests
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d codatau_tests"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  s3:
+    image: motoserver/moto:5.1.11
+  azure:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    environment:
+      AZURITE_ACCOUNTS: demo:ZGVtby1sb2NhbC1rZXktb25seQ==
+    command: azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+  tests:
+    build:
+      context: .
+      target: test
+    environment:
+      APP_ENV: production
+      SECRET_KEY: isolated-test-key
+      DATABASE_PROVIDER: postgresql
+      DATABASE_URL: postgresql+psycopg://test:test-only@db:5432/codatau_tests
+      TEST_DATABASE_URL: postgresql+psycopg://test:test-only@db:5432/codatau_tests
+      STORAGE_PROVIDER: local
+      UPLOAD_FOLDER: /tmp/uploads
+      ANALYTICS_FOLDER: /tmp/artifacts
+      AI_PROVIDER: disabled
+      RUN_STORAGE_INTEGRATION: '1'
+      S3_ENDPOINT_URL: http://s3:5000
+      S3_BUCKET: adapter-tests
+      S3_ACCESS_KEY_ID: test
+      S3_SECRET_ACCESS_KEY: test
+      AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=demo;AccountKey=ZGVtby1sb2NhbC1rZXktb25seQ==;BlobEndpoint=http://azure:10000/demo;
+      AZURE_STORAGE_CONTAINER: adapter-tests
+    depends_on:
+      db:
+        condition: service_healthy
+      s3:
+        condition: service_started
+      azure:
+        condition: service_started

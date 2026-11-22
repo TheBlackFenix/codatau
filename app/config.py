@@ -16,6 +16,20 @@ def _env_int(name, default):
         raise ValueError(f'{name} debe ser un número entero.') from exc
 
 class Config:
+    DATABASE_PROVIDER = os.environ.get('DATABASE_PROVIDER', 'auto')
+    DATABASE_URL = os.environ.get('DATABASE_URL', '')
+    STORAGE_PROVIDER = os.environ.get('STORAGE_PROVIDER', 'local')
+    STORAGE_PREFIX = os.environ.get('STORAGE_PREFIX', 'codatau')
+    S3_BUCKET = os.environ.get('S3_BUCKET', '')
+    S3_ENDPOINT_URL = os.environ.get('S3_ENDPOINT_URL', '')
+    S3_REGION = os.environ.get('S3_REGION', 'us-east-1')
+    S3_ACCESS_KEY_ID = os.environ.get('S3_ACCESS_KEY_ID', '')
+    S3_SECRET_ACCESS_KEY = os.environ.get('S3_SECRET_ACCESS_KEY', '')
+    S3_ADDRESSING_STYLE = os.environ.get('S3_ADDRESSING_STYLE', 'path')
+    AZURE_STORAGE_CONNECTION_STRING = os.environ.get('AZURE_STORAGE_CONNECTION_STRING', '')
+    AZURE_STORAGE_ACCOUNT_URL = os.environ.get('AZURE_STORAGE_ACCOUNT_URL', '')
+    AZURE_STORAGE_CONTAINER = os.environ.get('AZURE_STORAGE_CONTAINER', '')
+    SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True}
     AI_MODEL_SELECTOR_ENABLED = os.environ.get('AI_MODEL_SELECTOR_ENABLED', '0') == '1'
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-insegura-cambiar-en-produccion'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -52,6 +66,7 @@ class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
 
 class TestingConfig(Config):
+    STORAGE_PROVIDER = 'local'
     AI_MODEL_SELECTOR_ENABLED = True
     TESTING = True
     WTF_CSRF_ENABLED = False

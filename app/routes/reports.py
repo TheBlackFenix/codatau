@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 
 from app.models.file_upload import FileUpload
 from app.services.dataset_pipeline import DatasetPipeline
+from app.services.storage_service import storage_for
 from app.services.cleaning_export_service import CleaningExportService
 from app.services.date_normalization_service import DateNormalizationService as Dates
 
@@ -41,16 +42,9 @@ def download(file_id):
         id=file_id, user_id=current_user.id
     ).first_or_404()
 
-    filepath = os.path.join(
-        current_app.config['UPLOAD_FOLDER'],
-        record.filename
-    )
-
-    pipeline = DatasetPipeline(
-        current_app.config['ANALYTICS_FOLDER'],
-        current_app.config['PROFILE_SAMPLE_SIZE'],
-    )
     try:
+        filepath = storage_for('uploads').path_for(record.filename)
+        pipeline = DatasetPipeline.configured()
         df = pipeline.load_dataframe_or_source(
             record.active_stored_filename,
             filepath,

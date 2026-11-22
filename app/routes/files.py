@@ -43,7 +43,7 @@ from app.services.cleaning_decision_service import CleaningDecisionService
 from app.services.custom_cleaning_rule_service import CustomCleaningRuleService
 from app.services.cleaning_export_service import CleaningExportService
 from app.services.dashboard_service import DashboardService
-from app.services.storage_service import LocalStorageService
+from app.services.storage_service import storage_for
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
 
@@ -515,14 +515,11 @@ def _quarantine_reason_labels(decisions):
 
 
 def _pipeline():
-    return DatasetPipeline(
-        current_app.config['ANALYTICS_FOLDER'],
-        current_app.config['PROFILE_SAMPLE_SIZE'],
-    )
+    return DatasetPipeline.configured()
 
 
 def _storage():
-    return LocalStorageService(current_app.config['UPLOAD_FOLDER'])
+    return storage_for('uploads')
 
 
 def _load_dataframe(record):
