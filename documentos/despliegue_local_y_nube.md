@@ -25,6 +25,8 @@ Cambiar de proveedor no copia automáticamente la información anterior. Las bas
 
 Desde la carpeta del proyecto, en PowerShell:
 
+Si ya existe una configuración de IA funcional en `.env`, ejecutar primero `venv\Scripts\python.exe scripts/configure-local.py` y omitir el `Copy-Item` siguiente. Ese asistente crea `deploy/local.env` conservando las opciones IA del `.env` y respeta los valores de un archivo Docker privado que ya exista. Después se usa siempre `--env-file deploy/local.env` al levantar el entorno.
+
 ```powershell
 Copy-Item deploy/local.env.example deploy/local.env
 docker compose --env-file deploy/local.env up --build -d
