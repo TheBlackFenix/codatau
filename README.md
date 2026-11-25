@@ -1,639 +1,285 @@
 <div align="center">
 
-<!-- Logo -->
-<img src="app/static/img/isotipo.png" alt="CoDataU Logo" width="100" height="100" style="border-radius: 20px"/>
-
-<br/>
+<img src="app/static/img/isotipo.png" alt="Logo de CoDataU" width="100" height="100" />
 
 # CoDataU
 
-### Dashboard de Análisis de Datos con Inteligencia Artificial
+**Preparación, limpieza y análisis de datos con asistencia de inteligencia artificial**
 
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Flask](https://img.shields.io/badge/Flask-3.x-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
-[![pandas](https://img.shields.io/badge/pandas-2.x-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org)
-[![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
-[![SQLite](https://img.shields.io/badge/SQLite-3.x-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org)
-[![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384?style=for-the-badge&logo=chartdotjs&logoColor=white)](https://chartjs.org)
-
-<br/>
-
-**Proyecto de Grado — Décimo Semestre**  
-**Universidad — Ingeniería / Tecnología en Sistemas**  
-**Autor: Kevin Santiago Sarmiento Rincón**
-
-<br/>
-
-[🚀 Demo en vivo](#) · [📖 Documentación](#documentación) · [🐛 Reportar bug](../../issues) · [💡 Sugerir feature](../../issues)
+Proyecto académico · Prototipo funcional
 
 </div>
 
----
+CoDataU permite cargar archivos CSV o Excel, revisar su calidad, configurar su limpieza y analizar los resultados desde el navegador. Está pensado para personas que necesitan trabajar con información sin escribir consultas ni programar transformaciones.
 
-## 📋 Tabla de Contenidos
+La limpieza combina reglas predefinidas con IA para los casos que requieren interpretación. El usuario revisa propuestas y confirma los cambios antes de crear una versión. El archivo original se mantiene separado de los resultados.
 
-La documentación del cierre de desarrollo está en [documentos/](documentos/README.md):
-[código e instalación (2.7)](documentos/2.7_codigo_fuente_e_instalacion.md),
-[manual de usuario (2.8)](documentos/2.8_manual_de_usuario.md) e
-[informe técnico (2.9)](documentos/2.9_informe_tecnico.md).
-Incluye los scripts de entrega y el alcance vigente del MVP, con sus límites conocidos.
+## Contenido
 
-- [Sobre el Proyecto](#-sobre-el-proyecto)
-- [¿Qué problema resuelve?](#-qué-problema-resuelve)
-- [Funcionalidades](#-funcionalidades)
-- [Stack Tecnológico](#-stack-tecnológico)
-- [Arquitectura del Sistema](#-arquitectura-del-sistema)
-- [Estructura del Proyecto](#-estructura-del-proyecto)
-- [Instalación y Configuración](#-instalación-y-configuración)
-- [Uso](#-uso)
-- [Capturas de Pantalla](#-capturas-de-pantalla)
-- [API de Rutas](#-api-de-rutas)
-- [Base de Datos](#-base-de-datos)
-- [Autor](#-autor)
-- [Contexto Académico](#-contexto-académico)
-- [Licencia](#-licencia)
+- [Autores](#autores)
+- [Funcionalidades](#funcionalidades)
+- [Tecnologías](#tecnologías)
+- [Arquitectura](#arquitectura)
+- [Modelo de datos](#modelo-de-datos)
+- [Ejecutar con Docker](#ejecutar-con-docker)
+- [Variables e IA](#variables-e-ia)
+- [Ejecutar con Python](#ejecutar-con-python)
+- [Despliegue en nube](#despliegue-en-nube)
+- [Pruebas](#pruebas)
+- [Estructura y documentación](#estructura-y-documentación)
+- [Alcance y pendientes](#alcance-y-pendientes)
 
----
+## Autores
 
-## 🎯 Sobre el Proyecto
+- Johan Sebastián Márquez Bonilla
+- Esthefania Narváez Poloche
+- Angie Lorena Urrego
+- Alexandra Cabrera Hernández
+- Ana Valentina Agudelo Barrantes
+- Diana Isabel Barón Gómez
+- Daniel Hernando Miranda Téllez
+- Michael Alexander Caycedo Bolaños
 
-**CoDataU** (Company Data University) es una aplicación web de análisis de datos con inteligencia artificial, desarrollada como proyecto de grado universitario. La plataforma permite a usuarios —especialmente pequeñas y medianas empresas— cargar archivos de datos en formato CSV y Excel, procesarlos automáticamente, visualizar métricas en un dashboard interactivo y obtener insights generados por IA, todo desde una interfaz moderna e intuitiva sin necesidad de conocimientos técnicos.
+## Funcionalidades
 
-El proyecto nació de la necesidad de democratizar el análisis de datos: herramientas como Power BI, Tableau o Google Data Studio son poderosas pero complejas y costosas para la mayoría de las PYMES. CoDataU propone una alternativa accesible que entrega valor en segundos, sin configuraciones complejas ni curvas de aprendizaje elevadas.
+### Carga y revisión
 
-> *"Datos + Análisis + Inteligencia"* — lema de CoDataU
+- Registro, inicio de sesión, edición de perfil y cambio de contraseña.
+- Carga de archivos `.csv`, `.xls` y `.xlsx`, con límite predeterminado de 50 MB.
+- Validación de estructura y mensajes sobre los problemas de lectura.
+- Perfil de columnas, tipos, valores faltantes, duplicados y muestras.
+- Contexto del archivo inferido con IA cuando el proveedor está configurado.
 
----
+### Limpieza guiada
 
-## 🔍 ¿Qué problema resuelve?
+- Selección de tipos con nombres comprensibles: texto, número, fecha, correo y teléfono, entre otros.
+- Configuración de separadores numéricos, valores negativos y rangos mínimo/máximo.
+- Duplicados por fila completa o por combinación de campos.
+- Reglas para espacios, marcadores de vacío, números, fechas, correos, teléfonos y categorías.
+- Diccionarios de equivalencias para unificar valores de una categoría.
+- Tratamientos para conservar valores, reemplazar celdas o separar filas en cuarentena, según la regla.
+- Revisión agrupada de propuestas de IA para evitar aprobar repetidamente el mismo tipo de cambio.
+- Vista previa, confirmación, historial de versiones y reactivación de una versión anterior.
+- Descarga del resultado, de la cuarentena y de un paquete de calidad con trazabilidad.
 
-Las PYMES generan datos constantemente (ventas, gastos, inventarios, nóminas), pero la gran mayoría **no tiene herramientas para analizarlos sistemáticamente**. Esto genera:
+Al cargar el archivo se descartan filas y columnas completamente vacías. Las transformaciones del asistente se revisan antes de aplicarse; los espacios del texto se conservan inicialmente para poder proponer su limpieza.
 
-- ❌ Toma de decisiones basada en intuición en lugar de evidencia
-- ❌ Errores no detectados: valores nulos, duplicados, inconsistencias
-- ❌ Oportunidades de mejora perdidas por falta de visualización
-- ❌ Tiempo invertido en análisis manuales en hojas de cálculo
+### Análisis
 
-**CoDataU resuelve esto en 3 pasos:**
+- Dashboard con métricas que se pueden agregar, quitar y ordenar; la configuración se guarda por usuario y archivo.
+- Selección semántica de medidas para evitar tratar identificadores como importes o cantidades.
+- Visualizaciones por categorías y fechas, sin agrupaciones iniciales por minutos o segundos.
+- Propuestas de métricas relevantes con IA.
+- Chat sobre la versión activa: agregaciones, agrupaciones, rankings y comparaciones entre dos períodos dentro de las operaciones admitidas.
+- Resultados del chat en tablas y explicación del cálculo.
 
-```
-1. Sube tu archivo CSV o Excel
-         ↓
-2. El motor lo analiza automáticamente
-         ↓
-3. Visualiza gráficas, insights y descarga el reporte limpio
-```
+Las alertas de calidad basadas en reglas funcionan sin una API de IA. En el chat, el modelo interpreta la pregunta y propone un plan limitado; la aplicación lo valida y calcula los resultados sobre los datos. El chat no ejecuta SQL libre generado por el modelo ni modifica archivos.
 
----
+## Tecnologías
 
-## ✨ Funcionalidades
+| Componente | Implementación actual |
+|---|---|
+| Lenguaje | Python; Docker con 3.13 y pruebas locales también en 3.14 |
+| Aplicación web | Flask 3.1.0, Application Factory y Blueprints |
+| Interfaz | Jinja2, HTML, CSS y JavaScript; no utiliza React |
+| Gráficas | Chart.js |
+| Autenticación y formularios | Flask-Login, Werkzeug y Flask-WTF, con protección CSRF |
+| Base de datos | SQLite o PostgreSQL; SQLAlchemy 2.0.36 y Flask-SQLAlchemy 3.1.1 |
+| Migraciones | Flask-Migrate y Alembic |
+| Procesamiento | pandas y DuckDB 1.5.5 |
+| Versiones analíticas | Parquet comprimido con Zstandard y perfiles JSON |
+| Archivos | Disco local, S3 compatible o Azure Blob Storage |
+| IA | Adaptadores `openai_compatible` y `openai_responses`; Gemini mediante endpoint compatible |
+| Ejecución | Docker Compose, Gunicorn y configuración para Render |
 
-### 🔐 Autenticación
-- [x] Registro de usuario con validación de email y username únicos
-- [x] Inicio de sesión con contraseña hasheada (bcrypt via Werkzeug)
-- [x] Cierre de sesión seguro
-- [x] Protección de rutas con `@login_required`
-- [x] Protección CSRF en todos los formularios (Flask-WTF)
-- [x] Edición de perfil (nombre de usuario)
-- [x] Cambio de contraseña con verificación de contraseña actual
+Las versiones exactas están en [requirements.txt](requirements.txt). pandas utiliza una versión distinta según Python. Las contraseñas se almacenan con las funciones de hash de Werkzeug; el proyecto no configura bcrypt.
 
-### 📁 Gestión de Archivos
-- [x] Carga de archivos `.csv`, `.xls`, `.xlsx` (hasta 50 MB)
-- [x] Detección de separadores CSV y errores de carga accionables
-- [x] Nombres únicos UUID para evitar colisiones
-- [x] Vista de todos los archivos con acciones: ver, activar, eliminar
-- [x] Eliminación de archivos (físico + registro en BD)
+## Arquitectura
 
-### 🧪 Procesamiento de datos (pandas + DuckDB)
-- [x] Lectura automática con detección de encoding (UTF-8 / Latin-1)
-- [x] Limpieza automática: eliminar filas/columnas vacías, strip de texto
-- [x] Persistencia analítica en Parquet comprimido con Zstandard
-- [x] Perfil estructurado con tipos, nulos, cardinalidad, duplicados y muestra
-- [x] Inferencia semántica y plan de limpieza seguro (`automatic` / revisión / IA)
-- [x] Vista previa, aprobación por operación y versiones reversibles
-- [x] Configuración interactiva de fechas, teléfonos, texto y separadores regionales
-- [x] Cuarentena descargable para filas que no superan una validación
-- [x] Flujo de limpieza accesible desde navegación, dashboard, análisis y archivos
-- [x] Detección de valores nulos y filas duplicadas
-- [x] Cálculo de estadísticas: suma, promedio, mínimo, máximo por columna
-- [x] Generación de datos para gráficas (promedios, agrupaciones)
-- [x] Identificación del tipo de datos (ventas, gastos, productos, etc.)
-
-### 📊 Dashboard Interactivo
-- [x] Selector de archivo activo con chips intercambiables
-- [x] 4 KPI cards: filas, columnas, nulos, duplicados
-- [x] Gráfica de barras: promedio por columna numérica
-- [x] Gráfica de dona: distribución agrupada por categoría
-- [x] Gráfica de nulos por columna
-- [x] Panel de Sugerencias IA
-- [x] Tabla de resumen estadístico
-- [x] Vista previa de las primeras 10 filas
-
-### 🤖 Insights automáticos (base para IA)
-- [x] Identificación automática del tipo de archivo
-- [x] Sugerencias de mejora categorizadas (success / warning / danger / info)
-- [x] Alertas de calidad: nulos, duplicados, filas insuficientes
-- [x] Análisis de valores extremos por columna numérica
-- [x] Insights persistentes en base de datos
-- [x] Análisis IA bajo demanda para limpiezas ambiguas, con muestras anonimizadas
-- [x] Proveedores intercambiables, JSON validado, auditoría y caché por contexto
-
-### 📄 Reportes
-- [x] Listado completo de archivos con métricas
-- [x] Estadísticas globales: total de archivos, registros y procesados
-- [x] Descarga de CSV procesado y limpio (UTF-8 con BOM para Excel)
-
----
-
-## 🛠 Stack Tecnológico
-
-| Categoría | Tecnología | Versión |
-|-----------|-----------|---------|
-| **Lenguaje** | Python | 3.13 |
-| **Framework web** | Flask | 3.x |
-| **ORM** | SQLAlchemy | 3.x |
-| **Base de datos y migraciones** | SQLite + SQLAlchemy + Alembic | 3.x / 2.x / 1.x |
-| **Autenticación** | Flask-Login + Werkzeug | — |
-| **Formularios** | Flask-WTF | — |
-| **Procesamiento datos** | pandas + DuckDB + Parquet | 2.2 / 1.5 / — |
-| **Frontend CSS** | Sistema propio (Inter) | — |
-| **Gráficas** | Chart.js | 4.4.1 |
-| **Iconos** | Bootstrap Icons | 1.11.0 |
-| **Tipografía** | Inter (Google Fonts) | — |
-| **Control de versiones** | Git + GitHub | — |
-
----
-
-## 🏗 Arquitectura del Sistema
-
-CoDataU implementa el patrón **MVC** con **Application Factory** de Flask:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     CLIENTE (Navegador)                  │
-│              HTML + CSS + Chart.js + Jinja2              │
-└──────────────────────────┬──────────────────────────────┘
-                           │ HTTP Request
-┌──────────────────────────▼──────────────────────────────┐
-│                    FLASK APPLICATION                      │
-│                                                          │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │              Application Factory                 │    │
-│  │              app/__init__.py                     │    │
-│  └──────────┬──────────────────────────────────────┘    │
-│             │                                            │
-│  ┌──────────▼──────────────────────────────────────┐    │
-│  │                   BLUEPRINTS                     │    │
-│  │  auth_bp │ dashboard_bp │ files_bp │ reports_bp  │    │
-│  └──────────┬──────────────────────────────────────┘    │
-│             │                                            │
-│  ┌──────────▼──────────────────────────────────────┐    │
-│  │                   SERVICES                       │    │
-│  │ DataService │ DatasetPipeline │ StorageService   │    │
-│  │ ValidationService │ AIService                      │    │
-│  └──────────┬──────────────────────────────────────┘    │
-│             │                                            │
-│  ┌──────────▼──────────────────────────────────────┐    │
-│  │                    MODELS                        │    │
-│  │         User │ FileUpload │ AIInsight            │    │
-│  └──────────┬──────────────────────────────────────┘    │
-└─────────────┼───────────────────────────────────────────┘
-              │
-┌─────────────▼───────────────────────────────────────────┐
-│                       DATOS                              │
-│ SQLite (usuarios/metadatos) │ uploads/ (originales)      │
-│ artifacts/ (Parquet canónico + perfil JSON)              │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    navegador[Navegador] --> flask[Flask y plantillas Jinja2]
+    flask --> servicios[Servicios de carga, limpieza, dashboard y chat]
+    servicios --> sql[SQLAlchemy y migraciones]
+    sql --> db[(SQLite o PostgreSQL)]
+    servicios --> procesamiento[pandas y DuckDB]
+    procesamiento --> temporales[Archivos de trabajo locales]
+    servicios --> almacenamiento[Adaptador de almacenamiento]
+    almacenamiento --> disco[Disco local]
+    almacenamiento --> s3[S3 compatible]
+    almacenamiento --> azure[Azure Blob Storage]
+    servicios --> ia[Adaptador IA y validación de respuestas]
+    ia --> proveedor[API configurada]
 ```
 
-### Flujo de procesamiento de un archivo
+La base relacional almacena usuarios, metadatos, decisiones y configuraciones. **Las filas completas de los archivos no se insertan en PostgreSQL**: permanecen en los originales y las versiones Parquet.
 
-```
-Usuario sube archivo
-       ↓
-Flask-WTF valida el formulario + tipo de archivo
-       ↓
-Original inmutable guardado con nombre UUID en uploads/
-       ↓
-DataService.read_file() → pandas lee CSV/XLS/XLSX
-       ↓
-ValidationService.validate_file() → detecta errores
-       ↓
-DataService.clean_dataframe() → normaliza datos
-       ↓
-DatasetPipeline → DuckDB escribe Parquet y genera el perfil
-       ↓
-La aplicación consulta el Parquet; la IA podrá consumir perfil + muestra
-       ↓
-AIService.generate_insights() → genera insights basados en reglas
-       ↓
-FileUpload + AIInsight guardados en SQLite
-       ↓
-Redirect a /files/results/<id> con todos los resultados
-```
+Con almacenamiento remoto se descarga lo necesario a una carpeta temporal por petición, se procesa y se publican los resultados en el proveedor. La carpeta temporal se elimina al terminar. No se necesita una base DuckDB persistente compartida.
 
----
+La IA recibe contexto, estadísticas y muestras limitadas según la tarea. Se aplican reglas locales antes de consultar casos ambiguos y se reutilizan respuestas compatibles mediante caché. Las muestras se redactan para reducir exposición, aunque esto no garantiza anonimización completa. El original completo no se envía como archivo al proveedor.
 
-## 📁 Estructura del Proyecto
+## Modelo de datos
 
-```
-pymes_ai/
-│
-├── app/
-│   ├── __init__.py              # Application Factory
-│   ├── config.py                # Configuraciones por entorno
-│   ├── extensions.py            # db, login_manager, csrf
-│   │
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── user.py              # Modelo User
-│   │   ├── file_upload.py       # Modelo FileUpload
-│   │   ├── dataset_version.py   # Versiones de limpieza reversibles
-│   │   └── ai_insight.py        # Modelo AIInsight
-│   │
-│   ├── routes/
-│   │   ├── auth.py              # Blueprint: /auth/*
-│   │   ├── dashboard.py         # Blueprint: /dashboard
-│   │   ├── files.py             # Blueprint: /files/*
-│   │   └── reports.py           # Blueprint: /reports/*
-│   │
-│   ├── services/
-│   │   ├── data_service.py      # Procesamiento con pandas
-│   │   ├── dataset_pipeline.py  # Parquet y perfilado con DuckDB
-│   │   ├── cleaning_executor.py # Vista previa y ejecución SQL controlada
-│   │   ├── storage_service.py   # Abstracción de almacenamiento local
-│   │   ├── validation_service.py # Validación de calidad
-│   │   └── ai_service.py        # Generación de insights IA
-│   │
-│   ├── forms/
-│   │   ├── auth_forms.py        # Login, Register, EditProfile, ChangePassword
-│   │   └── file_forms.py        # UploadForm
-│   │
-│   ├── templates/
-│   │   ├── base.html            # Layout base con navbar horizontal
-│   │   ├── auth/
-│   │   │   ├── inicio.html      # Landing page
-│   │   │   ├── login.html       # Inicio de sesión (split-screen)
-│   │   │   ├── register.html    # Registro (split-screen)
-│   │   │   ├── bienvenida.html  # Página de bienvenida post-login
-│   │   │   ├── edit_profile.html
-│   │   │   └── change_password.html
-│   │   ├── dashboard/
-│   │   │   └── index.html       # Dashboard con Chart.js
-│   │   ├── files/
-│   │   │   ├── upload.html      # Carga de archivos
-│   │   │   ├── results.html     # Resultados del archivo
-│   │   │   └── insights.html    # Análisis IA detallado
-│   │   └── reports/
-│   │       └── index.html       # Lista de reportes + descarga CSV
-│   │
-│   └── static/
-│       ├── css/
-│       │   └── main.css         # Sistema de diseño CoDataU
-│       └── img/
-│           ├── isotipo.png      # Ícono de la app
-│           └── logo_full.png    # Logo horizontal
-│
-├── instance/
-│   └── pymes_ai.db              # Base de datos SQLite administrada por Alembic
-│
-├── uploads/                     # Archivos subidos por usuarios
-├── artifacts/                   # Parquet y perfiles (auto-generados)
-├── docs/architecture/           # Decisiones técnicas del pipeline
-│
-├── .env                         # Variables de entorno (NO subir a Git)
-├── .env.example                 # Plantilla de variables de entorno
-├── .gitignore
-├── requirements.txt
-├── requirements-dev.txt         # Dependencias de pruebas
-├── pytest.ini                   # Configuración de pytest
-├── tests/                       # Pruebas automatizadas
-├── run.py                       # Punto de entrada
-└── README.md
-```
+El esquema tiene **ocho tablas de la aplicación**, además de `alembic_version`, que registra la revisión de migraciones. El diagrama muestra las relaciones y campos principales; los modelos completos están en [app/models/](app/models/).
 
----
+```mermaid
+erDiagram
+    users ||--o{ file_uploads : carga
+    users ||--o{ ai_insights : recibe
+    users ||--o{ ai_analysis_runs : solicita
+    users ||--o{ dataset_versions : crea
+    users ||--o{ cleaning_decisions : decide
+    users ||--o{ dashboard_configurations : configura
+    users ||--o{ cleaning_configurations : prepara
+    file_uploads ||--o{ ai_insights : tiene
+    file_uploads ||--o{ ai_analysis_runs : registra
+    file_uploads ||--o{ dataset_versions : versiona
+    file_uploads ||--o{ cleaning_decisions : conserva
+    file_uploads ||--o{ dashboard_configurations : personaliza
+    file_uploads ||--o| cleaning_configurations : tiene_borrador
 
-## ⚙️ Instalación y Configuración
-
-### Prerrequisitos
-
-- Python 3.10 o superior (probado también con Python 3.14)
-- pip
-- Git
-
-### 1. Clonar el repositorio
-
-```bash
-git clone https://github.com/TheBlackFenix/codatau.git
-cd codatau
+    users {
+        int id PK
+        string username UK
+        string email UK
+        string password_hash
+        datetime created_at
+        boolean is_active
+    }
+    file_uploads {
+        int id PK
+        int user_id FK
+        string filename
+        string original_name
+        string file_type
+        int file_size
+        int row_count
+        int column_count
+        string status
+        datetime uploaded_at
+        datetime processed_at
+    }
+    ai_insights {
+        int id PK
+        int user_id FK
+        int file_id FK
+        string insight_type
+        text message
+    }
+    ai_analysis_runs {
+        int id PK
+        int user_id FK
+        int file_id FK
+        string purpose
+        string provider
+        string model
+        string status
+        string request_fingerprint
+        int input_tokens
+        int output_tokens
+        json result
+        string error_code
+    }
+    dataset_versions {
+        int id PK
+        int file_id FK
+        int created_by FK
+        int version_number
+        string stored_filename UK
+        string quarantine_filename
+        json operations
+        json metrics
+        boolean is_active
+    }
+    cleaning_decisions {
+        int id PK
+        int file_id FK
+        int decided_by FK
+        string operation_id
+        string column_name
+        string choice
+        json parameters
+        int applied_version_number
+        boolean is_active
+    }
+    dashboard_configurations {
+        int id PK
+        int user_id FK
+        int file_id FK
+        json metrics
+    }
+    cleaning_configurations {
+        int id PK
+        int file_id FK,UK
+        int user_id FK
+        string source_version
+        json columns
+        json duplicates
+        json treatments
+        json ai_review
+        int revision
+    }
 ```
 
-### 2. Crear y activar entorno virtual
-
-```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
-
-# macOS / Linux
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Instalar dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
-Para desarrollo y pruebas:
-
-```bash
-pip install -r requirements-dev.txt
-pytest
-```
-
-### 4. Configurar variables de entorno
-
-Copia el archivo de ejemplo y edítalo:
-
-```bash
-# Windows
-copy .env.example .env
-
-# macOS / Linux
-cp .env.example .env
-```
-
-Edita `.env` con tus valores:
-
-```env
-FLASK_APP=run.py
-FLASK_ENV=development
-SECRET_KEY=tu-clave-secreta-muy-larga-y-segura
-DATABASE_URL=sqlite:///pymes_ai.db
-MAX_CONTENT_LENGTH=52428800
-UPLOAD_FOLDER=uploads
-ANALYTICS_FOLDER=artifacts
-PROFILE_SAMPLE_SIZE=12
-AI_PROVIDER=disabled
-AI_MODEL=
-AI_API_KEY=
-AI_BASE_URL=https://api.openai.com/v1
-```
-
-Para usar Gemini desde Google AI Studio:
-
-```env
-AI_PROVIDER=openai_compatible
-AI_MODEL=gemini-3.5-flash-lite
-AI_API_KEY=tu-clave
-AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-AI_RESPONSE_MODE=json_schema
-```
-
-Consulta [la arquitectura de integración con IA](docs/architecture/ai-integration.md)
-para conocer el aislamiento de datos, el caché y la prueba en vivo opcional.
-
-> ⚠️ **Nunca subas el archivo `.env` a GitHub.** Ya está incluido en `.gitignore`.
-
-### 5. Ejecutar la aplicación
-
-Inicializa o actualiza el esquema de base de datos:
-
-```bash
-python -m flask --app run.py db upgrade
-```
-
-Luego inicia la aplicación:
-
-```bash
-python run.py
-```
-
-La aplicación estará disponible en: **http://127.0.0.1:5000**
-
-El arranque comprueba que el puerto esté libre. Si ya existe otra instancia de
-CoDataU, se detiene con un mensaje explícito en lugar de servir versiones distintas
-de la aplicación sobre el mismo puerto.
-
-La base de datos se administra mediante migraciones de Alembic. El comando
-`db upgrade` crea una base nueva o adopta de forma segura una instalación anterior.
-
----
-
-## 🖥️ Uso
-
-### Primer uso
-
-1. Abre **http://127.0.0.1:5000** en tu navegador
-2. Haz clic en **Registrarse** y crea tu cuenta
-3. Inicia sesión — verás la página de bienvenida personalizada
-4. Ve a **Archivos** y sube tu primer CSV o Excel
-5. Explora el **Dashboard** con las gráficas automáticas
-6. Visita **Análisis** para ver los insights generados por IA
-7. En **Limpieza**, selecciona reglas, configura decisiones regionales y revisa la vista previa
-8. Aprueba una versión y desde **Reportes** descarga el archivo limpio
-
-### Formatos de archivo soportados
-
-| Formato | Extensión | Tamaño máximo |
-|---------|-----------|---------------|
-| CSV (separado por comas) | `.csv` | 50 MB |
-| Excel moderno | `.xlsx` | 50 MB |
-| Excel antiguo | `.xls` | 50 MB |
-
-### Comandos útiles en desarrollo
-
-```bash
-# Activar entorno virtual (cada vez que abres la terminal)
-venv\Scripts\activate          # Windows
-source venv/bin/activate       # macOS/Linux
-
-# Ejecutar en modo desarrollo
-python run.py
-
-# Reiniciar la base de datos (borra todos los datos)
-del instance\pymes_ai.db       # Windows
-rm instance/pymes_ai.db        # macOS/Linux
-# Luego ejecuta: python -m flask --app run.py db upgrade
-# Y finalmente: python run.py
-```
-
----
-
-## 📸 Capturas de Pantalla
-
-| Pantalla | Descripción |
-|----------|-------------|
-| 🏠 **Landing Page** | Página de inicio con hero section, cómo funciona y beneficios |
-| 🔐 **Login** | Diseño split-screen con logo y formulario |
-| 👋 **Bienvenida** | Página personalizada con accesos directos |
-| 📊 **Dashboard** | KPIs, gráficas Chart.js y panel de IA |
-| 🤖 **Insights IA** | Análisis detallado del archivo con sugerencias |
-| 📁 **Archivos** | Gestión completa: subir, ver, activar, eliminar |
-| 📄 **Reportes** | Lista de archivos con descarga CSV |
-
----
-
-## 🔗 API de Rutas
-
-| Método | Ruta | Descripción | Auth |
-|--------|------|-------------|------|
-| GET | `/` | Landing page (redirige si autenticado) | ❌ |
-| GET | `/auth/login` | Formulario de inicio de sesión | ❌ |
-| POST | `/auth/login` | Procesar inicio de sesión | ❌ |
-| GET | `/auth/register` | Formulario de registro | ❌ |
-| POST | `/auth/register` | Procesar registro | ❌ |
-| POST | `/auth/logout` | Cerrar sesión | ✅ |
-| GET | `/auth/bienvenida` | Página de bienvenida | ✅ |
-| GET | `/auth/perfil` | Editar perfil | ✅ |
-| POST | `/auth/perfil` | Guardar perfil | ✅ |
-| GET | `/auth/cambiar-contrasena` | Cambiar contraseña | ✅ |
-| POST | `/auth/cambiar-contrasena` | Procesar cambio | ✅ |
-| GET | `/dashboard` | Dashboard principal | ✅ |
-| GET | `/files/upload` | Vista de archivos | ✅ |
-| POST | `/files/upload` | Cargar archivo | ✅ |
-| GET | `/files/results/<id>` | Resultados de un archivo | ✅ |
-| GET | `/files/profile/<id>` | Perfil analítico estructurado | ✅ |
-| GET | `/files/cleaning/<id>` | Plan y versiones de limpieza | ✅ |
-| POST | `/files/cleaning/<id>/ai-analysis` | Analizar casos ambiguos sin modificar datos | ✅ |
-| GET | `/files/cleaning` | Abrir limpieza del archivo activo | ✅ |
-| POST | `/files/cleaning/<id>/preview` | Vista previa de operaciones | ✅ |
-| POST | `/files/cleaning/<id>/apply` | Crear una nueva versión | ✅ |
-| POST | `/files/cleaning/<id>/activate/<version>` | Activar o revertir versión | ✅ |
-| GET | `/files/cleaning/<id>/quarantine/<version>` | Descargar cuarentena | ✅ |
-| GET | `/files/select/<id>` | Activar archivo en dashboard | ✅ |
-| POST | `/files/delete/<id>` | Eliminar archivo | ✅ |
-| GET | `/files/insights` | Análisis IA | ✅ |
-| GET | `/reports` | Lista de reportes | ✅ |
-| GET | `/reports/download/<id>` | Descargar CSV procesado | ✅ |
-
----
-
-## 🗃️ Base de Datos
-
-### Diagrama de modelos
-
-```
-┌─────────────────────┐       ┌──────────────────────────┐
-│        users        │       │       file_uploads        │
-├─────────────────────┤       ├──────────────────────────┤
-│ id (PK)             │──┐    │ id (PK)                  │
-│ username (unique)   │  │    │ user_id (FK → users.id)  │
-│ email (unique)      │  └───>│ filename (UUID)           │
-│ password_hash       │       │ original_name             │
-│ created_at          │       │ file_type (csv/xlsx/xls)  │
-│ is_active           │       │ file_size (bytes)         │
-└─────────────────────┘       │ row_count                 │
-                               │ column_count              │
-                               │ status                    │
-                               │ uploaded_at               │
-                               │ processed_at              │
-                               └──────────┬───────────────┘
-                                          │
-                               ┌──────────▼───────────────┐
-                               │        ai_insights        │
-                               ├──────────────────────────┤
-                               │ id (PK)                  │
-                               │ user_id (FK → users.id)  │
-                               │ file_id (FK → uploads.id)│
-                               │ insight_type             │
-                               │ message                  │
-                               │ created_at               │
-                               └──────────────────────────┘
-```
-
----
-
-## 🧑‍💻 Autor
-
-<div align="center">
-
-**Kevin Santiago Sarmiento Rincón**
-
-*Estudiante de Décimo Semestre — Ingeniería / Tecnología en Sistemas*  
-*Universidad — Colombia*
-
-[![GitHub](https://img.shields.io/badge/GitHub-kevinsarmiento-181717?style=for-the-badge&logo=github)](https://github.com/kevinsarmiento)
-
-</div>
-
----
-
-## 🎓 Contexto Académico
-
-Este proyecto fue desarrollado como **Proyecto de Grado de Décimo Semestre** en el área de desarrollo de software. El objetivo académico fue aplicar los conocimientos adquiridos durante la carrera en el desarrollo de una aplicación web completa y funcional que resuelva un problema real.
-
-### Logros técnicos del proyecto
-
-- ✅ Implementación del patrón **Application Factory** de Flask para código modular y escalable
-- ✅ Arquitectura **MVC** con separación clara de responsabilidades (modelos, vistas, controladores, servicios)
-- ✅ Procesamiento de datos con **pandas** en archivos de hasta 55,620 filas en menos de 3 segundos
-- ✅ Sistema de autenticación seguro con **hashing de contraseñas** y protección CSRF
-- ✅ Diseño de sistema UI/UX completo desde cero (sin frameworks como Bootstrap) con estética **SaaS profesional**
-- ✅ Integración de **Chart.js** para visualizaciones de datos interactivas y reactivas
-- ✅ Gestión de base de datos con **SQLAlchemy ORM** con diseño preparado para migración a PostgreSQL
-
-### Entregas académicas
-
-| Entrega | Descripción |
-|---------|-------------|
-| **Entrega 1** | Definición del problema, objetivos, wireframes y arquitectura |
-| **Entrega 2** | MVP funcional con todas las funcionalidades principales |
-| **Entrega 3** | Prototipo final + documentación + manuales de usuario y técnico |
-
----
-
-## 📚 Documentación
-
-Este README contiene la guía funcional general. La decisión y evolución del
-pipeline analítico se documentan en
-[`docs/architecture/data-pipeline.md`](docs/architecture/data-pipeline.md). El
-contrato del motor de limpieza está en
-[`docs/architecture/semantic-cleaning.md`](docs/architecture/semantic-cleaning.md)
-y la capa intercambiable de proveedores de IA en
-[`docs/architecture/ai-integration.md`](docs/architecture/ai-integration.md). La
-operación y adopción del esquema están en
-[`docs/architecture/database-migrations.md`](docs/architecture/database-migrations.md).
-
----
-
-## 🚀 Roadmap — Próximas funcionalidades
-
-- [x] Perfilado semántico y propuestas estructuradas de limpieza
-- [x] Ejecutor inicial con vista previa, aprobación y trazabilidad
-- [x] Parámetros interactivos para fechas, teléfonos y separadores regionales
-- [x] Análisis de casos ambiguos mediante IA
-- [ ] Evals de calidad por proveedor y presupuesto por usuario
-- [ ] Consultas y visualizaciones ejecutadas directamente en DuckDB
-- [ ] Integración con almacenamiento de objetos (S3 compatible)
-- [ ] Procesamiento asíncrono con **Celery + Redis** para archivos muy grandes
-- [ ] Gráficas avanzadas: correlaciones, series de tiempo, mapas de calor
-- [ ] Soporte para archivos **JSON**
-- [ ] Exportación de reportes en **PDF**
-- [ ] Despliegue en producción con **PostgreSQL + Gunicorn + Nginx**
-
----
-
-## Despliegue local y nube
-
-La guía [Ejecutar CoDataU en local y en nube](documentos/despliegue_local_y_nube.md) incluye Docker Compose con PostgreSQL, proveedores de archivos local/S3/Azure, configuración de Render y pruebas con emuladores aislados.
-
-### Inicio rápido con Docker
-
-Instala Docker Desktop y activa el motor de contenedores Linux. Desde la carpeta del repositorio:
+| Tabla | Qué conserva |
+|---|---|
+| `users` | Cuentas y credenciales protegidas con hash. |
+| `file_uploads` | Propietario, nombres y resumen de cada carga. |
+| `ai_insights` | Mensajes y alertas asociados al archivo; no todos provienen de una API de IA. |
+| `ai_analysis_runs` | Propósito, proveedor, modelo, estado, resultado y tokens reportados por el proveedor. |
+| `dataset_versions` | Versiones de limpieza, referencias a archivos y cuarentena, operaciones y métricas. |
+| `cleaning_decisions` | Decisiones por operación, parámetros y número de versión aplicada. |
+| `dashboard_configurations` | Métricas seleccionadas y su orden por usuario y archivo. |
+| `cleaning_configurations` | Borrador del asistente: tipos, duplicados, tratamientos y revisión IA, con control de revisión. |
+
+Hay una configuración de limpieza por archivo; una configuración de dashboard por pareja usuario/archivo; decisiones únicas por archivo/operación; y números de versión únicos dentro de cada archivo. `applied_version_number` registra un número de versión, no una clave foránea directa. La versión activa se obtiene de `dataset_versions.is_active`; no existe una columna `active_version_id` en `file_uploads`.
+
+Las migraciones están en [migrations/versions/](migrations/versions/), actualmente hasta `0006_value_proposals`. Funcionan con SQLite y PostgreSQL; no hay que crear tablas manualmente.
+
+## Ejecutar con Docker
+
+Se necesita Git y Docker Desktop con contenedores Linux activos. No hace falta instalar Python ni PostgreSQL en el computador para esta opción.
 
 ```powershell
-# Solo la primera vez; no sobrescribir un archivo privado que ya exista.
+git clone https://github.com/TheBlackFenix/codatau.git
+cd codatau
+# Solo la primera vez; no sobrescribir una configuración privada existente.
 Copy-Item deploy/local.env.example deploy/local.env
 docker compose --env-file deploy/local.env up --build -d
 ```
 
-Abre <http://localhost:5055>. Se levantan Flask y PostgreSQL; las migraciones se aplican automáticamente. Los archivos y la base quedan en volúmenes persistentes. Esta configuración inicial no consume IA.
+Abrir **http://localhost:5055**. Se levantan Flask y PostgreSQL, se espera a que la base esté disponible y se aplican las migraciones. Los archivos y la base se conservan en volúmenes. El ejemplo tiene la IA desactivada.
 
-Para habilitar Gemini, añade a `deploy/local.env`:
+```powershell
+docker compose --env-file deploy/local.env ps
+docker compose --env-file deploy/local.env logs --tail 80 web
+docker compose --env-file deploy/local.env exec web python scripts/database.py check
+# Detener sin borrar datos.
+docker compose --env-file deploy/local.env down
+# Volver a iniciar, o aplicar cambios de variables.
+docker compose --env-file deploy/local.env up -d
+```
+
+No utilizar `down -v` si se quieren conservar los datos. Para reconstruir después de cambiar código o dependencias se usa `up --build -d`.
+
+## Variables e IA
+
+| Variable | Uso |
+|---|---|
+| `SECRET_KEY` | Firma de sesiones y formularios; usar un valor privado y estable. |
+| `WEB_PORT` / `POSTGRES_PORT` | Puertos locales; predeterminados 5055 y 55432. |
+| `POSTGRES_PASSWORD` | Contraseña inicial de PostgreSQL en Compose; cambiarla aquí no modifica una base existente. |
+| `DATABASE_PROVIDER` | `auto`, `sqlite` o `postgresql`. |
+| `DATABASE_URL` | Conexión; omitirla en Compose utiliza PostgreSQL del servicio `db`. |
+| `STORAGE_PROVIDER` | `local`, `s3` o `azure`. |
+| `STORAGE_PREFIX` | Espacio de nombres de los objetos remotos. |
+| `S3_*` | Bucket, endpoint, región y credenciales del servicio compatible. |
+| `AZURE_STORAGE_*` | Contenedor y conexión, o URL de cuenta con autenticación Azure. |
+| `AI_*` | Proveedor, modelo, clave y límites de las tareas de IA. |
+
+`deploy/local.env` configura Docker; `.env` configura la ejecución directa con Python. Usar explícitamente `--env-file deploy/local.env` evita tomar accidentalmente la antigua URL SQLite del `.env` raíz. Los archivos privados están excluidos de Git y de la imagen; solo se versionan ejemplos.
+
+Para Gemini, añadir al archivo privado correspondiente:
 
 ```dotenv
 AI_PROVIDER=openai_compatible
@@ -641,30 +287,129 @@ AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 AI_MODEL=identificador-del-modelo-disponible-en-tu-cuenta
 AI_API_KEY=tu-clave-privada
 AI_MODEL_SELECTOR_ENABLED=1
+AI_RESPONSE_MODE=json_schema
 ```
 
-Guarda y ejecuta `docker compose --env-file deploy/local.env up -d` para aplicar los cambios. El selector aparece al iniciar sesión; si Google no permite consultar el catálogo, solo se muestra el modelo configurado. Si ya usabas IA en el `.env` de la raíz, la guía explica cómo conservar esa configuración con `scripts/configure-local.py`.
+Después de guardar, actualizar Docker con `docker compose --env-file deploy/local.env up -d`. El selector aparece al iniciar sesión. Si Google no permite consultar su catálogo, se muestra el modelo configurado; eso no confirma que la clave o la cuota permitan generar respuestas.
 
-`deploy/local.env` configura Docker; `.env` configura la ejecución directa con Python. Usa siempre `--env-file deploy/local.env` para que Docker no tome accidentalmente la antigua URL de SQLite del `.env` raíz. Las claves reales y los archivos privados están excluidos de Git y de la imagen; el repositorio solo incluye ejemplos.
+Si ya existe una configuración IA en `.env` y un entorno Python con las dependencias, `venv\Scripts\python.exe scripts/configure-local.py` prepara el archivo privado de Docker conservando esos valores. Si `deploy/local.env` ya existe, sus valores tienen prioridad. No copiar el ejemplo encima después de ejecutar el asistente.
+
+Sin IA siguen disponibles la carga, el perfilado, las reglas locales y los cálculos del dashboard. La inferencia remota de contexto, las propuestas remotas y la interpretación de preguntas requieren un proveedor configurado.
+
+La [guía de despliegue](documentos/despliegue_local_y_nube.md) explica todas las variables y cómo conectar Docker local a los servicios de nube.
+
+## Ejecutar con Python
+
+Alternativa a Docker. Se recomienda Python 3.13, utilizado en la imagen; también se ha probado en local con 3.14.
 
 ```powershell
-# Comprobar estado y detener conservando datos.
-docker compose --env-file deploy/local.env ps
-docker compose --env-file deploy/local.env down
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-Para nube, la guía detalla `render.yaml`, PostgreSQL y Azure/S3. Cambiar las variables selecciona el proveedor; no migra automáticamente datos existentes.
+Editar `.env` antes de migrar o iniciar, y no sobrescribirlo si ya existe. El ejemplo usa SQLite y archivos locales. Después:
 
-## 📝 Licencia
+```powershell
+python -m flask --app run.py db upgrade
+python run.py
+```
 
-Este proyecto fue desarrollado con fines académicos. Todos los derechos reservados a Kevin Santiago Sarmiento Rincón.
+Abrir **http://127.0.0.1:5000**. En Linux/macOS se activa el entorno con `source venv/bin/activate` y se copia el ejemplo con `cp`.
 
----
+`run.py` es el arranque de desarrollo; `wsgi.py` es la entrada de producción usada por Gunicorn. La base se administra con migraciones, no con creación automática de tablas al arrancar.
 
-<div align="center">
+## Despliegue en nube
 
-Hecho con ❤️ por **Kevin Santiago Sarmiento Rincón**
+La configuración de demo utiliza Flask dockerizado en Render, PostgreSQL y Azure Blob Storage; también admite S3 compatible.
 
-*CoDataU — Datos · Análisis · Inteligencia*
+1. Crear PostgreSQL y un contenedor/bucket privado.
+2. Conectar el repositorio a Render con runtime Docker, o crear un Blueprint con [render.yaml](render.yaml).
+3. Configurar `DATABASE_PROVIDER=postgresql`, `DATABASE_URL`, `SECRET_KEY` y el proveedor de archivos.
+4. Para Azure, establecer `STORAGE_PROVIDER=azure`, `AZURE_STORAGE_CONTAINER` y su conexión privada; para S3, establecer las variables correspondientes.
+5. Configurar IA si se utilizará; el Blueprint la deja desactivada inicialmente.
+6. Desplegar y comprobar `/healthz`, registro, carga, limpieza y descargas.
 
-</div>
+La imagen aplica migraciones e inicia Gunicorn en el puerto de Render. Se utiliza la URL interna de PostgreSQL cuando ambos servicios están en la misma región; desde local se necesita la externa con TLS y las reglas de red adecuadas. Las variables privadas se guardan en el panel del servicio, no en GitHub.
+
+No usar disco efímero para conservar archivos. Cambiar de proveedor no traslada los datos existentes. Se validó la preparación en Docker y con emuladores; cada despliegue requiere comprobar sus credenciales, cuotas y conectividad reales. Consultar las condiciones actuales de suspensión y vencimiento de los planes gratuitos antes de la demo.
+
+## Pruebas
+
+Suite local:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+node --test tests/chat_presentation.test.cjs
+```
+
+Migraciones y pruebas sobre PostgreSQL, con integraciones S3 y Azure simuladas:
+
+```powershell
+docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
+docker compose -f compose.test.yaml down
+```
+
+Las pruebas Docker están aisladas de la demo y utilizan Moto y Azurite sin credenciales reales. Incluyen carga, recuperación de objetos, limpieza, versiones, exportación y eliminación. Las pruebas de IA real son opcionales porque consumen API.
+
+Como referencia de la validación de despliegue: **314 pruebas aprobadas en local y 316 en Docker con PostgreSQL**. Las pruebas específicas de SQLite conservan ese motor; las de almacenamiento remoto se habilitan en Docker. Esto no sustituye pruebas de carga ni garantiza tiempos de procesamiento para cualquier archivo.
+
+## Estructura y documentación
+
+```text
+codatau/
+├── app/
+│   ├── __init__.py       # Application Factory
+│   ├── config.py         # Variables y entornos
+│   ├── models/           # Ocho modelos relacionales
+│   ├── routes/           # Autenticación, archivos, dashboard, reportes e IA
+│   ├── services/         # Limpieza, procesamiento, almacenamiento e IA
+│   ├── templates/        # Pantallas Jinja2
+│   └── static/           # Estilos, JavaScript e imágenes
+├── migrations/           # Esquema versionado con Alembic
+├── tests/                # Pruebas Python y presentación del chat
+├── scripts/              # Configuración Docker, migraciones y arranque
+├── deploy/               # Ejemplos de configuración local y remota
+├── documentos/           # Entregas y guía de despliegue
+├── docs/architecture/    # Decisiones técnicas
+├── Dockerfile
+├── compose.yaml          # Aplicación y PostgreSQL local
+├── compose.remote.yaml   # Aplicación local con servicios remotos
+├── compose.test.yaml     # PostgreSQL y emuladores para pruebas
+├── render.yaml           # Blueprint de la aplicación en Render
+├── .env.example
+├── requirements.txt
+├── requirements-dev.txt
+├── run.py                # Desarrollo
+└── wsgi.py               # Producción
+```
+
+`instance/`, `uploads/` y `artifacts/` son carpetas locales generadas cuando corresponde; no forman parte del código entregado. En Docker se usan los volúmenes de Compose.
+
+- [Índice de entregas](documentos/README.md).
+- [2.7 — Código fuente, scripts e instalación](documentos/2.7_codigo_fuente_e_instalacion.md).
+- [2.8 — Manual de usuario](documentos/2.8_manual_de_usuario.md).
+- [2.9 — Informe técnico](documentos/2.9_informe_tecnico.md).
+- [Guía de despliegue local y nube](documentos/despliegue_local_y_nube.md).
+- [Pipeline de datos](docs/architecture/data-pipeline.md).
+- [Motor de limpieza](docs/architecture/semantic-cleaning.md).
+- [Integración con IA](docs/architecture/ai-integration.md).
+- [Migraciones](docs/architecture/database-migrations.md).
+
+Los documentos 2.7–2.9 corresponden al cierre de la fase inicial. La guía de despliegue y este README incorporan la preparación posterior de Docker, PostgreSQL y almacenamiento remoto.
+
+## Alcance y pendientes
+
+El prototipo incluye limpieza guiada y versionada, IA configurable, dashboard persistente, chat acotado, PostgreSQL, adaptadores de archivos y configuración de despliegue. No está validado para alta concurrencia ni archivos grandes.
+
+Posibles siguientes etapas:
+
+- Evaluaciones de calidad de IA y límites económicos por usuario.
+- Procesamiento en segundo plano y control de tareas largas.
+- Pruebas de carga, memoria y recuperación ante fallos.
+- Respaldos y operación continua en un entorno público.
+- Nuevas fuentes y exportaciones, como JSON o PDF, fuera de esta fase.
+
+Proyecto desarrollado con fines académicos por el equipo de autores indicado arriba.
